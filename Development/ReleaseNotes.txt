@@ -1,0 +1,36 @@
+=======================================================================================
+= ReleaseNotes.txt
+=
+= Release notes for ChessBrainVB chess engine 
+=======================================================================================
+
+
+Changes from version 1.02 to 2.0 (Roger Zuehlsdorf 14-FEB-2016)
+----------------------------------------------------------------
+
+- improved evalution and search
+
+- problem fixes in hash logic and castling rights
+
+- added special functions for endgames with KQKP, KQKR, KRKP
+
+- added endgame table base access to web service for root position and first ply (see ini file)
+
+- added Wb2Uci files for use with UCI interface
+
+- ELO increase: 100 ELO 
+
+
+Playing strength (Test matches: CCRL conditions 40  moves in 4 minutes, Powerbook2010-8 moves):
+ 
+ - ChessBrainVB.exe: Winboard 32bit version, compiled Visual Basic 6 : >>> 2600 ELO <<<
+
+   ChessBrainVB_V2 (250kn/s) - Colossus2008b  ...(ELO 2644): 51,5/100 36-33-31 52% +14 
+   ChessBrainVB_V2 (250kn/s) - SOS 5.1 for Arena (1000 kn/s / ELO 2577): 56,0/100 36-24-40 56% +42
+
+ - ChessbrainVB_PCode.exe: VB6 Pseudo Code (VBA speed as used in Excel/Word): >>> 2100 ELO <<<
+
+   ChessBrainVB_PCode_V2 (20kn/s) - Wing2.0a ...(1800 kn/s / ELO 2097): 51,0/100 41-39-20 51% + 7
+   ChessBrainVB_PCode_V2 (20kn/s) - Matheus-2.3 (ELO 2054): 64,0/109 53-34-22 59% +63  
+
+-------------------------------------------------------------------
