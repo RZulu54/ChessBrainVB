@@ -25,12 +25,12 @@ Playing strength (Test matches: CCRL conditions 40  moves in 4 minutes, Powerboo
  
  - ChessBrainVB.exe: Winboard 32bit version, compiled Visual Basic 6 : >>> 2600 ELO <<<
 
-   ChessBrainVB_V2 (250kn/s) - Colossus2008b  ...(ELO 2644): 51,5/100 36-33-31 52% +14 
+   ChessBrainVB_V2 (250kn/s) - Colossus2008b  ...(1600 kn/s / ELO 2644): 51,5/100 36-33-31 52% +14 
    ChessBrainVB_V2 (250kn/s) - SOS 5.1 for Arena (1000 kn/s / ELO 2577): 56,0/100 36-24-40 56% +42
 
  - ChessbrainVB_PCode.exe: VB6 Pseudo Code (VBA speed as used in Excel/Word): >>> 2100 ELO <<<
 
-   ChessBrainVB_PCode_V2 (20kn/s) - Wing2.0a ...(1800 kn/s / ELO 2097): 51,0/100 41-39-20 51% + 7
-   ChessBrainVB_PCode_V2 (20kn/s) - Matheus-2.3 (ELO 2054): 64,0/109 53-34-22 59% +63  
+   ChessBrainVB_PCode_V2 (20kn/s) - Wing2.0a ....(1800 kn/s / ELO 2097): 51,0/100 41-39-20 51% + 7
+   ChessBrainVB_PCode_V2 (20kn/s) - Matheus-2.3  (4000 kn/s / ELO 2054): 64,0/109 53-34-22 59% +63  
 
 -------------------------------------------------------------------
