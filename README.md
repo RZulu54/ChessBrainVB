@@ -14,3 +14,5 @@ There are two ways to use this chess engine:
   Playing strength 2100 ELO (CCRL 40/4 conditions, see http://www.computerchess.org.uk/ccrl/404/rating_list_all.html)
   Visual Basic for Applications is used for the chess engine.
   This pseudo code is not compiled and 15 times slower than the compiled VB6 EXE for winboard.
+
+Hint: Virus scanner AVAST shows a false positive alarm (checkd with VirusTotal.com, Avast ticket pending).
