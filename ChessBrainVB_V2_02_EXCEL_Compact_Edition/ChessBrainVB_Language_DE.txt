@@ -52,6 +52,7 @@ OO-White#OO-Weiss#
 OOO-White#OOO-Weiss#
 OO-Black#OO-Schwarz#
 OOO-Black#OOO-Schwarz#
+Promote to queen#Umwandeln in Dame?#
 
 Show hint#Zugvorschlag#
 Winboard command input#Winboard Befehlseingabe#
