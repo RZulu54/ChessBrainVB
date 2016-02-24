@@ -4,6 +4,15 @@
 = Release notes for ChessBrainVB chess engine 
 =======================================================================================
 
+Changes in version 2.03
+ - fixed WORD VBA problem with Avast virus scanner: creates false positive alert => AutoOpen removed fixed it
+
+Changes in version 2.02
+ - fixed VBA GUI problem with promotions
+
+Changes in version 2.01
+ - show endgame table base access in VBA GUI
+
 
 Changes from version 1.02 to 2.0 (Roger Zuehlsdorf 14-FEB-2016)
 ----------------------------------------------------------------

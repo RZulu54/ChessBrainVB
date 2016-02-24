@@ -862,7 +862,7 @@ Public Sub auto_open() ' Excel
   Main
 End Sub
 
-Public Sub autoopen() ' Word
-  Main
-End Sub
+'Public Sub Word_Auto_Open() ' Word ; normal auto open creates problems with AVASt virus scanner: false positive altert
+'  Main
+'End Sub
 
