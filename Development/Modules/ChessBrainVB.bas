@@ -475,7 +475,8 @@ Public Sub ParseCommand(ByVal sCommand As String)
       GoTo NextCmd:
     End If
     If sCurrentCmd = "go" Then
-      bCompIsWhite = Not bCompIsWhite
+      bCompIsWhite = bWhiteToMove ' Fix for winboard - "black" not sent before first move after book
+      ' bCompIsWhite = Not bCompIsWhite
       bForceMode = False
       GoTo NextCmd:
     End If

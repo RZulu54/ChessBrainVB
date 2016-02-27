@@ -4,7 +4,10 @@
 = Release notes for ChessBrainVB chess engine 
 =======================================================================================
 
-Changes in version 2.03
+Changes in version 2.04 / 27-FEB-2016
+ - fixed problem with Winboard.exe with black to move
+
+Changes in version 2.03 
  - fixed WORD VBA problem with Avast virus scanner: creates false positive alert => AutoOpen removed fixed it
 
 Changes in version 2.02
