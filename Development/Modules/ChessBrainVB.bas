@@ -490,11 +490,11 @@ Public Sub ParseCommand(ByVal sCommand As String)
     End If
     If sCurrentCmd = "draw" Then
       SendCommand "tellics decline"
-      If iXBoardProtoVer > 1 Then
-        SendCommand "tellopponent Sorry, this program does not accept draws yet."
-      Else
-        SendCommand "tellics say Sorry, this program does not accept draws yet."
-      End If
+     ' If iXBoardProtoVer > 1 Then
+     '   SendCommand "tellopponent Sorry, this program does not accept draws yet."
+     ' Else
+     '   SendCommand "tellics say Sorry, this program does not accept draws yet."
+     ' End If
       GoTo NextCmd:
     End If
     

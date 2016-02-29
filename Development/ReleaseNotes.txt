@@ -4,6 +4,10 @@
 = Release notes for ChessBrainVB chess engine 
 =======================================================================================
 
+
+Changes in version 2.05 / 9-FEB-2016
+ - fixed problem with Winboard.exe: removed: message box says that draws are not accepted
+
 Changes in version 2.04 / 27-FEB-2016
  - fixed problem with Winboard.exe with black to move
 
