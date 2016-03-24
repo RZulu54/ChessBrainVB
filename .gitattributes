@@ -1,10 +1,15 @@
 # Auto detect text files and perform LF normalization
-* text=auto
+* text=binary
 
 # Custom for Visual Studio
 *.cs     diff=csharp
 
 # Standard to msysgit
+*.vbp  diff=astextplain
+*.frm  diff=astextplain
+*.bas  diff=astextplain
+*.cls  diff=astextplain
+*.txt  diff=astextplain
 *.doc	 diff=astextplain
 *.DOC	 diff=astextplain
 *.docx diff=astextplain
