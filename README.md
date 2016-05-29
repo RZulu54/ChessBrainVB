@@ -15,4 +15,19 @@ There are two ways to use this chess engine:
   Visual Basic for Applications is used for the chess engine.
   This pseudo code is not compiled and 15 times slower than the compiled VB6 EXE for winboard.
 
+----------------------------------------------------------------------
+### CREDITS
+This chess engine is based on the source of the engine "LarsenVB" by Luca Dormio (http://xoomer.virgilio.it/ludormio/download.htm).
+LarsenVB was inspired by "Faile 0.6 by" Adrien M. Regimbald, which was also the base for the engine "Sjeng".
+I want to thank Luca Dormio for his permission to use his LarsenVB source. 
+
+ChessBrainVB is also based on many great ideas from the following people: 
+
+Marco Costabla/Tord Romstad/Joona Kiiski (Stockfish sources): Search logic, king safety, piece evaluation
+
+Ed SChroder (REBEL descriptions):  Killer move strucure, Search extensions
+
+Raimund Heid (Protector sources):  Material draw logic
+
+----------------------------------------------------------------------
 Hint: Virus scanner AVAST shows a false positive alarm (checkd with VirusTotal.com, Avast ticket pending).
