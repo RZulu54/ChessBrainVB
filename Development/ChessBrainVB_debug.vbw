@@ -1,0 +1,13 @@
+BoardBas = 0, 0, 0, 0, C
+BookBas = 0, 0, 0, 0, C
+ConstBas = 0, 0, 0, 0, C
+IObas = 0, 0, 0, 0, C
+ChessBrainVBbas = 0, 0, 0, 0, C
+EPDbas = 0, 0, 0, 0, C
+SearchBas = 0, 0, 0, 0, C
+frmDebugMain = 0, 0, 0, 0, C, 0, 0, 0, 0, C
+EvalBas = 0, 0, 0, 0, C
+HashBas = 0, 0, 0, 0, C
+TimeBas = 0, 0, 0, 0, C
+frmMain = 0, 0, 0, 0, C, 0, 0, 0, 0, C
+DebugBas = 0, 0, 0, 0, C
