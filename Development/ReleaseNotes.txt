@@ -4,7 +4,14 @@
 = Release notes for ChessBrainVB chess engine 
 =======================================================================================
 
+Changes from version 2.05 to 3.02 (Roger Zuehlsdorf 09-DEC-2016)
+----------------------------------------------------------------
+- major rewrite of move generation, king safety and search logic (new stockfish7 patches added if helpful)
+- bug fixes and speed improvements
+- ELO increase 100 ELO ( CCRL 40/4: 2750 for compiled VB6 EXE, 2250 for VBA code)
 
+
+----------------------------------------------------------------
 Changes in version 2.05 / 9-FEB-2016
  - fixed problem with Winboard.exe: removed: message box says that draws are not accepted
 

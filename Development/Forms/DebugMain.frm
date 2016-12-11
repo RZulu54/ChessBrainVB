@@ -3,13 +3,13 @@ Begin VB.Form frmDebugMain
    Caption         =   "ChessBrainVB debug console"
    ClientHeight    =   9960
    ClientLeft      =   60
-   ClientTop       =   348
-   ClientWidth     =   14712
+   ClientTop       =   345
+   ClientWidth     =   14715
    Icon            =   "DebugMain.frx":0000
    LinkTopic       =   "Form1"
    ScaleHeight     =   9960
-   ScaleWidth      =   14712
-   StartUpPosition =   2  'Bildschirmmitte
+   ScaleWidth      =   14715
+   StartUpPosition =   2  'CenterScreen
    Begin VB.CommandButton cmdFakeInput 
       Caption         =   "Send"
       Default         =   -1  'True
@@ -30,7 +30,7 @@ Begin VB.Form frmDebugMain
       BackColor       =   &H00E0E0E0&
       BeginProperty Font 
          Name            =   "Courier New"
-         Size            =   8.4
+         Size            =   8.25
          Charset         =   0
          Weight          =   400
          Underline       =   0   'False
@@ -42,7 +42,7 @@ Begin VB.Form frmDebugMain
       Left            =   105
       Locked          =   -1  'True
       MultiLine       =   -1  'True
-      ScrollBars      =   3  'Beides
+      ScrollBars      =   3  'Both
       TabIndex        =   2
       TabStop         =   0   'False
       Top             =   735

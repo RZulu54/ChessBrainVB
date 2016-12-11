@@ -12,7 +12,7 @@ Option Explicit
 Public Function AllocateTime(ByVal CurrScore As Long) As Single
 
   Dim Score         As Long
-  Dim GameMovesDone As Integer, RemainingMovesToTC As Integer, TimeBase As Single
+  Dim GameMovesDone As Long, RemainingMovesToTC As Long, TimeBase As Single
 
   If bTimeTrace Then WriteTrace ">> Start AllocateTime  MTOC:" & MovesToTC & ", MoveCnt=" & CStr(GameMovesCnt) & ", Left:" & Format$(TimeLeft, "0.00")
 
@@ -72,7 +72,7 @@ Public Function AllocateTime(ByVal CurrScore As Long) As Single
 End Function
 
 Public Function AllocateExtraTime() As Boolean
-  Dim GameMovesDone As Integer, RemainingMovesToTC As Integer, TimeBase As Single
+  Dim GameMovesDone As Long, RemainingMovesToTC As Long, TimeBase As Single
 
   GameMovesDone = GameMovesCnt \ 2 ' Full move = 2* Half move
   If MovesToTC = 0 Then RemainingMovesToTC = 0 Else RemainingMovesToTC = MovesToTC - (GameMovesDone Mod MovesToTC)
@@ -109,7 +109,7 @@ Public Function AllocateExtraTime() As Boolean
   AllocateExtraTime = ExtraTimeForMove
 End Function
 
-Public Function CalcTime(ByVal RemainingMovesToTC As Integer, _
+Public Function CalcTime(ByVal RemainingMovesToTC As Long, _
                          ByVal TimeIncr As Single, _
                          ByVal TimeLeft As Single, _
                          ByVal CurrScore As Long) As Single
@@ -118,11 +118,11 @@ Public Function CalcTime(ByVal RemainingMovesToTC As Integer, _
   MaximumTime = GetMax(OptimalTime, GetMin(OptimalTime * 3, TimeLeft / 2))
 End Function
 
-Public Function CalcTimeLimit(ByVal RemainingMovesToTC As Integer, _
+Public Function CalcTimeLimit(ByVal RemainingMovesToTC As Long, _
                               ByVal TimeIncr As Single, _
                               ByVal TimeLeftIn As Single, _
                               ByVal CurrScore As Long)
-  Dim TimeTarget As Single, CalcMTOC As Integer
+  Dim TimeTarget As Single, CalcMTOC As Long
    
   TimeLeftIn = GetMaxSingle(TimeLeftIn * 0.8 - 0.5 - (TimeIncr * 0.85), 0#) ' L
    
@@ -189,7 +189,7 @@ End Function
 Public Function CalcExtraTime(ByVal TimeTarget As Single, _
                               ByVal TimeIncr As Single, _
                               ByVal TimeLeft As Single) As Single
-  Dim GameMovesDone As Integer, RemainingMovesToTC As Integer
+  Dim GameMovesDone As Long, RemainingMovesToTC As Long
   
   If FixedDepth <> NO_FIXED_DEPTH Then
     CalcExtraTime = 0
@@ -213,7 +213,7 @@ Public Function CalcExtraTime(ByVal TimeTarget As Single, _
 End Function
 
 Public Sub PVInstability()
-  UnstablePvFactor = 1 + BestMoveChanges
+  UnstablePvFactor = 1# + BestMoveChanges
 End Sub
 
 Public Function AvailableTime() As Single
@@ -232,7 +232,7 @@ Public Function CheckTimeExit() As Boolean
   End If
 End Function
 
-Public Function MoveImportance(ByVal GamePly As Integer) As Single
+Public Function MoveImportance(ByVal GamePly As Long) As Single
   ' SF6: not used
   ' move_importance() is a skew-logistic function based on naive statistical
   ' analysis of "how many games are still undecided after n half-moves". Game

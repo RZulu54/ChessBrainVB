@@ -1,6 +1,8 @@
 ChessBrainVB is a chess program (32 bit Windows) that communicates with a chess GUI via the winboard protocol and can be used with  MsOffice-VBA (EXCEL/WORD) also.
 
 This engine is writen in Visual Basic 6. It does NOT use bitboards. The board uses the classic 10x12 array.
+Search logic and evaluation is based an Stockfish 7 with adaptions to non-bitboard data structure and search changes 
+that perform better for slower move generation and evaluation. 
 
 ### TERMS OF USE
 
@@ -20,6 +22,6 @@ ChessBrainVB is also based on many great ideas from the following people:
 
 Marco Costabla/Tord Romstad/Joona Kiiski (Stockfish sources): Search logic, king safety, piece evaluation
 
-Ed SChroder (REBEL descriptions):  Killer move strucure, Search extensions
+Ed Schroder (REBEL descriptions):  Killer move strucure, Search extensions
 
 Raimund Heid (Protector sources):  Material draw logic

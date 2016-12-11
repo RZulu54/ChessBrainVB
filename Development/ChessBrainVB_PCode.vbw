@@ -1,0 +1,12 @@
+SearchBas = 25, 25, 696, 340, 
+BookBas = 75, 75, 948, 479, 
+ConstBas = 0, 0, 0, 0, C
+EPDbas = 0, 0, 0, 0, C
+IObas = 50, 50, 1094, 356, 
+BoardBas = 0, 0, 0, 0, C
+frmMain = 0, 0, 0, 0, C, 25, 25, 1053, 373, C
+EvalBas = 0, 0, 0, 0, C
+ChessBrainVBbas = 0, 0, 0, 0, C
+HashBas = 0, 0, 0, 0, C
+TimeBas = 0, 0, 0, 0, C
+DebugBas = 0, 0, 0, 0, C

@@ -7,7 +7,7 @@ Option Explicit
 
 
 Public Function DEGUBPrintMoveList(MoveList() As TMove) As String
-  Dim i        As Integer
+  Dim i        As Long
   Dim strMoves As String
 
   Do While Not MoveList(i).From = 0
@@ -18,9 +18,9 @@ Public Function DEGUBPrintMoveList(MoveList() As TMove) As String
   DEGUBPrintMoveList = strMoves
 End Function
 
-Public Sub DEBUGPerfTestSearch(ByVal iDepth As Integer)
+Public Sub DEBUGPerfTestSearch(ByVal iDepth As Long)
 
-  Dim NumMoves As Integer
+  Dim NumMoves As Long
   Dim i        As Long
 
   If iDepth = 0 Then Exit Sub
@@ -38,7 +38,7 @@ Public Sub DEBUGPerfTestSearch(ByVal iDepth As Integer)
 
 End Sub
 
-Public Function DEBUGPerfTest(ByVal iDepth As Integer) As String
+Public Function DEBUGPerfTest(ByVal iDepth As Long) As String
 
   Dim strResult As String, StartTime As Single, EndTime As Single
 
@@ -65,6 +65,7 @@ Public Function DEBUGPerfTest(ByVal iDepth As Integer) As String
       strResult = strResult & Nodes - 8902 - 400 - 20 & " (expected: 197281)"
     Case 5
       strResult = strResult & Nodes - 197281 - 8902 - 400 - 20 & " (expected: 4865609)"
+       
   End Select
 
   DEBUGPerfTest = strResult
@@ -72,16 +73,17 @@ Public Function DEBUGPerfTest(ByVal iDepth As Integer) As String
 End Function
 
 
-Public Sub DEBUGBench(ByVal iDepth As Integer)
+Public Sub DEBUGBench(ByVal iDepth As Long)
   ' ORIGINAL
-  Dim i         As Long, StartTime As Single, EndTime As Single, x As Integer, c As Integer, s As String
+  Dim i         As Long, StartTime As Single, EndTime As Single, x As Long, c As Long, s As String
   Dim arTime(2) As Single, EPD(10) As String
   '--- Test positions -----
   
   'EPD(1) = "r1b1kb1r/pppp1ppp/2n1pq2/8/2PP4/P1P2N2/4PPPP/R1BQKB1R w KQkq - 1 7 " ' SF6 problem: Too high eval until ply 7
   
-  'EPD(1) = "rn1q4/pbp2kp1/1p1ppn2/8/1PP5/P5Q1/3PPP1r/R1B1KBR1 b Q b3 0 11" ' too high KSafety eval
-  'EPD(1) = "3r2k1/p1q1r2p/bppb2p1/6Qn/2NPp3/1PN1Pp1P/PB3PP1/2R3RK b - - 3 27 " '  King attack eval too high
+ ' EPD(1) = "rn1q4/pbp2kp1/1p1ppn2/8/1PP5/P5Q1/3PPP1r/R1B1KBR1 b Q b3 0 11" ' too high KSafety eval
+  'EPD(1) = "3r2k1/p1q1r2p/bppb2p1/6Qn/2NPp3/1PN1Pp1P/PB3PP1/2R3RK b - - 3 27 " '  King attack eval too high <<<
+' EPD(1) = "r3k3/p2nbpp1/bpp1p3/3nP3/2NP3P/1PB4P/P1Q2PBq/R3RK2 w q - 1 20 " ' KS eval
   'EPD(1) = "r4r2/p1q1n1kp/2n1ppp1/8/3P2N1/3BPP2/2Q2P1P/R3K2R w KQ - 0 19 " ' Trapped knight h3/h4
   'EPD(1) = "r4rk1/1p2ppbp/pq1p2p1/3P4/1nP3n1/2N2N2/PP2QPPP/R1B2RK1 b - - 0 18 " ' Trapped knight a5
   'EPD(1) = "rnbq1rk1/ppp2pp1/8/2npP2Q/1P6/8/P1PN1PPP/R1B2RK1 b - b3 0 11"
@@ -121,6 +123,13 @@ Public Sub DEBUGBench(ByVal iDepth As Integer)
   ' EPD(1) = "6k1/6p1/8/8/8/8/4P2P/6K1 b - -" ' Test Endgame Tablebase acces in search for root
   'EPD(1) = "8/6k1/6p1/8/7r/3P1KP1/8/8 w - - 0 1 "  ' Test Endgame Tablebase acces in search for ply=1
   
+ ' EPD(1) = "r3k2r/pb3pbp/2p1p3/1q2p3/2p5/6P1/1PQ1PPBP/R1BR2K1 w kq - 0 2 "
+ 
+ 'EPD(1) = "2r1r1k1/4bp1p/p2pp1pP/q3n1P1/Np1Nb3/1P2B3/P1PQ4/1K2RBR1 b - - 1 21 " ' e5f3 not found
+ ' EPD(1) = "2r1r1k1/4bp1p/p2pp1pP/q5P1/Np2b3/1P2BN2/P1PQ4/1K2RBR1 b - - 0 21 "
+ '   EPD(1) = "4r1k1/4bp1p/p2pp1pP/q5P1/Np2b3/1P2BN2/P1rQ4/1K2RBR1 w - - 0 22"  ' d2xc2 ok, d2d4 >Rc2c4 illegal move, IsCHecking no detected
+  
+ ' EPD(1) = "r2qkb1r/2r2ppp/pp3nb1/2ppp3/1P2p1P1/4PP1P/P1Q2P2/RNB1KB1R b KQkq - 0 1  "  ' weak queen
   
   EPD(1) = "r1bqk2r/p2p1pp1/1p2pn1p/n1pP2B1/1bP5/2N2N2/PPQ1PPPP/R3KB1R w KQkq - 0 9" '<<<<< AKT
   EPD(2) = "1rb2rk1/p3nppp/1p1qp3/3n2N1/2pP4/2P3P1/PP3PBP/R1BQR11K w - -"  'TEST 2
@@ -136,12 +145,11 @@ Public Sub DEBUGBench(ByVal iDepth As Integer)
   ' ReadGame "Drawbug2.txt"
   'bForceMode = False
 
- ' For x = 1 To 1
+' For x = 1 To 1
   For x = 1 To 7 ' if EPD(1) only to test
     
     For i = 0 To 0 ' number of time measure runs  > 1x
      'For i = 0 To 2 ' number of time measure runs > 3x
-    
       
       InitGame ' Reset FixedDepth
       ReadEPD EPD(x) ' Reset FixedDepth
@@ -219,7 +227,7 @@ End Sub
 
 Public Sub DMoves()
   ' Debug: print current move line
-  Dim i As Integer, s As String
+  Dim i As Long, s As String
   s = CStr(IterativeDepth) & "/" & CStr(Ply) & ">"
 
   For i = 1 To Ply - 1

@@ -40,20 +40,20 @@ Begin VB.Form frmMain
       Alignment       =   1  'Right Justify
       AutoSize        =   -1  'True
       BackStyle       =   0  'Transparent
-      Caption         =   "based on engines: LarsenVB (by Luca Dormio) and Faile (by Adrien M. Regimbald)"
-      Height          =   480
+      Caption         =   "based on engines: LarsenVB (by Luca Dormio) and Faile (by Adrien M. Regimbald) / Stockfish"
+      Height          =   390
       Index           =   4
-      Left            =   792
+      Left            =   795
       TabIndex        =   6
       ToolTipText     =   "GNU General Public License"
-      Top             =   612
+      Top             =   615
       UseMnemonic     =   0   'False
-      Width           =   3528
+      Width           =   3525
       WordWrap        =   -1  'True
    End
    Begin VB.Label lblDescr 
       BackStyle       =   0  'Transparent
-      Caption         =   "ChessBrainVB 1.1"
+      Caption         =   "ChessBrainVB 3.02"
       BeginProperty Font 
          Name            =   "MS Sans Serif"
          Size            =   13.5
@@ -247,7 +247,7 @@ End Sub
 
 Private Sub Form_Load()
 
-  Dim i As Integer
+  Dim i As Long
 
   imgIco.Picture = Me.Icon
   Set Me.Icon = Nothing
@@ -272,7 +272,7 @@ End Sub
 
 Private Sub Form_MouseMove(Button As Integer, Shift As Integer, x As Single, y As Single)
 
-  Dim i As Integer
+  Dim i As Long
 
   For i = 0 To lblCmd.UBound
     lblCmd(i).Font.Underline = False
@@ -332,8 +332,8 @@ Private Sub lblCmd_MouseMove(Index As Integer, _
                              x As Single, _
                              y As Single)
 
-  Dim i            As Integer
-  Static LastIndex As Integer
+  Dim i            As Long
+  Static LastIndex As Long
 
   If Index <> LastIndex Then
     For i = 0 To lblCmd.UBound

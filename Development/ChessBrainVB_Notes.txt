@@ -1,6 +1,6 @@
 =======================================================================================
 = ChessBrainVB_Notes.txt
-= by Roger Zuehlsdorf (2015)
+= by Roger Zuehlsdorf (2016 / V3.02)
 =======================================================================================
 
 This chess engine (32 bit Windows) for winboard and MsOfficeVBA (EXCEL/WORD) is based on the source of the engine "LarsenVB" 
@@ -41,13 +41,12 @@ So I added a simple hash logic and tried to understand sources from Cuckoo, Sjen
 One problem: The VB engine does NOT use bitboards. The board uses the classic 10x12 array.
 Then she search logic and the king safety evaluation was improved with Stockfish logic and combined with own ideas.
 
-The final native version has a >>> playing strength of about 2500 ELO <<< compared to CCRL 40/4,
-the same level as engines like "LittleGoliath Evolution" and "Yace".
-Match result: ChessBrainVB - Yace : 104,5/200 81-72-47  52%  
+The final native version has a >>> playing strength of about 2750 ELO <<< compared to CCRL 40/4,
+Match result: ChessBrainVB - Bison 9.11x64 : 50%
 
 Compiling the VB6 source as Pseudo-Code creates a winboard exe which is close to VBA speed (10% faster than VBA).
 This slow engine has the same level as the famous small engine Micro-Max 4.8 from H.G.Mueller.
->>> Office VBA playing strength is about  ELO 1950 <<<  compared to CCRL 40/4.
+>>> Office VBA playing strength is about  ELO 2150 <<<  compared to CCRL 40/4.
 Comparing these engines is quite interesting: the smallest (but fast) engine against the slowest(?) (but very selective) engine.
 Node count of the Pseudo-Code-Exe (VBA speed)  is about 10.000-20.000 nodes per second only!
 

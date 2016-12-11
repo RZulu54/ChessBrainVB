@@ -73,11 +73,13 @@ Private bTbBaseTrace As Boolean
 '---------------------------------
 Public bLogPV          As Boolean  ' log PV in post mode
 Public bLogMode        As Boolean
-Public LogFile         As Integer
+Public LogFile         As Long
+
+Public LastFullPV As String
 
 Private LanguageENArr(200) As String
 Private LanguageArr(200) As String
-Public LangCnt As Integer
+Public LangCnt As Long
 
 
 '---------------------------------------------------------------------------
@@ -203,8 +205,8 @@ Public Sub WriteGame(sFile As String)
   '[Result "1/2-1/2"]
   ' 1. e4 d5 2. d4 dxe4 3. Nf3
 
-  Dim i As Integer, h As Integer, s As String, MoveCnt As Integer, Cnt As Integer
-  Cnt = UBound(arGameMoves)
+  Dim i As Long, h As Long, s As String, MoveCnt As Long, Cnt As Long
+  Cnt = GameMovesCnt
 
   If Cnt = 0 Then Exit Sub
   s = "": MoveCnt = 0
@@ -232,7 +234,7 @@ End Sub
 
 Public Sub ReadGame(sFile As String)
   ' Read PGN File
-  Dim h            As Integer, s As String, m As Integer, sInp As String, m1 As String, m2 As String
+  Dim h            As Long, s As String, m As Long, sInp As String, m1 As String, m2 As String
   Dim asMoveList() As String
  
   InitGame
@@ -285,7 +287,7 @@ End Sub
 
 Public Sub SendThinkInfo(Elapsed As Single, CurrentScore As Long)
   Static FinalMoveForHint As TMove
-  Dim sPost               As String, j As Integer, sPostPV As String
+  Dim sPost               As String, j As Long, sPostPV As String
  
   If pbIsOfficeMode Then
     '--- MS OFFICE
@@ -322,15 +324,27 @@ Public Sub SendThinkInfo(Elapsed As Single, CurrentScore As Long)
     For j = 1 To PVLength(1)
       If PV(1, j).From <> 0 Then sPostPV = sPostPV & " " & MoveText(PV(1, j))
     Next
-
+    
+    If Len(Trim(sPostPV)) < 8 Then
+      If Trim(LastFullPV) = "" Or Left(Trim(sPostPV), 5) = Left(Trim(LastFullPV), 5) Then
+        LastFullPV = sPostPV
+      End If
+    Else
+      If Left(Trim(sPostPV), 5) = Left(Trim(LastFullPV), 5) Then
+        sPostPV = LastFullPV
+      End If
+    End If
+    
     sPost = sPost & sPostPV & " (" & MaxPly & "/" & HashUsagePerc & ")"
-    SendCommand sPost
+    If Not GotExitCommand() Then
+      SendCommand sPost
+    End If
   End If
  
 End Sub
 
 Public Sub SendRootInfo(Elapsed As Single, CurrentScore As Long)
-  Dim sPost As String, j As Integer
+  Dim sPost As String, j As Long, sPV As String
  
   If pbIsOfficeMode Then
     '--- MS OFFICE
@@ -351,14 +365,44 @@ Public Sub SendRootInfo(Elapsed As Single, CurrentScore As Long)
   Else
     ' VB6
     sPost = IterativeDepth & " " & EvalSFTo100(CurrentScore) & " " & (Int(Elapsed) * 100) & " " & Nodes
+    sPV = ""
     For j = 1 To PVLength(1) - 1
-       If PV(1, j).From <> 0 Then sPost = sPost & " " & MoveText(PV(1, j))
+       If PV(1, j).From <> 0 Then sPV = sPV & " " & MoveText(PV(1, j))
     Next
-    SendCommand sPost
+    
+    If PVLength(1) >= 2 Then
+      If Trim(LastFullPV) = "" Or Left(sPV, 5) = Left(LastFullPV, 5) Then
+        LastFullPV = sPV
+      End If
+    Else
+      If Trim(Left(sPV, 5)) = Trim(Left(LastFullPV, 5)) Then
+        sPV = LastFullPV
+      End If
+    End If
+    sPost = sPost & sPV
+    If Not GotExitCommand() Then
+      SendCommand sPost
+    End If
   End If
 
-  If bLogPV Then LogWrite Space(6) & sPost
+  If bWinboardTrace Then If bLogPV Then LogWrite Space(6) & sPost
 End Sub
+
+Public Function GotExitCommand() As Boolean
+ Dim sInput As String
+  GotExitCommand = False
+  If PollCommand Then
+    sInput = ReadCommand
+    If Left$(sInput, 1) = "." Then
+      SendAnalyzeInfo
+    Else
+      If sInput <> "" Then
+        ParseCommand sInput
+        GotExitCommand = bExitReceived
+      End If
+    End If
+  End If
+End Function
 
 Public Function FormatScore(ByVal lScore As Long) As String
   If lScore < -MATE_IN_MAX_PLY And lScore >= -MATE0 Then
@@ -376,11 +420,13 @@ Public Sub SendAnalyzeInfo()
   Dim sPost As String, Elapsed As Single
   Elapsed = TimerDiff(StartThinkingTime, Timer)
   sPost = "stat01: " & Int(Elapsed) & " " & Nodes & " " & IterativeDepth & " " & "1 1"
-  SendCommand sPost
+  If Not GotExitCommand() Then
+    SendCommand sPost
+  End If
 End Sub
 
 Public Sub WriteTrace(s As String)
-  Dim h As Integer
+  Dim h As Long
   On Error Resume Next
   'Debug.Print s
   If s <> "" Then
@@ -453,8 +499,8 @@ Public Sub LogWrite(sLogString As String, _
 End Sub
 
 Public Sub ShowMoveInfo(ByVal sMove As String, _
-                        ByVal lDepth As Integer, _
-                        ByVal lMaxPly As Integer, _
+                        ByVal lDepth As Long, _
+                        ByVal lMaxPly As Long, _
                         ByVal lScore As Long, _
                         ByVal lTime As Single)
   #If VBA_MODE Then
@@ -472,7 +518,7 @@ Public Sub ShowMoveInfo(ByVal sMove As String, _
   #End If
 End Sub
 
-Public Function FieldNumToCoord(ByVal ilFieldNum As Integer) As String
+Public Function FieldNumToCoord(ByVal ilFieldNum As Long) As String
   FieldNumToCoord = Chr$(Asc("a") + ((ilFieldNum - 1) Mod 8)) & Chr$(Asc("1") + ((ilFieldNum - 1) \ 8))
 End Function
 
@@ -529,7 +575,7 @@ Public Sub InitTranslate()
 End Sub
 
 Public Function Translate(ByVal isTextEN As String) As String
-  Dim i As Integer
+  Dim i As Long
   If pbIsOfficeMode Then
     For i = 1 To LangCnt
       If LanguageENArr(i) = isTextEN Then Translate = LanguageArr(i): Exit Function
@@ -586,13 +632,13 @@ End Function
  End Function
  
   
-Public Function IsTbBasePosition(ByVal ActPly As Integer) As Boolean
- Dim i As Integer, PieceCnt As Integer
- PieceCnt = PieceCntRoot
+Public Function IsTbBasePosition(ByVal ActPly As Long) As Boolean
+ Dim i As Long, ActPieceCnt As Long
+ ActPieceCnt = PieceCntRoot
  For i = 1 To ActPly - 1
-   If MovesList(i).Captured <> NO_PIECE Then PieceCnt = PieceCnt - 1
+   If MovesList(i).Captured <> NO_PIECE Then ActPieceCnt = ActPieceCnt - 1
  Next
- IsTbBasePosition = CBool(PieceCnt <= TB_MAX_PIECES)
+ IsTbBasePosition = CBool(ActPieceCnt <= TB_MAX_PIECES)
 End Function
 
 Public Sub TestTableBase()
@@ -600,7 +646,7 @@ Public Sub TestTableBase()
   Dim i As Long
   
   For i = 1 To 3
-    If i Mod 2 = 0 Then
+    If i Mod 2 = BCOL Then
      sFEN = "6k1/6p1/8/8/8/8/4P2P/6K1 b - -"
     Else
       sFEN = "7k/4P3/6K1/8/8/8/8/8 w - -"
@@ -670,7 +716,7 @@ lblErr:
 End Function
 
 Public Function ExtractFirstTbMove(ByVal sMoveList As String) As String
-  Dim sMove As String, p As Integer, c As String
+  Dim sMove As String, p As Long, c As String
   For p = 1 To Len(sMoveList)
     c = Mid$(sMoveList, p, 1)
     If (c >= "a" And c <= "h") Or (c >= "0" And c <= "9") Then

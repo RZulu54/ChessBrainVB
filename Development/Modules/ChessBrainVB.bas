@@ -1,8 +1,9 @@
 Attribute VB_Name = "ChessBrainVBbas"
 '==================================================
-'= ChessBrainVB V2.0:
+'= ChessBrainVB V3.0:
 '=   by Roger Zuehlsdorf (Copyright 2016)
 '=   based on LarsenVB by Luca Dormio (http://xoomer.virgilio.it/ludormio/download.htm) and Faile by Adrien M. Regimbald
+'=        and Stockfish by Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
 '= start of program
 '= init engine
 '==================================================
@@ -18,21 +19,22 @@ Public FakeInput              As String
 
 Public MatchInfo              As TMatchInfo
 Public bXBoardMode            As Boolean
-Public iXBoardProtoVer        As Integer      ' winboard protocol version
+Public iXBoardProtoVer        As Long      ' winboard protocol version
 Public bForceMode             As Boolean
 Public bPostMode              As Boolean
 Public bAnalyzeMode           As Boolean
+Public bExitReceived          As Boolean
 
 Public ThisApp                As Object
 Public psAppName              As String
 
-Public Moves(99, MAX_MOVES)   As TMove ' Generated moves [ply,Move]
-Public QuietsSearched(99, 65) As TMove  ' Quiet moves for pruning conditions
-Public MovePickerDat(99)      As TMovePicker
+Public Moves(100, MAX_MOVES)   As TMove ' Generated moves [ply,Move]
+Public QuietsSearched(100, 65) As TMove  ' Quiet moves for pruning conditions
+Public MovePickerDat(100)      As TMovePicker
 
-Public GameMovesCnt           As Integer
-Public arGameMoves()          As TMove
-Public GamePosHash(MAX_MOVES) As THashKey
+Public GameMovesCnt           As Long
+Public arGameMoves(999)        As TMove
+Public GamePosHash(999) As THashKey
 
 Public GUICheckIntervalNodes  As Long
 
@@ -43,7 +45,7 @@ Public GUICheckIntervalNodes  As Long
 Sub Main()
 
   Dim sCmdList() As String
-  Dim i          As Integer
+  Dim i          As Long
 
   '--- VBA_MODE constant is set in Excel/Word in VBAChessBrain project properties for conditional compiling
   #If VBA_MODE = 1 Then
@@ -54,7 +56,7 @@ Sub Main()
   #Else
     '--- VB6 ---
     pbIsOfficeMode = False
-    GUICheckIntervalNodes = 10000
+    GUICheckIntervalNodes = 5000
     psEnginePath = App.Path
     psAppName = App.EXEName
   #End If
@@ -129,17 +131,11 @@ Public Sub InitEngine()
   '------------------------------
   Erase PVLength()
   Erase PV()
-  Erase HistoryH()
+  Erase History()
   Erase Pieces()
   Erase Squares()
 
-  Erase Killer1()
-  Erase Killer2()
-  Erase Killer3()
-  Erase MateKiller1()
-  Erase MateKiller2()
-  Erase CapKiller1()
-  Erase CapKiller2()
+  Erase Killer()
 
   Erase Board()
   Erase Moved()
@@ -154,6 +150,9 @@ Public Sub InitEngine()
   ReadIntArr KnightOffsets(), 8, 19, 21, 12, -8, -19, -21, -12
   ReadIntArr BishopOffsets(), 9, 11, -9, -11
   ReadIntArr RookOffsets(), 1, -1, 10, -10
+  
+  OppositeDir(1) = -1: OppositeDir(-1) = 1: OppositeDir(10) = -10: OppositeDir(-10) = 10
+  OppositeDir(11) = -11: OppositeDir(-11) = 11: OppositeDir(9) = -9: OppositeDir(-9) = 9
 
   ReadIntArr WPromotions(), 0, WQUEEN, WROOK, WKNIGHT, WBISHOP
   ReadIntArr BPromotions(), 0, BQUEEN, BROOK, BKNIGHT, BBISHOP
@@ -163,10 +162,13 @@ Public Sub InitEngine()
   InitRankFile ' must be before InitMaxDistance
   InitBoardColors
   InitMaxDistance
+  InitSqBetween
+  InitSameXRay
+  InitAttackBitCnt
 
   ' setup empty move
   With EmptyMove
-    .From = 0: .Target = 0: .Piece = NO_PIECE: .Castle = NO_CASTLE: .Promoted = 0: .Captured = NO_PIECE: .CapturedNumber = 0
+    .From = 0: .Target = 0: .piece = NO_PIECE: .Castle = NO_CASTLE: .Promoted = 0: .Captured = NO_PIECE: .CapturedNumber = 0
     .EnPassant = 0: .IsChecking = False: .IsInCheck = False: .IsLegal = False: .OrderValue = 0: .SeeValue = UNKNOWN_SCORE
   End With
 
@@ -214,23 +216,16 @@ Public Sub InitEngine()
   ' Queens
   ReadScoreArr MobilityQ, -40, -35, -25, -12, 2, 7, 4, 19, 14, 37, 24, 55, 25, 62, 40, 76, 43, 79, 47, 87, 54, 94, 56, 102, 60, 111, 70, 116, 72, 118, 73, 122, 75, 128, 77, 130, 85, 133, 94, 136, 99, 140, 108, 157, 112, 158, 113, 161, 118, 174, 119, 177, 123, 191, 128, 199
   
-  'SF6: Eval weights ( pairs MG/EG ) ,
-  ' see "enumWeight": 0,0,Mobility_Weight=1 (289,344),PawnStructure_Weight=2,PassedPawns_Weight = 3,Space_Weight = 4,KingSafety_Weight=5, ThreatsWeight=6
-  ReadScoreArr Weights, 0, 0, 256, 256, 214, 203, 193, 262, 47, 0, 322, 0, 330, 0
-  
   'SF6: Threat by pawn (pairs MG/EG: NOPIECE,PAWN,KNIGHT (176,139), BISHOP, ROOK, QUEEN
-  ReadScoreArr ThreatenedByPawn, 0, 0, 0, 0, 176, 139, 131, 127, 217, 218, 203, 215
+  ReadScoreArr ThreatBySafePawn, 0, 0, 0, 0, 176, 139, 131, 127, 217, 218, 203, 215
   
   'SF6: Outpost (Pair MG/EG )[0, 1=supported by pawn]
-  ReadScoreArr OutpostBonusKnight, 32, 8, 49, 13
-  ReadScoreArr OutpostBonusBishop, 14, 4, 22, 6
+  ReadScoreArr OutpostBonusKnight, 43, 11, 65, 20
+  ReadScoreArr OutpostBonusBishop, 20, 3, 29, 8
   
   'SF6: King Attack Weights by attacker { 0, 0, 7, 5, 4, 1 }  NO_PIECE_TYPE, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING,
   ' SF values not clear: why queen is 1 and knight is 7 ?!? More attack fields in total for queen?
-  '  KingAttackWeights(PT_KNIGHT) = 7: KingAttackWeights(PT_BISHOP) = 5: KingAttackWeights(PT_ROOK) = 4: KingAttackWeights(PT_QUEEN) = 1
-  KingAttackWeights(PT_KNIGHT) = 5: KingAttackWeights(PT_BISHOP) = 3: KingAttackWeights(PT_ROOK) = 4: KingAttackWeights(PT_QUEEN) = 7
-          
-  InitKingDangerArr ' Lookup table for scoring
+  KingAttackWeights(PT_KNIGHT) = 78: KingAttackWeights(PT_BISHOP) = 56: KingAttackWeights(PT_ROOK) = 45: KingAttackWeights(PT_QUEEN) = 11
     
   ' Pawn eval
   ReadScoreArr DoubledPenalty(), 0, 0, 13, 43, 20, 48, 23, 48, 23, 48, 23, 48, 23, 48, 20, 48, 13, 43 ' by file mg/eg
@@ -239,9 +234,10 @@ Public Sub InitEngine()
   ReadScoreArr2 IsolatedPenalty(), 1, 0, 0, 25, 30, 36, 35, 40, 35, 40, 35, 40, 35, 40, 35, 36, 25, 25, 30
   SetScoreVal IsolatedNotPassed, 10, 10
   
-  ReadScoreArr BackwardPenalty(), 67, 37, 34, 24 ' not opposed /  opposed
-  ReadScoreArr PassedPawnFileBonus(), 0, 0, 12, 10, 3, 10, 1, -8, -27, -12, -27, -12, 1, -8, 3, 10, 12, 10
-  ReadScoreArr PassedPawnRankBonus(), 0, 7, 1, 14, 34, 37, 90, 63, 214, 134, 328, 189
+  ReadScoreArr BackwardPenalty(), 60, 33, 40, 23 ' not opposed /  opposed
+  
+  ReadScoreArr PassedPawnRankBonus(), 5, 7, 5, 14, 31, 38, 73, 73, 166, 166, 252, 252
+  ReadScoreArr PassedPawnFileBonus(), 0, 0, 9, 10, 2, 10, 1, -8, -20, -12, -27, -12, 1, -8, 2, 10, 9, 10
 
   ' King safety eval
   ' Weakness of our pawn shelter in front of the king by [distance from edge][rank]
@@ -295,7 +291,8 @@ Public Sub InitEngine()
   SetScoreVal ThreatenedByHangingPawn, 70, 63
   SetScoreVal KingOnOneBonus, 3, 62
   SetScoreVal Hanging, 48, 28 ' Hanging piece penalty
-  SetScoreVal Checked, 20, 20
+  SetScoreVal SafeCheck, 20, 10
+  SetScoreVal OtherCheck, 10, 5
   
   'Material Imbalance
   InitImbalance
@@ -352,9 +349,9 @@ End Sub
 Public Sub ParseCommand(ByVal sCommand As String)
 
   Dim bLegalInput As Boolean
-  Dim i           As Integer, c As Integer
+  Dim i           As Long, c As Long
   Dim PlayerMove  As TMove, sCoordMove As String
-  Dim iNumMoves   As Integer
+  Dim iNumMoves   As Long
   Dim sCurrentCmd As String
   Dim sCmdList()  As String
   Dim sInput()    As String
@@ -378,7 +375,7 @@ Public Sub ParseCommand(ByVal sCommand As String)
     '--- normal move like with 4 char: e2e4 ---
     If Not IsNumeric(sInput(0)) And IsNumeric(sInput(1)) And Not IsNumeric(sInput(2)) And IsNumeric(sInput(3)) Then
       Ply = 0
-    
+      
       GenerateMoves Ply, False, iNumMoves
       PlayerMove.From = FileRev(sInput(0)) + RankRev(sInput(1))
       PlayerMove.Target = FileRev(sInput(2)) + RankRev(sInput(3))
@@ -392,7 +389,7 @@ Public Sub ParseCommand(ByVal sCommand As String)
           If CheckLegal(Moves(Ply, i)) Then
             bLegalInput = True
             PlayerMove.Captured = Moves(Ply, i).Captured
-            PlayerMove.Piece = Moves(Ply, i).Piece
+            PlayerMove.piece = Moves(Ply, i).piece
             PlayerMove.Promoted = Moves(Ply, i).Promoted
             PlayerMove.EnPassant = Moves(Ply, i).EnPassant
             PlayerMove.Castle = Moves(Ply, i).Castle
@@ -406,33 +403,33 @@ Public Sub ParseCommand(ByVal sCommand As String)
         
       If Not bLegalInput Then
         SendCommand "Illegal move: " & sCurrentCmd
-        LogWrite "Illegal move: " & sCoordMove
+        If bWinboardTrace Then LogWrite "Illegal move: " & sCoordMove
       Else
         ' do game move
         PlayMove PlayerMove
-        HashKey = HashBoard()
+        HashKey = HashBoard(EmptyMove)
         If Is3xDraw(HashKey, GameMovesCnt, 0) Then
           ' Result = DRAW3REP_RESULT
-          LogWrite "ParseCommand: Return Draw3Rep"
+          If bWinboardTrace Then LogWrite "ParseCommand: Return Draw3Rep"
           SendCommand "1/2-1/2 {Draw by repetition}"
         End If
         GameMovesAdd PlayerMove
         'LogWrite "move: " & sCoordMove
       End If
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     
     '--- not supported commands
-    If sCurrentCmd = "xboard" Then GoTo NextCmd:
-    If sCurrentCmd = "random" Then GoTo NextCmd:
-    If sCurrentCmd = "hard" Then GoTo NextCmd:
-    If sCurrentCmd = "easy" Then GoTo NextCmd:
+    If sCurrentCmd = "xboard" Then GoTo NextCmd
+    If sCurrentCmd = "random" Then GoTo NextCmd
+    If sCurrentCmd = "hard" Then GoTo NextCmd
+    If sCurrentCmd = "easy" Then GoTo NextCmd
     
     If sCurrentCmd = "?" Then ' Stop Analyze
       bTimeExit = True
       bPostMode = False
       'bAnalyzeMode = False
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     
     '--- protocol xboard version 2 ---
@@ -441,7 +438,7 @@ Public Sub ParseCommand(ByVal sCommand As String)
       If iXBoardProtoVer = 2 Then
         SendCommand "feature variants=""normal"" ping=1 setboard=1 analyze=1 done=1"
       End If
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     If Left$(sCurrentCmd, 8) = "setboard" Then
       ReadEPD Mid$(sCurrentCmd, 10)
@@ -451,42 +448,48 @@ Public Sub ParseCommand(ByVal sCommand As String)
     End If
     If Left$(sCurrentCmd, 5) = "ping " Then
       SendCommand "pong " & Mid$(sCurrentCmd, 6)
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     
     If sCurrentCmd = "new" Then
       InitGame
+      bExitReceived = False
       'LogWrite String(20, "=")
       'LogWrite "New Game", True
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     If sCurrentCmd = "white" Then
+      bExitReceived = False
       bWhiteToMove = True
       bCompIsWhite = False
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     If sCurrentCmd = "black" Then
+      bExitReceived = False
       bWhiteToMove = False
       bCompIsWhite = True
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     If sCurrentCmd = "force" Then
+      bExitReceived = True
       bForceMode = True
-      GoTo NextCmd:
+      bTimeExit = True
+      GoTo NextCmd
     End If
     If sCurrentCmd = "go" Then
       bCompIsWhite = bWhiteToMove ' Fix for winboard - "black" not sent before first move after book
       ' bCompIsWhite = Not bCompIsWhite
+      bExitReceived = False
       bForceMode = False
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     If sCurrentCmd = "undo" Then
       GameMovesTakeBack 1
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     If sCurrentCmd = "remove" Then
       GameMovesTakeBack 2
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     If sCurrentCmd = "draw" Then
       SendCommand "tellics decline"
@@ -495,19 +498,19 @@ Public Sub ParseCommand(ByVal sCommand As String)
      ' Else
      '   SendCommand "tellics say Sorry, this program does not accept draws yet."
      ' End If
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     
     ' winboard time commands ( i.e. send from ARENA GUI )
     If Left$(sCurrentCmd, 4) = "time" Then ' time left for computer in 1/100 sec
       TimeLeft = Val(Mid$(sCurrentCmd, 5))
       TimeLeft = TimeLeft / 100#
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     If Left$(sCurrentCmd, 4) = "otim" Then ' time left for opponent
       OpponentTime = Val(Mid$(sCurrentCmd, 5))
       OpponentTime = OpponentTime / 100#
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     If Left$(sCurrentCmd, 5) = "level" Then
       ' time control
@@ -532,7 +535,7 @@ Public Sub ParseCommand(ByVal sCommand As String)
       FixedDepth = NO_FIXED_DEPTH
       FixedTime = 0
 
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     If Left$(sCurrentCmd, 3) = "st " Then
       ' fixed time for move
@@ -545,7 +548,7 @@ Public Sub ParseCommand(ByVal sCommand As String)
       OpponentTime = TimeLeft
       FixedDepth = NO_FIXED_DEPTH
         
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     If Left$(sCurrentCmd, 3) = "sd " Then
       ' fixed depth (iterativedepth)
@@ -558,21 +561,22 @@ Public Sub ParseCommand(ByVal sCommand As String)
       OpponentTime = TimeLeft
       FixedDepth = Val(Mid$(sCurrentCmd, 3))
         
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     If sCurrentCmd = "post" Then ' post PV
       bPostMode = True
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     If sCurrentCmd = "nopost" Then
       bPostMode = False
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     
     If sCurrentCmd = "analyze" Then
       ' start analyze of position / command "?" or "exit" to stop analyze
       bAnalyzeMode = True
       bPostMode = True
+      bExitReceived = False
       bForceMode = False
       bTimeExit = False
       MovesToTC = 0
@@ -585,47 +589,49 @@ Public Sub ParseCommand(ByVal sCommand As String)
         
       bCompIsWhite = Not bCompIsWhite
 
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     
     If sCurrentCmd = "." Then ' Show analyze info
+      bExitReceived = False
       If bAnalyzeMode Then
         SendAnalyzeInfo
       End If
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     
     If sCurrentCmd = "exit" Then
       'bAnalyzeMode = False
       bForceMode = False
       bTimeExit = True
-      GoTo NextCmd:
+      bExitReceived = True
+      GoTo NextCmd
     End If
     
     If Left$(sCurrentCmd, 6) = "result" Then
       SendCommand Mid$(sCurrentCmd, 8)
       'LogWrite sCurrentCmd
       'LogWrite MatchInfo.Opponent & " (" & MatchInfo.OppRating & ") " & MatchInfo.OppComputer
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
 
     If Left$(sCurrentCmd, 4) = "name" Then
       MatchInfo.Opponent = Mid$(sCurrentCmd, 6)
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     If Left$(sCurrentCmd, 6) = "rating" Then
       MatchInfo.EngRating = Val(Mid$(sCurrentCmd, 8, 4))
       MatchInfo.OppRating = Val(Mid$(sCurrentCmd, 13, 4))
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     If sCurrentCmd = "computer" Then
       MatchInfo.OppComputer = True
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     If sCurrentCmd = "allseeks" Then
       SendCommand "tellics seek " & ReadINISetting("Seek1", "5 0 f")
       SendCommand "tellics seek " & ReadINISetting("Seek2", "15 5 f")
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     
     If sCurrentCmd = "quit" Then ExitProgram
@@ -637,7 +643,7 @@ Public Sub ParseCommand(ByVal sCommand As String)
       bCompIsWhite = Not bCompIsWhite
       StartEngine
       bEvalTrace = False
-      GoTo NextCmd:
+      GoTo NextCmd
     End If
     
     'If DebugMode Then
@@ -656,6 +662,7 @@ Public Sub ParseCommand(ByVal sCommand As String)
     'End If
 
 NextCmd:
+   
   Next
 End Sub
 
@@ -668,8 +675,7 @@ Public Sub InitGame()
   CopyIntArr StartupBoard, Board
   
   Erase Moved()
-  ReDim arGameMoves(0)
-  GameMovesCnt = 0
+  GameMovesCnt = 0: Erase arGameMoves()
   HintMove = EmptyMove
   PrevGameMoveScore = 0
   InitHash
@@ -696,8 +702,6 @@ Public Sub InitGame()
 
   WKingLoc = WKING_START
   BKingLoc = BKING_START
-  WQueenLoc = WQUEEN_START
-  BQueenLoc = BQUEEN_START
 
   WhiteCastled = NO_CASTLE
   BlackCastled = NO_CASTLE
@@ -709,6 +713,7 @@ Public Sub InitGame()
   TimeLeft = 300
   OpponentTime = 300
   FixedDepth = NO_FIXED_DEPTH
+  ClearEasyMove
 
   bForceMode = False
   
@@ -721,12 +726,8 @@ End Sub
 
 Public Sub GameMovesAdd(mMove As TMove)
 
-  Dim i As Long
-
-  i = UBound(arGameMoves)
-  ReDim Preserve arGameMoves(i + 1)
-  arGameMoves(i + 1) = mMove
-  GameMovesCnt = i + 1
+  GameMovesCnt = GameMovesCnt + 1
+  arGameMoves(GameMovesCnt) = mMove
 
   If mMove.EnPassant = 1 Then
     Board(mMove.From + 10) = WEP_PIECE
@@ -737,17 +738,17 @@ Public Sub GameMovesAdd(mMove As TMove)
   Else
     EpPosArr(0) = 0
   End If
-
-  GamePosHash(GameMovesCnt) = HashBoard() ' for 3x repetition draw
+  ClearEasyMove
+  GamePosHash(GameMovesCnt) = HashBoard(EmptyMove) ' for 3x repetition draw
 End Sub
 
-Public Sub GameMovesTakeBack(ByVal iPlies As Integer)
+Public Sub GameMovesTakeBack(ByVal iPlies As Long)
 
-  Dim i          As Integer
-  Dim iUpper     As Integer
-  Dim iRealFifty As Integer
+  Dim i          As Long
+  Dim iUpper     As Long
+  Dim iRealFifty As Long
 
-  iUpper = UBound(arGameMoves)
+  iUpper = GameMovesCnt
   If iUpper >= iPlies Then
     For i = iUpper To iUpper - (iPlies - 1) Step -1
       iRealFifty = Fifty
@@ -766,9 +767,9 @@ Public Sub GameMovesTakeBack(ByVal iPlies As Integer)
         End If
       End If
     Next
-    ReDim Preserve arGameMoves(iUpper - iPlies)
-    GameMovesCnt = UBound(arGameMoves)
+    GameMovesCnt = GameMovesCnt - iPlies
     InitPieceSquares
+    ClearEasyMove
     Result = NO_MATE
   End If
 
@@ -791,7 +792,7 @@ End Sub
 '---------------------------------------------------------------------------
 'RndInt: Returns random value between iMin and IMax
 '---------------------------------------------------------------------------
-Public Function RndInt(ByVal iMin As Integer, ByVal IMax As Integer) As Integer
+Public Function RndInt(ByVal iMin As Long, ByVal IMax As Long) As Long
   Randomize
   RndInt = Int((IMax - iMin + 1) * Rnd + iMin)
 End Function
@@ -814,15 +815,15 @@ End Function
 
 Public Function ReadScoreArr(pDest() As TScore, ParamArray pSrc())
   ' Read paramter list into array of type TScore ( MG / EG )
-  Dim i As Integer
+  Dim i As Long
   For i = 0 To (UBound(pSrc) - 1) \ 2
     pDest(i).MG = pSrc(2 * i): pDest(i).EG = pSrc(2 * i + 1)
   Next
 End Function
 
-Public Function ReadScoreArr2(pDest() As TScore, I1 As Integer, ParamArray pSrc())
+Public Function ReadScoreArr2(pDest() As TScore, I1 As Long, ParamArray pSrc())
   ' Read paramter list into array of type TScore ( MG / EG )
-  Dim i As Integer
+  Dim i As Long
   For i = 0 To (UBound(pSrc) - 1) \ 2
     pDest(I1, i).MG = pSrc(2 * i): pDest(I1, i).EG = pSrc(2 * i + 1)
   Next
@@ -830,29 +831,29 @@ End Function
 
 Public Function ReadLngArr(pDest() As Long, ParamArray pSrc())
   ' Read paramter list into array of type Long
-  Dim i As Integer
+  Dim i As Long
   For i = 0 To UBound(pSrc): pDest(i) = pSrc(i): Next
 End Function
 
-Public Function ReadIntArr(pDest() As Integer, ParamArray pSrc())
+Public Function ReadIntArr(pDest() As Long, ParamArray pSrc())
   ' Read paramter list into array of type Integer
-  Dim i As Integer
+  Dim i As Long
   For i = 0 To UBound(pSrc): pDest(i) = pSrc(i): Next
 End Function
 
-Public Function ReadIntArr2(pDest() As Integer, I1 As Integer, ParamArray pSrc())
+Public Function ReadIntArr2(pDest() As Long, I1 As Long, ParamArray pSrc())
   ' Read Integer array of 2-dimensional array: I1= dimension 1
-  Dim i As Integer
+  Dim i As Long
   For i = 0 To UBound(pSrc): pDest(I1, i) = pSrc(i): Next
 End Function
 
-Public Function ReadIntArr3(pDest() As Integer, I1 As Integer, i2 As Integer, ParamArray pSrc())
+Public Function ReadIntArr3(pDest() As Long, I1 As Long, i2 As Long, ParamArray pSrc())
   ' Read Integer array of 3-dimensional array: I1= dimension 1, I2= dimension 2
-  Dim i As Integer
+  Dim i As Long
   For i = 0 To UBound(pSrc): pDest(I1, i2, i) = pSrc(i): Next
 End Function
 
-Public Sub CopyIntArr(SourceArr() As Integer, DestArr() As Integer)
+Public Sub CopyIntArr(SourceArr() As Long, DestArr() As Long)
   Dim i As Long
   For i = LBound(SourceArr) To UBound(SourceArr) - 1: DestArr(i) = SourceArr(i): Next
 End Sub

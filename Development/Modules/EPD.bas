@@ -6,20 +6,19 @@ Attribute VB_Name = "EPDbas"
 Option Explicit
 
 ' Table for board indexes
-Private EPDTable(63) As Integer
+Private EPDTable(63) As Long
 
 '---------------------------------------------------------------------------
 'ReadEPD()
 '---------------------------------------------------------------------------
 Public Function ReadEPD(ByVal sEpdString As String) As Boolean
 
-  Dim NumSquares  As Integer, i As Integer
+  Dim NumSquares  As Long, i As Long
   Dim sChar       As String
   Dim arCmdList() As String
 
-  Erase arFiftyMove()
-  Fifty = 0
-  GameMovesCnt = 0
+  Erase arFiftyMove(): Erase GamePosHash(): Erase arGameMoves()
+  Fifty = 0: GameMovesCnt = 0
   HintMove = EmptyMove
   PrevGameMoveScore = 0
   InitHash
@@ -68,11 +67,9 @@ Public Function ReadEPD(ByVal sEpdString As String) As Boolean
         Board(EPDTable(NumSquares)) = BROOK
         NumSquares = NumSquares + 1
       Case "Q"
-        WQueenLoc = EPDTable(NumSquares)
         Board(EPDTable(NumSquares)) = WQUEEN
         NumSquares = NumSquares + 1
       Case "q"
-        BQueenLoc = EPDTable(NumSquares)
         Board(EPDTable(NumSquares)) = BQUEEN
         NumSquares = NumSquares + 1
       Case "B"
@@ -135,9 +132,26 @@ Public Function ReadEPD(ByVal sEpdString As String) As Boolean
     End If
   End If
 
-  InitPieceSquares
+  'Part5 : Half move count
+  If UBound(arCmdList) >= 4 Then
+    sChar = arCmdList(4)
+    If sChar <> "" Then
+     If Val("0" & sChar) > 0 Then Fifty = Val(sChar)
+    End If
+  End If
+  
+  'Part5 : Half move count
   GameMovesCnt = 0
-  GamePosHash(GameMovesCnt) = HashBoard() ' for 3x repetition draw
+  If UBound(arCmdList) >= 5 Then
+    sChar = arCmdList(5)
+    If sChar <> "" Then
+     If Val("0" & sChar) > 0 Then GameMovesCnt = Val(sChar)
+    End If
+  End If
+  
+  InitPieceSquares
+  ClearEasyMove
+  GamePosHash(GameMovesCnt) = HashBoard(EmptyMove) ' for 3x repetition draw
   ReadEPD = True
 
 End Function
@@ -147,8 +161,8 @@ End Function
 '---------------------------------------------------------------------------
 Public Function WriteEPD() As String
 
-  Dim i        As Integer
-  Dim iPiece   As Integer, iEmptySquares As Integer
+  Dim i        As Long
+  Dim iPiece   As Long, iEmptySquares As Long
   Dim sEPD     As String, sRow As String
   Dim sEPPiece As String, sCastle As String
 
@@ -224,4 +238,5 @@ Public Sub InitEPDTable()
   EPDTable(60) = 25: EPDTable(61) = 26: EPDTable(62) = 27: EPDTable(63) = 28
        
 End Sub
+
 

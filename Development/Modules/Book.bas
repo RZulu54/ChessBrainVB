@@ -7,7 +7,7 @@ Attribute VB_Name = "BookBas"
 Option Explicit
 
 Public Book()         As String   '4999
-Public BookPly        As Integer
+Public BookPly        As Long
 Public bUseBook       As Boolean
 Public OpeningHistory As String
 
@@ -15,16 +15,16 @@ Private dicBookIndex  As Scripting.Dictionary
 Private NumBookLines  As Long
 
 Private BookWhite1()  As String
-Private NumBookWhite1 As Integer
+Private NumBookWhite1 As Long
 
 '---------------------------------------------------------------------------
 'ChooseBookMove()
 '---------------------------------------------------------------------------
 Public Function ChooseBookMove() As TMove
 
-  Dim i                As Long, j As Long, iRandom As Integer, iReplies As Integer
-  Dim sPossibleMove    As String, sCoordMove As String, sPreviousMove As String, From As Integer, Target As Integer
-  Dim iNumMoves        As Integer
+  Dim i                As Long, j As Long, iRandom As Long, iReplies As Long
+  Dim sPossibleMove    As String, sCoordMove As String, sPreviousMove As String, From As Long, Target As Long
+  Dim iNumMoves        As Long
   Dim BookReplies()    As TMove
   Dim BookCandidates() As String
   Ply = 0
@@ -109,12 +109,18 @@ End Function
 Public Function InitBook() As Boolean
 
   Dim sBookName       As String, sIndexFile As String
-  Dim iFBook          As Integer, iFIndex As Integer
+  Dim iFBook          As Long, iFIndex As Long
   Dim sBookLine       As String
   Dim lBookIndex      As Long, lAllSet As Long
   Dim sLastWhite1Move As String
 
   sBookName = ReadINISetting(USE_BOOK_KEY, "")
+  
+  If pbIsOfficeMode And Trim(sBookName) = "" Then
+    ' Always use default book if not set in INI file
+    sBookName = "ChessBrainVB_Book.opn"
+  End If
+  
   If sBookName <> "" Then
     NumBookLines = 0
     Erase Book
@@ -167,7 +173,7 @@ Public Function InitBook() As Boolean
   Exit Function
 
 BookErr:
-  LogWrite "Opening book error: " & Error, , True
+  If bWinboardTrace Then LogWrite "Opening book error: " & Error, , True
 
 End Function
 '---------------------------------------------------------------------------
@@ -175,7 +181,7 @@ End Function
 '---------------------------------------------------------------------------
 Private Function SetAllBits() As Long
 
-  Dim i As Integer, lBit As Long
+  Dim i As Long, lBit As Long
 
   For i = 0 To BOOK_MAX_PLY - 1
     lBit = lBit Or 2 ^ i
@@ -186,7 +192,7 @@ End Function
 '---------------------------------------------------------------------------
 'CheckBookBit()
 '---------------------------------------------------------------------------
-Private Function CheckBookBit(ByVal sKey As String, ByVal iPos As Integer) As Boolean
+Private Function CheckBookBit(ByVal sKey As String, ByVal iPos As Long) As Boolean
 
   Dim lIndex As Long, lBit As Long
 
@@ -202,7 +208,7 @@ End Function
 '---------------------------------------------------------------------------
 Private Function GetIndexFileName(ByVal sBook As String) As String
 
-  Dim iPos As Integer
+  Dim iPos As Long
 
   iPos = InStrRev(sBook, ".")
 
