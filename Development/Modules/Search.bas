@@ -23,7 +23,7 @@ Public QNodes                     As Long
 Public QNodesPerc                 As Double
 Public EvalCnt                    As Long
 Public bEndgame                   As Boolean
-Public PlyScore(99)               As Long
+Public PlyScore(MAX_DEPTH)        As Long
 Public MaxPly                     As Long
 
 Public PV(MAX_PV, MAX_PV)         As TMove '--- principal variation(PV): best path of moves in current search tree

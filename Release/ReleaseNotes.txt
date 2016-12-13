@@ -4,6 +4,13 @@
 = Release notes for ChessBrainVB chess engine 
 =======================================================================================
 
+
+Changes from version 3.02 to 3.03 (Roger Zuehlsdorf 13-DEC-2016)
+----------------------------------------------------------------
+- VBA overflow at depth 100 fixed
+- VBA move list output fixed
+
+
 Changes from version 2.05 to 3.02 (Roger Zuehlsdorf 09-DEC-2016)
 ----------------------------------------------------------------
 - major rewrite of move generation, king safety and search logic (new stockfish7 patches added if helpful)

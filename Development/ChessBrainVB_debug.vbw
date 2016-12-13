@@ -1,10 +1,10 @@
-BoardBas = 16, 9, 933, 515, C
+BoardBas = 16, 9, 933, 515, 
 BookBas = 100, 100, 1100, 490, C
 ConstBas = 100, 100, 1146, 370, C
 IObas = -9, 116, 991, 506, C
-ChessBrainVBbas = 150, 150, 839, 520, 
+ChessBrainVBbas = 150, 79, 839, 520, 
 EPDbas = 13, 10, 1014, 515, 
-SearchBas = 114, -8, 1110, 570, 
+SearchBas = 101, -14, 1097, 564, 
 frmDebugMain = 75, 75, 1075, 465, C, 50, 50, 1118, 453, C
 EvalBas = 20, 0, 1221, 581, 
 HashBas = 50, 50, 1033, 453, C
