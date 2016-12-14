@@ -1,17 +1,17 @@
 # ChessBrainVB
-Chess engine with GUI for Excel/Word VBA - plus edition for winboard: win32 engine with playing strength of 2600 ELO
+Chess engine with GUI for Excel/Word VBA - plus edition for winboard: win32 engine with playing strength of 2750 ELO
 
 There are two ways to use this chess engine:
 
 1. Use a free chess GUI like ARENA, add ChessBrainVB.exe as winboard engine  and play games.
    Files needed: ChessBrainVB.ini  for settings, ChessBrainVB_Book.opn, ChessBrainVB_Book.opi for opening book.
-  Playing strength 2600 ELO (CCRL 40/4 conditions, see http://www.computerchess.org.uk/ccrl/404/rating_list_all.html)
+  Playing strength 2750 ELO (CCRL 40/4 conditions, see http://www.computerchess.org.uk/ccrl/404/rating_list_all.html)
   Compiled with Visual Basic 6
  
 2. Use ExcelChessBrainX.xlsm or WordChessBrainX.docm (full install needed, viewer not working)
    to play games using the GUI implemented in VBA forms.
   Files needed: ChessBrainVB.ini  for settings, ChessBrainVB_Book.opn, ChessBrainVB_Book.opi for opening book.
-  Playing strength 2100 ELO (CCRL 40/4 conditions, see http://www.computerchess.org.uk/ccrl/404/rating_list_all.html)
+  Playing strength 2250 ELO (CCRL 40/4 conditions, see http://www.computerchess.org.uk/ccrl/404/rating_list_all.html)
   Visual Basic for Applications is used for the chess engine.
   This pseudo code is not compiled and 15 times slower than the compiled VB6 EXE for winboard.
 
@@ -23,9 +23,10 @@ I want to thank Luca Dormio for his permission to use his LarsenVB source.
 
 ChessBrainVB is also based on many great ideas from the following people: 
 
-Marco Costabla/Tord Romstad/Joona Kiiski (Stockfish sources): Search logic, king safety, piece evaluation
+Marco Costabla/Tord Romstad/Joona Kiiski (Stockfish sources): Search logic, king safety, piece evaluation.
+Search logic and evaluation are based an Stockfish 7 with adaptions to non-bitboard data structure and search changes that perform better for slower move generation and evaluation. 
 
-Ed SChroder (REBEL descriptions):  Killer move strucure, Search extensions
+Ed Schroeder (REBEL descriptions):  Killer move strucure, Search extensions
 
 Raimund Heid (Protector sources):  Material draw logic
 
