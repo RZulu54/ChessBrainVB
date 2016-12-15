@@ -4,6 +4,10 @@
 = Release notes for ChessBrainVB chess engine 
 =======================================================================================
 
+Changes from version 3.03 to 3.03a (Roger Zuehlsdorf 15-DEC-2016)
+----------------------------------------------------------------
+- compact edition for WORD and POWERPOINT added
+
 
 Changes from version 3.02 to 3.03 (Roger Zuehlsdorf 13-DEC-2016)
 ----------------------------------------------------------------
