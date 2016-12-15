@@ -14,15 +14,15 @@ Public psLastFieldMouseDown As String
 Public psLastFieldMouseUp As String
 
 Public SetupBoardMode As Boolean  ' manual board setup using GUI
-Public SetupPiece As Integer
+Public SetupPiece As Long
 
 ' GUI colors
 Public WhiteSqCol As Long
 Public BlackSqCol As Long
 Public BoardFrameCol As Long
 
-Dim plFieldFrom As Integer, plFieldTarget As Integer
-Dim psFieldFrom As String, psFieldTarget As String
+Public plFieldFrom As Long, plFieldTarget As Long
+Public psFieldFrom As String, psFieldTarget As String
 Dim plFieldFromColor As Long, plFieldTargetColor As Long
 Dim psMove As String
 
@@ -52,7 +52,8 @@ End Sub
 
 Public Sub DoFieldClicked()
   ' square click handling: 1. click: select FROM square, 2. click: select TARGET square => do move
-  Dim bIsLegal As Boolean, NumLegalMoves As Integer, FieldPos As Integer
+  Dim bIsLegal As Boolean, NumLegalMoves As Long, FieldPos As Long, FieldTarget As Long
+  Dim sPromotePiece As String, lResult As Long
   
   '--- Setup board mode:  if square not empty: 1 click: white piece, 2. click: black piece, 3. click: clear field
   If SetupBoardMode Then
@@ -129,8 +130,14 @@ Public Sub DoFieldClicked()
         '--- Check player move
         bIsLegal = CheckGUIMoveIsLegal(FieldNumToCoord(plFieldFrom), FieldNumToCoord(plFieldTarget), NumLegalMoves)
         If bIsLegal Then
+          ' Promotion?
+          sPromotePiece = "": FieldPos = FieldNumToBoardPos(plFieldFrom): FieldTarget = FieldNumToBoardPos(plFieldTarget)
+          If (Board(FieldPos) = WPAWN And Rank(FieldTarget) = 8) Or (Board(FieldPos) = BPAWN And Rank(FieldTarget) = 1) Then
+            lResult = MsgBox(Translate("Promote to queen?"), vbYesNo) ' or Knight
+            If lResult = vbYes Then sPromotePiece = "q" Else sPromotePiece = "n"
+          End If
           '--- Send move to Engine
-          psMove = FieldNumToCoord(plFieldFrom) & FieldNumToCoord(plFieldTarget) & vbLf
+          psMove = FieldNumToCoord(plFieldFrom) & FieldNumToCoord(plFieldTarget) & sPromotePiece & vbLf
           ParseCommand psMove
           frmChessX.ShowMoveList
           frmChessX.ShowBoard
@@ -164,16 +171,16 @@ Public Sub DoFieldClicked()
 End Sub
 
 
-Public Function FieldNumToBoardPos(ByVal ilFieldNum As Integer) As Integer
+Public Function FieldNumToBoardPos(ByVal ilFieldNum As Long) As Long
    Dim s As String
    s = FieldNumToCoord(ilFieldNum)
    FieldNumToBoardPos = FileRev(Left(s, 1)) + RankRev(Mid(s, 2, 1))
 End Function
 
 
-Public Function CheckGUIMoveIsLegal(MoveFromText, MoveTargetText, oLegalMoves As Integer) As Boolean
+Public Function CheckGUIMoveIsLegal(MoveFromText, MoveTargetText, oLegalMoves As Long) As Boolean
   ' Input: "e2", "e4", Output:  oLegalMoves:Number of Legal Moves
-  Dim a As Integer, NumMoves As Integer, From As Integer, Target As Integer
+  Dim a As Long, NumMoves As Long, From As Long, Target As Long
   CheckGUIMoveIsLegal = False
   
   Ply = 0
@@ -192,8 +199,8 @@ End Function
 
 Public Sub ShowLegalMovesForPiece(MoveFromText)
   ' Input: square as text "e2"
-  Dim a As Integer, NumMoves As Integer, From As Integer, Target As Integer
-  Dim NumLegalMoves As Integer, ctrl As Control, bFound As Boolean
+  Dim a As Long, NumMoves As Long, From As Long, Target As Long
+  Dim NumLegalMoves As Long, ctrl As Control, bFound As Boolean
   
   Ply = 0: bFound = False
   NumLegalMoves = GenerateLegalMoves(NumMoves)
@@ -220,7 +227,7 @@ Public Sub ShowLegalMovesForPiece(MoveFromText)
 End Sub
 
 Public Sub ResetGUIFieldColors()
- Dim x As Long, y As Long, bBackColorIsWhite As Boolean, i As Integer
+ Dim x As Long, y As Long, bBackColorIsWhite As Boolean, i As Long
  
  bBackColorIsWhite = False
  
@@ -242,9 +249,9 @@ End Sub
 
 
 
-Public Function GenerateLegalMoves(olTotalMoves As Integer) As Integer
+Public Function GenerateLegalMoves(olTotalMoves As Long) As Long
   ' Returns all moves in Moves(ply). Moves(x).IsLegal=true for legal moves
-  Dim LegalMoves As Integer, lLegalMoves As Integer, i As Integer, NumMoves As Integer
+  Dim LegalMoves As Long, lLegalMoves As Long, i As Long, NumMoves As Long
   
   GenerateMoves Ply, False, NumMoves
   Ply = 0: lLegalMoves = 0
@@ -279,16 +286,13 @@ Public Sub ShowColToMove()
 End Sub
 
 Public Sub ShowLastMoveAtBoard()
- Dim lGameMoves As Long
-
- lGameMoves = UBound(arGameMoves)
- If lGameMoves = 0 Then Exit Sub
- ShowMove arGameMoves(lGameMoves).From, arGameMoves(lGameMoves).Target
+ If GameMovesCnt = 0 Then Exit Sub
+ ShowMove arGameMoves(GameMovesCnt).From, arGameMoves(GameMovesCnt).Target
 End Sub
 
-Public Sub ShowMove(From As Integer, Target As Integer)
+Public Sub ShowMove(From As Long, Target As Long)
  ' show move on board with different backcolor
- Dim Pos As Integer, ctrl As Control
+ Dim Pos As Long, ctrl As Control
  
  If From > 0 Then
     For Each ctrl In frmChessX.Controls

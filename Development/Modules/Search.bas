@@ -795,11 +795,20 @@ lblNoMoreReductions:
 
     If (bTimeExit And LegalMoveCnt > 0) Or RootScore = MATE0 - 1 Then Exit For
     If pbIsOfficeMode Then
+      If bTimeExit Then
+        SearchTime = TimerDiff(TimeStart, Timer)
+        Debug.Print Nodes, SearchTime
+      End If
+      #If VBA_MODE = 1 Then
+       '-- Office sometimes lost focus for Powepoint
+       If Application.Name = "Microsoft PowerPoint" Then
+         If IterativeDepth > 4 Then frmChessX.cmdStop.SetFocus
+       End If
+      #End If
       If IterativeDepth > 2 Then DoEvents
     Else
       If IterativeDepth > 6 Then DoEvents
     End If
-    
     '--- Add Quiet move, used for pruning and history update
     If CurrentMove.Captured = NO_PIECE And CurrentMove.Promoted = 0 And QuietMoves < 64 Then
       If Not MovesEqual(BestMove, CurrentMove) Then QuietMoves = QuietMoves + 1: QuietsSearched(Ply, QuietMoves) = CurrentMove
@@ -954,7 +963,7 @@ Private Function Search(ByVal PVNode As Boolean, _
   If Not FixedDepthMode Then
     '-- Fix:Nodes Mod 1000 > not working because nodes are incremented in QSearch too
     If Nodes > LastNodesCnt + GUICheckIntervalNodes And (IterativeDepth > LIGHTNING_DEPTH) Then
-      If pbIsOfficeMode Then DoEvents
+      'If pbIsOfficeMode Then DoEvents
       ' --- Check new commands from GUI (i.e. analyze stop)
       If PollCommand Then
         sInput = ReadCommand

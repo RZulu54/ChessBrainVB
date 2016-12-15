@@ -1,6 +1,6 @@
 VERSION 5.00
 Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} frmChessX 
-   Caption         =   "ChessBrainVBA 2.0"
+   Caption         =   "ChessBrainVBA 3.03"
    ClientHeight    =   10500
    ClientLeft      =   45
    ClientTop       =   375
@@ -146,9 +146,10 @@ Private Sub cmdEndSetup_Click()
   InitPieceSquares
   GameMovesCnt = 0
   HintMove = EmptyMove
-  GamePosHash(GameMovesCnt) = HashBoard() ' for 3x repetition draw
+  GamePosHash(GameMovesCnt) = HashBoard(EmptyMove) ' for 3x repetition draw
   ShowMoveList
   ShowBoard
+  psLastFieldClick = "": psFieldFrom = "": psFieldTarget = "": plFieldFrom = 0: plFieldTarget = 0
 End Sub
 
 Private Sub cmdHint_Click()
@@ -188,17 +189,24 @@ End Sub
 
 Private Sub cmdTestPos1_Click()
  ' Read from INI or use default
+ optSecondsPerMove.Value = 1
+ If cboSecondsPerMove.Value < 8 Then cboSecondsPerMove.Value = "8"
  cboFakeInput.Text = "setboard " & ReadINISetting("TEST_POSITION1", "1b5k/7P/p1p2np1/2P2p2/PP3P2/4RQ1R/q2r3P/6K1 w - - bm Re8+; id WAC.250;Mate in 8;")
  cmdFakeInput_Click
 End Sub
 
 Private Sub cmdTestPos2_Click()
+ optSecondsPerMove.Value = 1
+ If cboSecondsPerMove.Value < 10 Then cboSecondsPerMove.Value = "10"
  cboFakeInput.Text = "setboard " & ReadINISetting("TEST_POSITION2", "2k4B/bpp1qp2/p1b5/7p/1PN1n1p1/2Pr4/P5PP/R3QR1K b - - bm Ng3+; id WAC.273;")
  cmdFakeInput_Click
 End Sub
 
 Private Sub cmdTestPos3_Click()
+ optSecondsPerMove.Value = 1
+ If cboSecondsPerMove.Value < 10 Then cboSecondsPerMove.Value = "10"
  cboFakeInput.Text = "setboard " & ReadINISetting("TEST_POSITION3", "r3q2r/2p1k1p1/p5p1/1p2Nb2/1P2nB2/P7/2PNQbPP/R2R3K b - - bm Rxh2+; id WAC.266;")
+' cboFakeInput.Text = "setboard 8/5P2/8/4K3/2k5/8/8/8 w - -"  ' Promote test
  cmdFakeInput_Click
 End Sub
 
@@ -336,7 +344,8 @@ Private Sub cmdFakeInput_Click()
     If InStr(FakeInput, "setboard") > 0 Then
       InitGame
       txtMoveList = ""
-      ReDim arGameMoves(0)
+      Erase arGameMoves()
+      GameMovesCnt = 0
       Result = NO_MATE
     End If
     
@@ -349,20 +358,20 @@ Private Sub cmdFakeInput_Click()
       optBlack.Value = True
     End If
     ShowColToMove
-    
+    psLastFieldClick = "": plFieldFrom = 0: plFieldTarget = 0
 End Sub
 
 Public Sub ShowBoard()
-  Dim x As Long, y As Long, Pos As Long, Piece As Long
+  Dim x As Long, y As Long, Pos As Long, piece As Long
   
   For x = 1 To 8
     For y = 1 To 8
       Pos = x + (y - 1) * 8
-      Piece = Board(SQ_A1 + x - 1 + (y - 1) * 10)
-      If Piece = NO_PIECE Then
+      piece = Board(SQ_A1 + x - 1 + (y - 1) * 10)
+      If piece = NO_PIECE Then
         Set oField(Pos).Picture = Nothing
-      ElseIf Piece >= 1 And Piece <= 12 Then
-        Set oField(Pos).Picture = oPiecePics(Piece).Picture
+      ElseIf piece >= 1 And piece <= 12 Then
+        Set oField(Pos).Picture = oPiecePics(piece).Picture
       End If
     Next
   Next
@@ -371,15 +380,15 @@ Public Sub ShowBoard()
   ' Show piece counts for white; call Eval to get counts
   InitEval
   x = Eval()
-  oPieceCnt(PieceDisplayOrder(WPAWN) + 1).Caption = CStr(WPawnCnt - BPawnCnt)
-  oPieceCnt(PieceDisplayOrder(WKNIGHT) + 1).Caption = CStr(WKnightCnt - BKnightCnt)
-  oPieceCnt(PieceDisplayOrder(WBISHOP) + 1).Caption = CStr(WBishopCnt - BBishopCnt)
-  oPieceCnt(PieceDisplayOrder(WROOK) + 1).Caption = CStr(WRookCnt - BRookCnt)
-  oPieceCnt(PieceDisplayOrder(WQUEEN) + 1).Caption = CStr(WQueenCnt - BQueenCnt)
+  oPieceCnt(PieceDisplayOrder(WPAWN) + 1).Caption = CStr(PieceCnt(WPAWN) - PieceCnt(BPAWN))
+  oPieceCnt(PieceDisplayOrder(WKNIGHT) + 1).Caption = CStr(PieceCnt(WKNIGHT) - PieceCnt(BKNIGHT))
+  oPieceCnt(PieceDisplayOrder(WBISHOP) + 1).Caption = CStr(PieceCnt(WBISHOP) - PieceCnt(BBISHOP))
+  oPieceCnt(PieceDisplayOrder(WROOK) + 1).Caption = CStr(PieceCnt(WROOK) - PieceCnt(BROOK))
+  oPieceCnt(PieceDisplayOrder(WQUEEN) + 1).Caption = CStr(PieceCnt(WQUEEN) - PieceCnt(BQUEEN))
   
   ' instead of king count show total sum
-  oPieceCnt(PieceDisplayOrder(WKING) + 1).Caption = CStr(WPawnCnt - BPawnCnt + (WKnightCnt - BKnightCnt) * 3 + _
-                                                   (WBishopCnt - BBishopCnt) * 3 + (WRookCnt - BRookCnt) * 5 + (WQueenCnt - BQueenCnt) * 9)
+  oPieceCnt(PieceDisplayOrder(WKING) + 1).Caption = CStr(PieceCnt(WPAWN) - PieceCnt(BPAWN) + (PieceCnt(WKNIGHT) - PieceCnt(BKNIGHT)) * 3 + _
+                                                   (PieceCnt(WBISHOP) - PieceCnt(BBISHOP)) * 3 + (PieceCnt(WROOK) - PieceCnt(BROOK)) * 5 + (PieceCnt(WQUEEN) - PieceCnt(BQUEEN)) * 9)
   
   Me.Repaint
   ShowColToMove
@@ -575,8 +584,8 @@ For i = 1 To 12
 Next
 End Sub
 
-Private Function PieceDisplayOrder(Piece As Long) As Integer
-  Select Case Piece
+Private Function PieceDisplayOrder(piece As Long) As Integer
+  Select Case piece
   Case WPAWN, BPAWN: PieceDisplayOrder = 0
   Case WKNIGHT, BKNIGHT: PieceDisplayOrder = 1
   Case WBISHOP, BBISHOP: PieceDisplayOrder = 2
@@ -771,18 +780,20 @@ End Sub
 
 
 Public Sub ShowMoveList()
-Dim lGameMoves As Long, i As Integer
+Dim i As Integer
 
-lGameMoves = UBound(arGameMoves)
 txtMoveList = ""
-If lGameMoves = 0 Then Exit Sub
-If arGameMoves(1).Piece Mod 2 = 0 Then txtMoveList = "      "
-For i = 1 To lGameMoves
+If GameMovesCnt = 0 Then Exit Sub
+If arGameMoves(1).piece Mod 2 = 0 Then txtMoveList = "      "
+For i = 1 To GameMovesCnt
   If Len(txtMoveList) > 32000 Then txtMoveList = ""
-  If arGameMoves(i).Piece Mod 2 = 1 Then
-    txtMoveList = txtMoveList & Left(MoveText(arGameMoves(i)) & Space(6), 6)
+  
+  If arGameMoves(i).piece Mod 2 = 1 Then
+    If arGameMoves(i).From > 0 Or arGameMoves(i + 1).From > 0 Then
+      txtMoveList = txtMoveList & Left(MoveText(arGameMoves(i)) & Space(6), 6)
+    End If
   Else
-    txtMoveList = txtMoveList & " - " & MoveText(arGameMoves(i)) & vbCrLf
+    If arGameMoves(i).From > 0 Then txtMoveList = txtMoveList & " - " & MoveText(arGameMoves(i)) & vbCrLf
   End If
 Next i
   txtMoveList.SetFocus: txtMoveList.SelStart = Len(txtMoveList): txtMoveList.SelLength = 0
