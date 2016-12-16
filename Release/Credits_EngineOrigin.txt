@@ -25,3 +25,5 @@ Marco Costabla/Tord Romstad/Joona Kiiski (Stockfish sources): Search logic, king
 Ed Schroder (REBEL descriptions):  Killer move strucure, Search extensions
 
 Raimund Heid (Protector sources):  Material draw logic
+
+Norbert Raimund Leisner: Logo file
