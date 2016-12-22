@@ -15,6 +15,8 @@ There are two ways to use this chess engine:
   Visual Basic for Applications is used for the chess engine.
   This pseudo code is not compiled and 15 times slower than the compiled VB6 EXE for winboard.
 
+For questions please contact me:
+rogzuehlsdorf@yahoo.de
 ----------------------------------------------------------------------
 ### CREDITS
 This chess engine is based on the source of the engine "LarsenVB" by Luca Dormio (http://xoomer.virgilio.it/ludormio/download.htm).
