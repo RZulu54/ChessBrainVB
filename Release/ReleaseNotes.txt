@@ -4,12 +4,22 @@
 = Release notes for ChessBrainVB chess engine 
 =======================================================================================
 
+Changes from version 3.03 to 3.20 (Roger Zuehlsdorf 10-MAR-2017)
+----------------------------------------------------------------
+- bugfix in king safety
+- several small fixes and code cleanup 
+- move counter added to Office GUI
+- ELO increase about 20 ELO
+
+Changes from version 3.03 to 3.03a (Roger Zuehlsdorf 15-DEC-2016)
+----------------------------------------------------------------
+- compact edition for WORD and POWERPOINT added
+
 
 Changes from version 3.02 to 3.03 (Roger Zuehlsdorf 13-DEC-2016)
 ----------------------------------------------------------------
 - VBA overflow at depth 100 fixed
 - VBA move list output fixed
-- Logo file added (thanks to Norbert Raimund Leisner)
 
 
 Changes from version 2.05 to 3.02 (Roger Zuehlsdorf 09-DEC-2016)

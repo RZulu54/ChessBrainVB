@@ -1,6 +1,6 @@
 Attribute VB_Name = "ChessBrainVBbas"
 '==================================================
-'= ChessBrainVB V3.0:
+'= ChessBrainVB V3.20:
 '=   by Roger Zuehlsdorf (Copyright 2016)
 '=   based on LarsenVB by Luca Dormio (http://xoomer.virgilio.it/ludormio/download.htm) and Faile by Adrien M. Regimbald
 '=        and Stockfish by Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
@@ -168,8 +168,8 @@ Public Sub InitEngine()
 
   ' setup empty move
   With EmptyMove
-    .From = 0: .Target = 0: .piece = NO_PIECE: .Castle = NO_CASTLE: .Promoted = 0: .Captured = NO_PIECE: .CapturedNumber = 0
-    .EnPassant = 0: .IsChecking = False: .IsInCheck = False: .IsLegal = False: .OrderValue = 0: .SeeValue = UNKNOWN_SCORE
+    .From = 0: .Target = 0: .Piece = NO_PIECE: .Castle = NO_CASTLE: .Promoted = 0: .Captured = NO_PIECE: .CapturedNumber = 0
+    .EnPassant = 0: .IsChecking = False: .IsLegal = False: .OrderValue = 0: .SeeValue = UNKNOWN_SCORE
   End With
 
   '--------------------------------------------
@@ -218,10 +218,13 @@ Public Sub InitEngine()
   
   'SF6: Threat by pawn (pairs MG/EG: NOPIECE,PAWN,KNIGHT (176,139), BISHOP, ROOK, QUEEN
   ReadScoreArr ThreatBySafePawn, 0, 0, 0, 0, 176, 139, 131, 127, 217, 218, 203, 215
+  SetScoreVal ThreatByRank, 16, 3
   
   'SF6: Outpost (Pair MG/EG )[0, 1=supported by pawn]
-  ReadScoreArr OutpostBonusKnight, 43, 11, 65, 20
-  ReadScoreArr OutpostBonusBishop, 20, 3, 29, 8
+  ReadScoreArr ReachableOutpostKnight, 22, 6, 33, 9
+  ReadScoreArr ReachableOutpostBishop, 9, 2, 14, 4
+  ReadScoreArr OutpostBonusKnight, 44, 12, 66, 18
+  ReadScoreArr OutpostBonusBishop, 18, 4, 28, 8
   
   'SF6: King Attack Weights by attacker { 0, 0, 7, 5, 4, 1 }  NO_PIECE_TYPE, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING,
   ' SF values not clear: why queen is 1 and knight is 7 ?!? More attack fields in total for queen?
@@ -283,16 +286,22 @@ Public Sub InitEngine()
     0, 100, 90, 80, 70, 70, 80, 90, 100
   
   ' Threats
-  ReadScoreArr ThreatDefendedMinor, 0, 0, 0, 0, 19, 37, 24, 37, 44, 97, 35, 106 'Minor on Defended
-  ReadScoreArr ThreatDefendedMajor, 0, 0, 0, 0, 9, 14, 9, 14, 7, 14, 24, 48 'Major on Defended
-  ReadScoreArr ThreatWeakMinor, 0, 0, 0, 33, 45, 43, 46, 47, 72, 107, 48, 118 'Minor on weak
-  ReadScoreArr ThreatWeakMajor, 0, 0, 0, 25, 40, 62, 40, 59, 0, 34, 35, 48 'Major on weak
-  
-  SetScoreVal ThreatenedByHangingPawn, 70, 63
+  ReadScoreArr ThreatByMinor, 0, 0, 0, 33, 45, 43, 46, 47, 72, 107, 48, 118 'Minor on Defended
+  ReadScoreArr ThreatByRook, 0, 0, 0, 25, 40, 62, 40, 59, 0, 34, 35, 48 'Major on Defended
+   
+  SetScoreVal ThreatenedByHangingPawn, 71, 61
   SetScoreVal KingOnOneBonus, 3, 62
-  SetScoreVal Hanging, 48, 28 ' Hanging piece penalty
-  SetScoreVal SafeCheck, 20, 10
-  SetScoreVal OtherCheck, 10, 5
+  SetScoreVal KingOnManyBonus, 9, 138
+  SetScoreVal Hanging, 48, 27 ' Hanging piece penalty
+  SetScoreVal SafeCheck, 20, 20
+  SetScoreVal OtherCheck, 10, 10
+  SetScoreVal PawnlessFlank, 20, 80
+  
+  ' King protection ( zero index should never be hit)
+  ReadScoreArr KnightProtection, 10, 0, 7, 9, 7, 1, 1, 5, -10, -4, -1, -4, -7, -3, -16, -10
+  ReadScoreArr BishopProtection, 15, 7, 11, 8, -7, -1, -1, -2, -1, -7, -11, -3, -9, -1, -16, -1
+  ReadScoreArr RookProtection, 9, 7, 10, 0, -2, 2, -5, 4, -6, 2, -14, -3, -2, -9, -12, -7
+  ReadScoreArr QueenProtection, 4, 2, 3, -5, 2, -5, -4, 0, -9, -6, -4, 7, -13, -7, -10, -7
   
   'Material Imbalance
   InitImbalance
@@ -389,7 +398,7 @@ Public Sub ParseCommand(ByVal sCommand As String)
           If CheckLegal(Moves(Ply, i)) Then
             bLegalInput = True
             PlayerMove.Captured = Moves(Ply, i).Captured
-            PlayerMove.piece = Moves(Ply, i).piece
+            PlayerMove.Piece = Moves(Ply, i).Piece
             PlayerMove.Promoted = Moves(Ply, i).Promoted
             PlayerMove.EnPassant = Moves(Ply, i).EnPassant
             PlayerMove.Castle = Moves(Ply, i).Castle
@@ -811,6 +820,10 @@ End Function
 
 Public Function GetMaxSingle(ByVal X1 As Single, ByVal x2 As Single) As Single
   If X1 >= x2 Then GetMaxSingle = X1 Else GetMaxSingle = x2
+End Function
+
+Public Function GetMaxDbl(ByVal X1 As Double, ByVal x2 As Double) As Double
+  If X1 >= x2 Then GetMaxDbl = X1 Else GetMaxDbl = x2
 End Function
 
 Public Function ReadScoreArr(pDest() As TScore, ParamArray pSrc())

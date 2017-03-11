@@ -9,6 +9,9 @@ Option Explicit
 '----------------
 '- AllocateTime()
 '----------------
+
+Public TimeLeftCorr As Single
+
 Public Function AllocateTime(ByVal CurrScore As Long) As Single
 
   Dim Score         As Long
@@ -24,10 +27,19 @@ Public Function AllocateTime(ByVal CurrScore As Long) As Single
   If MovesToTC = 0 Then RemainingMovesToTC = 0 Else RemainingMovesToTC = MovesToTC - (GameMovesDone Mod MovesToTC)
   If bTimeTrace Then WriteTrace "before CalcTime: RMTOC:" & RemainingMovesToTC & " MToTC:" & MovesToTC
 
-  AllocateTime = CalcTime(RemainingMovesToTC, TimeIncrement, TimeLeft, CurrScore)
+  ' Subtract overhead for move transfer/execution
+  If MovesToTC > 0 And MovesToTC < 15 Then
+    TimeLeftCorr = TimeLeft - 1 - 0.2 * CDbl(GetMax(1, GetMin(40, RemainingMovesToTC)))
+  Else
+    TimeLeftCorr = TimeLeft
+  End If
+  If TimeLeftCorr < 0.1 Then TimeLeftCorr = 0.2
+  
+  AllocateTime = CalcTime(RemainingMovesToTC, TimeIncrement, TimeLeftCorr, CurrScore)
 
   If MovesToTC > 0 Then
-    TimeBase = TimeLeft / CDbl(GetMax(1, RemainingMovesToTC))
+    
+    TimeBase = TimeLeftCorr / CDbl(GetMax(1, RemainingMovesToTC))
   
     If RemainingMovesToTC < 10 Then
       AllocateTime = TimeBase * 0.9
@@ -36,37 +48,37 @@ Public Function AllocateTime(ByVal CurrScore As Long) As Single
         If bTimeTrace Then WriteTrace "Allocate TimeBase*4 limit. " & Format$(AllocateTime, "0.00")
         AllocateTime = TimeBase * 4#
       End If
-      If (TimeLeft - AllocateTime) / CDbl(GetMax(1, RemainingMovesToTC)) < TimeBase \ 2# Then
+      If (TimeLeftCorr - AllocateTime) / CDbl(GetMax(1, RemainingMovesToTC)) < TimeBase \ 2# Then
         If bTimeTrace Then WriteTrace "Allocate Timebase\2 limit. " & Format$(AllocateTime, "0.00")
-        AllocateTime = TimeLeft / CDbl(GetMax(1, RemainingMovesToTC))
+        AllocateTime = TimeLeftCorr / CDbl(GetMax(1, RemainingMovesToTC))
       End If
     End If
   End If
-  If AllocateTime > (TimeLeft + TimeIncrement) / 2# Then AllocateTime = (TimeLeft + TimeIncrement) / 2#
+  If AllocateTime > (TimeLeftCorr + TimeIncrement) / 2# Then AllocateTime = (TimeLeftCorr + TimeIncrement) / 2#
 
-  If TimeLeft < 1.5 And TimeIncrement = 0 And AllocateTime > 0.2 Then
-    AllocateTime = GetMaxSingle(TimeLeft, 0.1 + TimeLeft / (GetMax(1, RemainingMovesToTC)))
-    AllocateTime = GetMinSingle(AllocateTime, TimeLeft)
+  If TimeLeftCorr < 1.5 And TimeIncrement = 0 And AllocateTime > 0.2 Then
+    AllocateTime = GetMaxSingle(TimeLeftCorr, 0.1 + TimeLeftCorr / (GetMax(1, RemainingMovesToTC)))
+    AllocateTime = GetMinSingle(AllocateTime, TimeLeftCorr)
   End If
 
-  If (TimeLeft - AllocateTime) / CDbl(GetMax(1, RemainingMovesToTC)) < 0.8 Then
-    AllocateTime = (TimeLeft - 0.2) / CDbl(GetMax(1, RemainingMovesToTC))
+  If (TimeLeftCorr - AllocateTime) / CDbl(GetMax(1, RemainingMovesToTC)) < 0.8 Then
+    AllocateTime = (TimeLeftCorr - 0.2) / CDbl(GetMax(1, RemainingMovesToTC))
     If bTimeTrace Then WriteTrace "Average < 0.5 " & Format$(AllocateTime, "0.00")
   End If
 
-  If MovesToTC > 1 And RemainingMovesToTC = 1 And TimeLeft > 0.5 And AllocateTime < TimeLeft * 0.75 Then
-    AllocateTime = GetMaxSingle((TimeLeft - 0.9) * 0.8, 0.5)
-    If bTimeTrace Then WriteTrace "RMTOC=1 < TImeLeft*0.8 " & Format$(AllocateTime, "0.00")
+  If MovesToTC > 1 And RemainingMovesToTC = 1 And TimeLeftCorr > 0.5 And AllocateTime < TimeLeftCorr * 0.75 Then
+    AllocateTime = GetMaxSingle((TimeLeftCorr - 0.9) * 0.8, 0.5)
+    If bTimeTrace Then WriteTrace "RMTOC=1 < TimeLeftCorr*0.8 " & Format$(AllocateTime, "0.00")
   End If
 
-  AllocateTime = GetMinSingle(AllocateTime, TimeLeft - 0.2)
+  AllocateTime = GetMinSingle(AllocateTime, TimeLeftCorr - 0.2)
   If AllocateTime < 0.2 Then AllocateTime = 0.2
 
   If DebugMode Then
     AllocateTime = 90
   End If
   If bTimeTrace Then
-    WriteTrace ">>>> Time allocated: " & Format$(AllocateTime, "0.00") & " MTOC:" & MovesToTC & "/RMTOC" & RemainingMovesToTC & ", MoveCnt=" & CStr(GameMovesCnt) & ", Left:" & Format$(TimeLeft, "0.00")
+    WriteTrace ">>>> Time allocated: " & Format$(AllocateTime, "0.00") & " MTOC:" & MovesToTC & "/RMTOC" & RemainingMovesToTC & ", MoveCnt=" & CStr(GameMovesCnt) & ", Left:" & Format$(TimeLeft, "0.00") & ", LeftCorr:" & Format$(TimeLeftCorr, "0.00")
     WriteTrace " -------------------"
   End If
 End Function
@@ -77,24 +89,24 @@ Public Function AllocateExtraTime() As Boolean
   GameMovesDone = GameMovesCnt \ 2 ' Full move = 2* Half move
   If MovesToTC = 0 Then RemainingMovesToTC = 0 Else RemainingMovesToTC = MovesToTC - (GameMovesDone Mod MovesToTC)
   
-  If RemainingMovesToTC < 5 Then
+  TimeBase = TimeLeftCorr / CDbl(GetMax(1, RemainingMovesToTC))
+
+  If MovesToTC > 0 And RemainingMovesToTC < 3 Then
     bExtraTime = True
     Exit Function
   End If
-  
-  TimeBase = TimeLeft / CDbl(GetMax(1, RemainingMovesToTC))
-  
+    
   If MovesToTC > 0 And RemainingMovesToTC < 10 Then
-    TimeBase = TimeLeft / CDbl(GetMax(1, RemainingMovesToTC))
+    TimeBase = TimeLeftCorr / CDbl(GetMax(1, RemainingMovesToTC))
     ExtraTimeForMove = TimeBase * 0.2: AllocateExtraTime = True
     TimeForIteration = TimeForIteration + ExtraTimeForMove
     TotalTimeGiven = TotalTimeGiven + ExtraTimeForMove
     If bTimeTrace Then WriteTrace "ExtraTime RMTOC<10: TimeBAse * 0.2"
   Else
-    ExtraTimeForMove = CalcExtraTime(TimeBase, TimeIncrement, TimeLeft)
-    If TimeForIteration + ExtraTimeForMove > TimeLeft / 3 Then
+    ExtraTimeForMove = CalcExtraTime(TimeBase, TimeIncrement, TimeLeftCorr)
+    If TimeForIteration + ExtraTimeForMove > TimeLeftCorr / 3 Then
       ExtraTimeForMove = 0
-      If bTimeTrace Then WriteTrace "ExtraTime: set to 0 : >(TimeLeft /3)"
+      If bTimeTrace Then WriteTrace "ExtraTime: set to 0 : >(TimeLeftCorr /3)"
     Else
       TimeForIteration = TimeForIteration + ExtraTimeForMove
       TotalTimeGiven = TotalTimeGiven + ExtraTimeForMove
@@ -111,11 +123,11 @@ End Function
 
 Public Function CalcTime(ByVal RemainingMovesToTC As Long, _
                          ByVal TimeIncr As Single, _
-                         ByVal TimeLeft As Single, _
+                         ByVal TimeLeftCorr As Single, _
                          ByVal CurrScore As Long) As Single
-  CalcTime = CalcTimeLimit(RemainingMovesToTC, TimeIncr, TimeLeft, CurrScore)
+  CalcTime = CalcTimeLimit(RemainingMovesToTC, TimeIncr, TimeLeftCorr, CurrScore)
   OptimalTime = CalcTime
-  MaximumTime = GetMax(OptimalTime, GetMin(OptimalTime * 3, TimeLeft / 2))
+  MaximumTime = GetMax(OptimalTime, GetMin(OptimalTime * 3, TimeLeftCorr / 2))
 End Function
 
 Public Function CalcTimeLimit(ByVal RemainingMovesToTC As Long, _
@@ -175,8 +187,8 @@ Public Function CalcTimeLimit(ByVal RemainingMovesToTC As Long, _
     If bTimeTrace Then WriteTrace "TimeAdd-1.0 pawn"
   End If
    
-  If TimeTarget + 0.25 >= TimeLeft Then
-    If bTimeTrace Then WriteTrace "Limit2:" & Format(TimeTarget, "0.00") & " : " & Format(TimeLeft, "0.00") * 0.25
+  If TimeTarget + 0.25 >= TimeLeftCorr Then
+    If bTimeTrace Then WriteTrace "Limit2:" & Format(TimeTarget, "0.00") & " : " & Format(TimeLeftCorr, "0.00") * 0.25
     TimeTarget = GetMaxSingle(0.25, TimeLeftIn * 0.75)
   End If
 
@@ -188,7 +200,7 @@ End Function
 
 Public Function CalcExtraTime(ByVal TimeTarget As Single, _
                               ByVal TimeIncr As Single, _
-                              ByVal TimeLeft As Single) As Single
+                              ByVal TimeLeftCorr As Single) As Single
   Dim GameMovesDone As Long, RemainingMovesToTC As Long
   
   If FixedDepth <> NO_FIXED_DEPTH Then
@@ -202,7 +214,7 @@ Public Function CalcExtraTime(ByVal TimeTarget As Single, _
       RemainingMovesToTC = MovesToTC - (GameMovesDone Mod MovesToTC)
     End If
     
-    If (TimeIncr = 0 And TimeLeft > TimeTarget * 5#) Or (TimeIncr > 0 And TimeLeft > TimeTarget * 8#) Then
+    If (TimeIncr = 0 And TimeLeftCorr > TimeTarget * 5#) Or (TimeIncr > 0 And TimeLeftCorr > TimeTarget * 8#) Then
       CalcExtraTime = TimeTarget * 1.25
       If bTimeTrace Then WriteTrace "ExtraTime+ " & Format$(CalcExtraTime, "0.00") & ", Target:" & Format$(TimeTarget, "0.00")
     Else

@@ -120,7 +120,6 @@ Public Type TMove
   CapturedNumber   As Long
   OrderValue       As Long
   SeeValue         As Long
-  IsInCheck        As Boolean
   IsLegal          As Boolean
   IsChecking       As Boolean
 End Type

@@ -50,9 +50,11 @@ Public ShelterWeakness(4, 8)      As Long
 Public StormDanger(4, 4, 8)       As Long
 
 Public ThreatenedByHangingPawn    As TScore
+Public ThreatByRank    As TScore
 Public Hanging                    As TScore
 Public SafeCheck                  As TScore
 Public OtherCheck                 As TScore
+Public PawnlessFlank              As TScore
 
 Public ScorePawn                  As TScore
 Public ScoreKnight                As TScore
@@ -129,6 +131,8 @@ Public ZeroScore                  As TScore
 Public ThreatBySafePawn(5)        As TScore
 Public OutpostBonusKnight(1)      As TScore
 Public OutpostBonusBishop(1)      As TScore
+Public ReachableOutpostKnight(1)  As TScore
+Public ReachableOutpostBishop(1)  As TScore
 
 Public KingAttackWeights(6)       As Long
 
@@ -151,6 +155,8 @@ Dim WPassedPawnAttack             As Long, BPassedPawnAttack As Long
 Public PushClose(8) As Long
 Public PushAway(8) As Long
 Public PushToEdges(MAX_BOARD) As Long
+Public WOutpostSq(MAX_BOARD) As Boolean
+Public BOutpostSq(MAX_BOARD) As Boolean
 
 '--- Threat list
 Dim ThreatCnt     As Long
@@ -172,11 +178,19 @@ Public PassedPawnRankBonus(8) As TScore
 Private OwnAttCnt As Long, OppAttCnt As Long
 
 ' Threats
-Public ThreatDefendedMinor(6) As TScore ' Attacker is defended minor (B/N)
-Public ThreatDefendedMajor(6) As TScore
+Public ThreatByMinor(6) As TScore ' Attacker is defended minor (B/N)
+Public ThreatByRook(6) As TScore
 Public ThreatWeakMinor(6)     As TScore
 Public ThreatWeakMajor(6)     As TScore
 Public KingOnOneBonus         As TScore
+Public KingOnManyBonus        As TScore
+
+' King protection
+Public KnightProtection(8)    As TScore
+Public BishopProtection(8)    As TScore
+Public RookProtection(8)      As TScore
+Public QueenProtection(8)     As TScore
+
    
 ' Material imbalance (SF6)
 Public Linear(5)              As Long
@@ -252,8 +266,9 @@ Public Sub InitEval()
   'InitRecaptureMargins ' no longer used
   InitFutilityMoveCounts
   InitReductionArray
-
+  InitRazorMargin
   InitConnectedPawns
+  InitOutpostSq
 
 End Sub
 
@@ -323,19 +338,19 @@ Public Function Eval() As Long
 
   Dim a                            As Long, i As Long, Square As Long, Target As Long, Offset As Long, MobCnt As Long, r As Long, rr As Long, AttackBit As Long, ForkCnt As Long, SC As TScore, Safety As Long, bKingAtt As Boolean
   Dim WPos                         As TScore, BPos As TScore, WPassed As TScore, BPassed As TScore, WMobility As TScore, BMobility As TScore
-  Dim WPawnStruct                  As TScore, BPawnStruct As TScore, piece As Long, WPawnCnt As Long, BPawnCnt As Long
+  Dim WPawnStruct                  As TScore, BPawnStruct As TScore, Piece As Long, WPawnCnt As Long, BPawnCnt As Long
   Dim WKSafety                     As TScore, BKSafety As TScore, bDoWKSafety As Boolean, bDoBKSafety As Boolean
   Dim WKingAdjacentZoneAttCnt      As Long, BKingAdjacentZoneAttCnt As Long, WKnightChecks As Long, BKnightChecks As Long, WBishopChecks As Long, BBishopChecks As Long
-  Dim AttackUnits                  As Long, Undefended As Long, RankNum As Long, RelRank As Long
+  Dim KingDanger                   As Long, Undefended As Long, RankNum As Long, RelRank As Long
   Dim FileNum                      As Long, MinWKingPawnDistance As Long, MinBKingPawnDistance As Long
   Dim DefByPawn                    As Long, AttByPawn As Long, bAllDefended As Boolean, BlockSqDefended As Boolean, WPinnedCnt As Long, BPinnedCnt As Long
-  Dim RankPath                     As Long, sq As Long, IsPossibleOutpost As Boolean, WSemiOpenFiles As Long, BSemiOpenFiles As Long
+  Dim RankPath                     As Long, sq As Long, WSemiOpenFiles As Long, BSemiOpenFiles As Long
   Dim BlockSq                      As Long, MBonus As Long, EBonus As Long, k As Long, UnsafeCnt As Long
   Dim OwnCol                       As Long, OppCol As Long, MoveUp As Long, RelRank8 As Long, OwnKingLoc As Long, OppKingLoc As Long, BlockSqUnsafe As Boolean, bAttackedFromBehind As Boolean, bDefendedFromBehind As Boolean
   Dim WBishopsOnBlackSq            As Long, WBishopsOnWhiteSq As Long, BBishopsOnBlackSq As Long, BBishopsOnWhiteSq As Long
   Dim WPawnCntOnWhiteSq            As Long, BPawnCntOnWhiteSq As Long
   Dim bPawnHashFound               As Boolean, WKingFile As Long, BKingFile As Long, WFrontMostPassedPawnRank As Long, BFrontMostPassedPawnRank As Long, ScaleFactor As Long
-  
+  Dim WDistanceChecksCounted       As Long, BDistanceChecksCounted As Long, WOtherChecksCounted As Long, BOtherChecksCounted As Long
   EvalCnt = EvalCnt + 1
 
   If bEvalTrace Then WriteTrace "------- Start Eval ------"
@@ -343,8 +358,7 @@ Public Function Eval() As Long
   WBestPawnVal = UNKNOWN_SCORE: WBestPawn = 0
   BBestPawnVal = UNKNOWN_SCORE: BBestPawn = 0
   WPassedPawnAttack = 0: BPassedPawnAttack = 0
-  QueenCnt = 0
-  ThreatCnt = 0: WThreat = ZeroScore:  BThreat = ZeroScore
+  QueenCnt = 0: ThreatCnt = 0: WThreat = ZeroScore: BThreat = ZeroScore
 
   '--- Fill Pawn Arrays
   For a = 0 To 9
@@ -368,7 +382,7 @@ Public Function Eval() As Long
     Square = Pieces(a): If Square = 0 Or Board(Square) >= NO_PIECE Then GoTo lblNextPieceCnt
     Select Case Board(Square)
       Case WPAWN
-        WAttack(Square + SQ_UP_LEFT) = PAttackBit: WAttack(Square + SQ_UP_RIGHT) = PAttackBit  ' Set pawn attack here for use in pieces eval
+        WAttack(Square + SQ_UP_LEFT) = WAttack(Square + SQ_UP_LEFT) Or PLAttackBit: WAttack(Square + SQ_UP_RIGHT) = WAttack(Square + SQ_UP_RIGHT) Or PRAttackBit  ' Set pawn attack here for use in pieces eval
         FileNum = File(Square): RankNum = Rank(Square)
         WPawns(FileNum) = WPawns(FileNum) + 1
         If RankNum < PawnsWMin(FileNum) Then PawnsWMin(FileNum) = RankNum
@@ -376,7 +390,7 @@ Public Function Eval() As Long
         If MaxDistance(WKingLoc, Square) < MinWKingPawnDistance Then MinWKingPawnDistance = MaxDistance(WKingLoc, Square)
         If ColorSq(Square) = COL_WHITE Then WPawnCntOnWhiteSq = WPawnCntOnWhiteSq + 1  ' for Bishop eval
       Case BPAWN
-        BAttack(Square + SQ_DOWN_LEFT) = PAttackBit: BAttack(Square + SQ_DOWN_RIGHT) = PAttackBit
+        BAttack(Square + SQ_DOWN_LEFT) = BAttack(Square + SQ_DOWN_LEFT) Or PLAttackBit: BAttack(Square + SQ_DOWN_RIGHT) = BAttack(Square + SQ_DOWN_RIGHT) Or PRAttackBit
         FileNum = File(Square): RankNum = Rank(Square)
         BPawns(FileNum) = BPawns(FileNum) + 1
         If RankNum < PawnsBMin(FileNum) Then PawnsBMin(FileNum) = RankNum
@@ -448,16 +462,12 @@ lblNextPieceCnt:
     Square = Pieces(a): If Square = 0 Or Board(Square) >= NO_PIECE Then GoTo lblNextPiece
     FileNum = File(Square): RankNum = Rank(Square): SC.MG = 0: SC.EG = 0
     If Board(Square) Mod 2 = WCOL Then RelRank = RankNum Else RelRank = (9 - RankNum)
-
+    
     Select Case Board(Square)
       Case WPAWN  '---- WHITE PAWN ------------------------------------
         WPos.MG = WPos.MG + PsqtWP(Square).MG: WPos.EG = WPos.EG + PsqtWP(Square).EG
-      
-        DefByPawn = 0: AttByPawn = 0
-        If Board(Square + SQ_DOWN_LEFT) = WPAWN Then DefByPawn = DefByPawn + 1
-        If Board(Square + SQ_DOWN_RIGHT) = WPAWN Then DefByPawn = DefByPawn + 1
-        If Board(Square + SQ_UP_LEFT) = BPAWN Then AttByPawn = AttByPawn + 1
-        If Board(Square + SQ_UP_RIGHT) = BPAWN Then AttByPawn = AttByPawn + 1
+        DefByPawn = AttackBitCnt(WAttack(Square) And PAttackBit) ' counts 1 or 2 pawns
+        AttByPawn = AttackBitCnt(BAttack(Square) And PAttackBit) ' counts 1 or 2 pawns
         If MaxDistance(Square, BKingLoc) <= 2 Then BKingAttackersCount = BKingAttackersCount + 1
         If bEndgame And RankNum > 4 Then If MaxDistance(Square, BKingLoc) = 1 Then SC.EG = SC.EG + 10 ' advanced pawn supported by king
         
@@ -465,12 +475,24 @@ lblNextPieceCnt:
         Neighbours = (WPawns(FileNum + 1) > 0 Or WPawns(FileNum - 1) > 0)
         Doubled = (WPawns(FileNum) > 1) And Board(Square + SQ_UP) = WPAWN ' old: And RankNum < PawnsWMax(FileNum)
         Opposed = (BPawns(FileNum) > 0) And RankNum < PawnsBMax(FileNum)
-        Passed = (Not Opposed And PawnsBMax(FileNum + 1) <= RankNum And PawnsBMax(FileNum - 1) <= RankNum)
         Lever = (AttByPawn > 0)
         Isolated = Not Neighbours
         Phalanx = (Board(Square + SQ_LEFT) = WPAWN Or Board(Square + SQ_RIGHT) = WPAWN)
         Supported = (DefByPawn > AttByPawn)
         Connected = (Supported Or Phalanx)
+        
+        Passed = False
+        If Not Opposed Then
+          Passed = (PawnsBMax(FileNum + 1) <= RankNum And PawnsBMax(FileNum - 1) <= RankNum)
+          If Not Passed Then
+            ' Potential passer?
+              If (PawnsBMax(FileNum + 1) <= RankNum + 1 And PawnsBMax(FileNum - 1) <= RankNum + 1) Then
+                If DefByPawn >= AttByPawn Or bWhiteToMove Then
+                   Passed = True
+                End If
+              End If
+          End If
+        End If
  
         If (Passed Or Isolated Or Lever Or Connected) Or RelRank >= 5 Then
           Backward = False
@@ -550,12 +572,8 @@ lblNextPieceCnt:
     
       Case BPAWN  '---- BLACK PAWN ------------------------------------
         BPos.MG = BPos.MG + PsqtBP(Square).MG: BPos.EG = BPos.EG + PsqtBP(Square).EG
-
-        DefByPawn = 0: AttByPawn = 0
-        If Board(Square + SQ_DOWN_LEFT) = WPAWN Then AttByPawn = AttByPawn + 1
-        If Board(Square + SQ_DOWN_RIGHT) = WPAWN Then AttByPawn = AttByPawn + 1
-        If Board(Square + SQ_UP_LEFT) = BPAWN Then DefByPawn = DefByPawn + 1
-        If Board(Square + SQ_UP_RIGHT) = BPAWN Then DefByPawn = DefByPawn + 1
+        DefByPawn = AttackBitCnt(BAttack(Square) And PAttackBit) ' counts 1 or 2 pawns
+        AttByPawn = AttackBitCnt(WAttack(Square) And PAttackBit) ' counts 1 or 2 pawns
         If MaxDistance(Square, WKingLoc) <= 2 Then WKingAttackersCount = WKingAttackersCount + 1
         If bEndgame And RelRank > 4 Then If MaxDistance(Square, WKingLoc) = 1 Then SC.EG = SC.EG + 10  ' advanced pawn supported by king
 
@@ -563,12 +581,26 @@ lblNextPieceCnt:
         Neighbours = (BPawns(FileNum + 1) > 0 Or BPawns(FileNum - 1) > 0)
         Doubled = (BPawns(FileNum) > 1) And Board(Square + SQ_DOWN) = BPAWN ' Old: And RankNum > PawnsBMin(FileNum)
         Opposed = (WPawns(FileNum) > 0) And RankNum > PawnsWMin(FileNum)
-        Passed = (Not Opposed And PawnsWMin(FileNum + 1) >= RankNum And PawnsWMin(FileNum - 1) >= RankNum)
         Lever = (AttByPawn > 0)
         Isolated = Not Neighbours
         Phalanx = (Board(Square + SQ_LEFT) = BPAWN Or Board(Square + SQ_RIGHT) = BPAWN)
         Supported = (DefByPawn > AttByPawn)
         Connected = (Supported Or Phalanx)
+
+        Passed = (Not Opposed And PawnsWMin(FileNum + 1) >= RankNum And PawnsWMin(FileNum - 1) >= RankNum)
+        If Not Opposed Then
+          Passed = (PawnsWMin(FileNum + 1) >= RankNum And PawnsWMin(FileNum - 1) >= RankNum)
+          If Not Passed Then
+            ' Potential passer?
+              If (PawnsWMin(FileNum + 1) >= RankNum - 1 And PawnsWMin(FileNum - 1) - 1 >= RankNum - 1) Then
+                If DefByPawn >= AttByPawn Or Not bWhiteToMove Then
+                   Passed = True
+                End If
+              End If
+          End If
+        End If
+ 
+
 
         If (Passed Or Isolated Or Lever Or Connected) Or RelRank >= 5 Then
           Backward = False
@@ -689,7 +721,7 @@ lblNextPieceCnt:
               Case BROOK:  If AttackBit = RAttackBit Then AddThreat COL_BLACK, PT_ROOK, PT_ROOK, Square, Target
                 MobCnt = MobCnt + 1
                 Exit Do ' equal exchange, ok for mobility
-              Case WKING: ' ignore
+              Case WKING: Exit Do ' ignore
               Case BKING: MobCnt = MobCnt + 1
                 Exit Do
               Case BQUEEN: MobCnt = MobCnt + 1:  If AttackBit = RAttackBit Then AddThreat COL_BLACK, PT_QUEEN, PT_ROOK, Square, Target
@@ -732,6 +764,9 @@ lblNextPieceCnt:
             SC.MG = SC.MG + (PawnsWMin(FileNum)): SC.EG = SC.EG + 5 * PawnsWMin(FileNum)
           End If
         End If
+        
+        AddScore WKSafety, RookProtection(MaxDistance(Square, WKingLoc)) ' defends king?
+        
         AddScore WPos, SC
         If bEvalTrace Then WriteTrace "WRook: " & LocCoord(Square) & ">" & SC.MG & ", " & SC.EG & " / " & WPos.MG & ", " & WPos.EG
 
@@ -778,7 +813,7 @@ lblNextPieceCnt:
               Case WROOK:  If AttackBit = RAttackBit Then AddThreat COL_WHITE, PT_ROOK, PT_ROOK, Square, Target
                 MobCnt = MobCnt + 1
                 Exit Do  ' equal exchange ok for mobility
-              Case BKING: ' Ignore
+              Case BKING: Exit Do ' Ignore
               Case WKING: MobCnt = MobCnt + 1
                 Exit Do
               Case WQUEEN: MobCnt = MobCnt + 1:  If AttackBit = RAttackBit Then AddThreat COL_WHITE, PT_QUEEN, PT_ROOK, Square, Target
@@ -820,13 +855,23 @@ lblNextPieceCnt:
             SC.MG = SC.MG + (9 - PawnsBMin(FileNum)): SC.EG = SC.EG + 5 * (9 - PawnsBMin(FileNum))
           End If
         End If
-         
+        AddScore BKSafety, RookProtection(MaxDistance(Square, BKingLoc)) ' defends king?
+        
         AddScore BPos, SC
         If bEvalTrace Then WriteTrace "BRook: " & LocCoord(Square) & ">" & SC.MG & ", " & SC.EG & " / " & BPos.MG & ", " & BPos.EG
 
       Case WBISHOP    '--- WHITE BISHOP ----
         If ColorSq(Square) = COL_WHITE Then WBishopsOnWhiteSq = WBishopsOnWhiteSq + 1 Else WBishopsOnBlackSq = WBishopsOnBlackSq + 1
-        WPos.MG = WPos.MG + PsqtWB(Square).MG: WPos.EG = WPos.EG + PsqtWB(Square).EG
+        WPos.MG = WPos.MG + PsqtWB(Square).MG: WPos.EG = WPos.EG + PsqtWB(Square).EG: r = 0
+        
+        ' Outpost bonus
+        If WOutpostSq(Square) Then
+          If Not CBool(BAttack(Square) And PAttackBit) Then ' not attacked by pawn
+            ' Defended by pawn?
+            AddScore SC, OutpostBonusBishop(Abs(CBool(WAttack(Square) And PAttackBit))): r = 3 ' ignore ReachableOutpost
+            If bEvalTrace Then WriteTrace "WBishop: " & LocCoord(Square) & "> Outpost:" & OutpostBonusBishop(Abs(CBool(WAttack(Square) And PAttackBit))).MG
+          End If
+        End If
         
         '--- Mobility
         MobCnt = 0: bKingAtt = False
@@ -852,7 +897,7 @@ lblNextPieceCnt:
               Case BKNIGHT, BBISHOP, BROOK, BQUEEN: If Not CBool(BAttack(Target) And PAttackBit) Then MobCnt = MobCnt + 1
                 If AttackBit = BAttackBit Then AddThreat COL_BLACK, PieceType(Board(Target)), PT_BISHOP, Square, Target ' Reattack: no SC because x-x=0
                 Exit Do
-              Case WKING: ' ignore
+              Case WKING: Exit Do ' ignore
               Case BKING: MobCnt = MobCnt + 1
                 Exit Do
               Case WQUEEN: If Not CBool(BAttack(Target) And PAttackBit) Then MobCnt = MobCnt + 1
@@ -860,6 +905,11 @@ lblNextPieceCnt:
               Case Else: If Not CBool(BAttack(Target) And PAttackBit) Then MobCnt = MobCnt + 1
                 Exit Do ' own bishop or knight
             End Select
+            If r < 2 Then
+              If WOutpostSq(Target) Then ' Empty or opp piece: square can be occupied
+                If PieceColor(Board(Target)) <> COL_WHITE Then If (Not CBool(BAttack(Target) And PAttackBit)) Then r = 2 Else r = 1
+              End If
+            End If
             Target = Target + Offset
           Loop
         Next
@@ -872,21 +922,23 @@ lblNextPieceCnt:
           If PieceType(Board(Square + SQ_UP)) = PT_PAWN Then SC.MG = SC.MG + 16: If bEvalTrace Then WriteTrace "WBishop: " & LocCoord(Square) & "> Behind pawn 16"
         End If
   
-        ' Outpost bonus
-        If RelRank >= 4 And RelRank <= 6 Then
-         If Not CBool(BAttack(Square) And PAttackBit) Then
-          ' Defended by pawn?
-          AddScore SC, OutpostBonusBishop(Abs(CBool(WAttack(Square) And PAttackBit)))
-          If bEvalTrace Then WriteTrace "WBishop: " & LocCoord(Square) & "> Outpost:" & OutpostBonusBishop(Abs(CBool(WAttack(Square) And PAttackBit))).MG
-         End If
-        End If
-        ' Defends King?
-        'If MaxDistance(Square, WKingLoc) = 1 Then If RankNum >= Rank(WKingLoc) Then SC.MG = SC.MG + 10
+        If r > 0 And r < 3 Then AddScore SC, ReachableOutpostBishop(r - 1)
+        
+        AddScore WKSafety, BishopProtection(MaxDistance(Square, WKingLoc)) ' defends king?
+        
         AddScore WPos, SC
 
       Case BBISHOP   '--- BLACK BISHOP ----
         If ColorSq(Square) = COL_WHITE Then BBishopsOnWhiteSq = BBishopsOnWhiteSq + 1 Else BBishopsOnBlackSq = BBishopsOnBlackSq + 1
-        BPos.MG = BPos.MG + PsqtBB(Square).MG: BPos.EG = BPos.EG + PsqtBB(Square).EG
+        BPos.MG = BPos.MG + PsqtBB(Square).MG: BPos.EG = BPos.EG + PsqtBB(Square).EG: r = 0
+        ' Outpost bonus
+        If BOutpostSq(Square) Then
+          If Not CBool(WAttack(Square) And PAttackBit) Then ' not attacked by pawn
+            ' Defended by pawn?
+            AddScore SC, OutpostBonusBishop(Abs(CBool(BAttack(Square) And PAttackBit))): r = 3 ' ignore ReachableOutpost
+            If bEvalTrace Then WriteTrace "BBishop: " & LocCoord(Square) & "> Outpost:" & OutpostBonusBishop(Abs(CBool(BAttack(Square) And PAttackBit))).MG
+          End If
+        End If
         
         '--- Mobility
         MobCnt = 0: bKingAtt = False
@@ -912,7 +964,7 @@ lblNextPieceCnt:
               Case WKNIGHT, WBISHOP, WROOK, WQUEEN: If Not CBool(WAttack(Target) And PAttackBit) Then MobCnt = MobCnt + 1
                 If AttackBit = BAttackBit Then AddThreat COL_WHITE, PieceType(Board(Target)), PT_BISHOP, Square, Target
                 Exit Do
-              Case BKING: ' Ignore
+              Case BKING: Exit Do ' Ignore
               Case WKING: MobCnt = MobCnt + 1
                 Exit Do
               Case BQUEEN:
@@ -921,6 +973,11 @@ lblNextPieceCnt:
               Case Else: If Not CBool(WAttack(Target) And PAttackBit) Then MobCnt = MobCnt + 1
                 Exit Do ' own bishop or knight
             End Select
+            If r < 2 Then
+              If BOutpostSq(Target) Then ' Empty or opp piece: square can be occupied
+                If PieceColor(Board(Target)) <> COL_BLACK Then If (Not CBool(WAttack(Target) And PAttackBit)) Then r = 2 Else r = 1
+              End If
+            End If
             Target = Target + Offset
           Loop
         Next
@@ -933,21 +990,22 @@ lblNextPieceCnt:
           If PieceType(Board(Square + SQ_DOWN)) = PT_PAWN Then SC.MG = SC.MG + 16: If bEvalTrace Then WriteTrace "BBishop: " & LocCoord(Square) & "> Behind pawn 16"
         End If
             
-        ' Outpost bonus
-        If RelRank >= 4 And RelRank <= 6 Then
-         If Not CBool(WAttack(Square) And PAttackBit) Then
-          ' Defended by pawn?
-          AddScore SC, OutpostBonusBishop(Abs(CBool(BAttack(Square) And PAttackBit)))
-          If bEvalTrace Then WriteTrace "BBishop: " & LocCoord(Square) & "> Outpost:" & OutpostBonusBishop(Abs(CBool(BAttack(Square) And PAttackBit))).MG
-         End If
-        End If
-        ' Defends King?
-        'If MaxDistance(Square, BKingLoc) = 1 Then If RankNum <= Rank(BKingLoc) Then SC.MG = SC.MG + 10
+        If r > 0 And r < 3 Then AddScore SC, ReachableOutpostBishop(r - 1)
+         
+        AddScore BKSafety, BishopProtection(MaxDistance(Square, BKingLoc)) ' defends king?
  
         AddScore BPos, SC
 
       Case WKNIGHT   '--- WHITE KNIGHT ----
-        WPos.MG = WPos.MG + PsqtWN(Square).MG: WPos.EG = WPos.EG + PsqtWN(Square).EG
+        WPos.MG = WPos.MG + PsqtWN(Square).MG: WPos.EG = WPos.EG + PsqtWN(Square).EG: r = 0
+        ' Outpost bonus
+        If WOutpostSq(Square) Then
+          If Not CBool(BAttack(Square) And PAttackBit) Then ' not attacked by pawn
+            ' Defended by pawn?
+            AddScore SC, OutpostBonusKnight(Abs(CBool(WAttack(Square) And PAttackBit))): r = 3 ' ignore ReachableOutpost
+            If bEvalTrace Then WriteTrace "WKight: " & LocCoord(Square) & "> Outpost:" & OutpostBonusKnight(Abs(CBool(WAttack(Square) And PAttackBit))).MG
+          End If
+        End If
       
         '--- Mobility
         If Moved(Square) = 0 Then SC.MG = SC.MG - 45
@@ -977,6 +1035,11 @@ lblNextPieceCnt:
               Case BKING: MobCnt = MobCnt + 1: ForkCnt = ForkCnt + 1
               Case Else: If (Not CBool(BAttack(Target) And PAttackBit)) Then MobCnt = MobCnt + 1
             End Select
+            If r < 2 Then
+              If WOutpostSq(Target) Then ' Empty or opp piece: square can be occupied
+                If PieceColor(Board(Target)) <> COL_WHITE Then If (Not CBool(BAttack(Target) And PAttackBit)) Then r = 2 Else r = 1
+              End If
+            End If
           End If
         Next
         If ForkCnt > 1 Then AddScoreVal SC, 7 * ForkCnt * ForkCnt, 5 * ForkCnt * ForkCnt: If bWhiteToMove Then AddScoreVal SC, 35, 35
@@ -988,19 +1051,22 @@ lblNextPieceCnt:
           If PieceType(Board(Square + SQ_UP)) = PT_PAWN Then SC.MG = SC.MG + 16: If bEvalTrace Then WriteTrace "WKnight: " & LocCoord(Square) & "> Behind pawn 16"
         End If
           
-        ' Outpost bonus
-        If RelRank >= 4 And RelRank <= 6 Then
-         If Not CBool(BAttack(Square) And PAttackBit) Then
-          ' Defended by pawn?
-          AddScore SC, OutpostBonusKnight(Abs(CBool(WAttack(Square) And PAttackBit)))
-          If bEvalTrace Then WriteTrace "WKight: " & LocCoord(Square) & "> Outpost:" & OutpostBonusKnight(Abs(CBool(WAttack(Square) And PAttackBit))).MG
-         End If
-        End If
+        If r > 0 And r < 3 Then AddScore SC, ReachableOutpostKnight(r - 1)
+        AddScore WKSafety, KnightProtection(MaxDistance(Square, WKingLoc)) ' defends king?
+        
         AddScore WPos, SC
         If bEvalTrace Then WriteTrace "WKnight: " & LocCoord(Square) & ">" & SC.MG & ", " & SC.EG & " / " & WPos.MG & ", " & WPos.EG
 
       Case BKNIGHT   '--- BLACK KNIGHT ----
-        BPos.MG = BPos.MG + PsqtBN(Square).MG: BPos.EG = BPos.EG + PsqtBN(Square).EG
+        BPos.MG = BPos.MG + PsqtBN(Square).MG: BPos.EG = BPos.EG + PsqtBN(Square).EG: r = 0
+        ' Outpost bonus
+        If BOutpostSq(Square) Then
+          If Not CBool(WAttack(Square) And PAttackBit) Then ' not attacked by pawn
+            ' Defended by pawn?
+            AddScore SC, OutpostBonusKnight(Abs(CBool(BAttack(Square) And PAttackBit)))
+            If bEvalTrace Then WriteTrace "BKight: " & LocCoord(Square) & "> Outpost:" & OutpostBonusKnight(Abs(CBool(BAttack(Square) And PAttackBit))).MG
+          End If
+        End If
         
         If Moved(Square) = 0 Then SC.MG = SC.MG - 45
         '--- Mobility
@@ -1034,7 +1100,11 @@ lblNextPieceCnt:
                 If (Not CBool(WAttack(Target) And PAttackBit)) Then ForkCnt = ForkCnt + 1
               Case Else: If (Not CBool(WAttack(Target) And PAttackBit)) Then MobCnt = MobCnt + 1
             End Select
-            Target = Target + Offset
+            If r < 2 Then
+              If BOutpostSq(Target) Then ' Empty or opp piece: square can be occupied
+                If PieceColor(Board(Target)) <> COL_BLACK Then If (Not CBool(WAttack(Target) And PAttackBit)) Then r = 2 Else r = 1
+              End If
+            End If
           End If
         Next
         If ForkCnt > 1 Then AddScoreVal SC, 7 * ForkCnt * ForkCnt, 5 * ForkCnt * ForkCnt: If Not bWhiteToMove Then AddScoreVal SC, 35, 35
@@ -1045,14 +1115,9 @@ lblNextPieceCnt:
           If PieceType(Board(Square + SQ_DOWN)) = PT_PAWN Then SC.MG = SC.MG + 16: If bEvalTrace Then WriteTrace "BKnight: " & LocCoord(Square) & "> Behind pawn 16"
         End If
           
-        ' Outpost bonus
-        If RelRank >= 4 And RelRank <= 6 Then
-         If Not CBool(WAttack(Square) And PAttackBit) Then
-          ' Defended by pawn?
-          AddScore SC, OutpostBonusKnight(Abs(CBool(BAttack(Square) And PAttackBit)))
-          If bEvalTrace Then WriteTrace "BKight: " & LocCoord(Square) & "> Outpost:" & OutpostBonusKnight(Abs(CBool(BAttack(Square) And PAttackBit))).MG
-         End If
-        End If
+        If r > 0 And r < 3 Then AddScore SC, ReachableOutpostKnight(r - 1)
+        AddScore BKSafety, KnightProtection(MaxDistance(Square, BKingLoc)) ' defends king?
+        
         AddScore BPos, SC
         If bEvalTrace Then WriteTrace "BKnight: " & LocCoord(Square) & ">" & SC.MG & ", " & SC.EG & " / " & BPos.MG & ", " & BPos.EG
       
@@ -1112,7 +1177,7 @@ lblNextPiece:
                 'If i >= 4 Then If CBool(BAttack(Target) And QRBAttackBit) Then If PinnedPieceW(Target, i) Then SC.MG = SC.MG - 50
                 If AttackBit = QAttackBit Then AddThreat COL_BLACK, PieceType(Board(Target)), PT_QUEEN, Square, Target
                 Exit Do
-              Case WKING: ' ignore
+              Case WKING: Exit Do ' ignore
               Case BKING: MobCnt = MobCnt + 1
                 Exit Do
               Case BQUEEN: If AttackBit = QAttackBit Then AddThreat COL_BLACK, PT_QUEEN, PT_QUEEN, Square, Target: MobCnt = MobCnt + 1
@@ -1141,6 +1206,7 @@ lblNextPiece:
           Loop
         Next
         AddScore WMobility, MobilityQ(MobCnt)
+        AddScore WKSafety, QueenProtection(MaxDistance(Square, WKingLoc)) ' defends king?
         AddScore WPos, SC
         If bEvalTrace Then WriteTrace "WQueen: " & LocCoord(Square) & ">" & SC.MG & ", " & SC.EG & " / " & WPos.MG & ", " & WPos.EG
 
@@ -1169,7 +1235,7 @@ lblNextPiece:
               Case WPAWN:
                 If Not CBool(WAttack(Target) And PNBRAttackBit) Then MobCnt = MobCnt + 1: If AttackBit = QAttackBit Then AddThreat COL_WHITE, PT_PAWN, PT_QUEEN, Square, Target
                 SC.MG = SC.MG + 7: SC.EG = SC.EG + 7
-                'If CBool(WAttack(Target) And QRBAttackBit) Then If Board(Target + SQ_UP) = NO_PIECE Then If PinnedPieceB(Target, i) Then SC.MG = SC.MG - 30
+                'If CBool(WAttack(Target) And QRBAttackBit) Then If Board(Target + SQ_UP) >= NO_PIECE Then If PinnedPieceB(Target, i) Then SC.MG = SC.MG - 30
                 Exit Do   'Attack pawn
               Case WKNIGHT:
                 If Not CBool(WAttack(Target) And PNBRAttackBit) Then MobCnt = MobCnt + 1
@@ -1186,7 +1252,7 @@ lblNextPiece:
                 'If i >= 4 Then If CBool(WAttack(Target) And QRBAttackBit) Then If PinnedPieceB(Target, i) Then SC.MG = SC.MG - 50
                 If AttackBit = QAttackBit Then AddThreat COL_WHITE, PieceType(Board(Target)), PT_QUEEN, Square, Target
                 Exit Do
-              Case BKING: ' Ignore
+              Case BKING: Exit Do ' Ignore
               Case WKING: MobCnt = MobCnt + 1
                 Exit Do
               Case WQUEEN:  If AttackBit = QAttackBit Then AddThreat COL_WHITE, PT_QUEEN, PT_QUEEN, Square, Target: MobCnt = MobCnt + 1
@@ -1216,7 +1282,7 @@ lblNextPiece:
           Loop
         Next
         AddScore BMobility, MobilityQ(MobCnt)
-
+        AddScore BKSafety, QueenProtection(MaxDistance(Square, BKingLoc)) ' defends king?
         AddScore BPos, SC
         If bEvalTrace Then WriteTrace "BQueen: " & LocCoord(Square) & ">" & SC.MG & ", " & SC.EG & " / " & BPos.MG & ", " & BPos.EG
     End Select
@@ -1239,15 +1305,15 @@ lblNextPiece:
           ' Safe pawn push: push field not attacked by opp pawn AND defend by own piece or not attacked by opp
           If BAttack(Target) = 0 Or WAttack(Target) > 0 Then
             If Not (rr = 2 And CBool(BAttack(Square + SQ_UP) And PAttackBit)) Then ' check EnPassant capture
-            For i = 9 To 11 Step 2
-              r = Board(Target + i)
-              If PieceColor(r) = COL_BLACK And r <> BPAWN Then
-                If Not CBool(WAttack(Target + i) And PAttackBit) Then ' already attacked by own pawn?
-                  SC.MG = SC.MG + 38: SC.EG = SC.EG + 22 ' pawn threats non pawn enemy
+              For i = 9 To 11 Step 2
+                r = Board(Target + i)
+                If PieceColor(r) = COL_BLACK And r <> BPAWN Then
+                  If Not CBool(WAttack(Target + i) And PAttackBit) Then ' already attacked by own pawn?
+                    SC.MG = SC.MG + 38: SC.EG = SC.EG + 22 ' pawn threats non pawn enemy
+                  End If
                 End If
-              End If
-            Next i
-          End If
+              Next i
+            End If
           End If
         Else
           Exit For
@@ -1266,14 +1332,14 @@ lblNextPiece:
             If WAttack(Target) = 0 Or BAttack(Target) > 0 Then
              If Not (rr = 2 And CBool(WAttack(Square + SQ_DOWN) And PAttackBit)) Then ' check EnPassant capture
               For i = 9 To 11 Step 2
-               r = Board(Target - i)
-               If PieceColor(r) = COL_WHITE And r <> WPAWN Then
-                 If Not CBool(BAttack(Target - i) And PAttackBit) Then ' already attacked by own pawn?
-                   SC.MG = SC.MG + 38: SC.EG = SC.EG + 22 ' pawn threats non pawn enemy
-                 End If
-               End If
+                r = Board(Target - i)
+                If PieceColor(r) = COL_WHITE And r <> WPAWN Then
+                  If Not CBool(BAttack(Target - i) And PAttackBit) Then ' already attacked by own pawn?
+                    SC.MG = SC.MG + 38: SC.EG = SC.EG + 22 ' pawn threats non pawn enemy
+                  End If
+                End If
               Next i
-            End If
+             End If
             End If
           Else
             Exit For
@@ -1305,7 +1371,7 @@ lblNextPiece3:
     '----------------------------------------------
     RankNum = Rank(WKingLoc): FileNum = WKingFile: Bonus = 0: LargerKingRingAttacksCount = 0
     If (PieceCnt(BQUEEN) * 2 + PieceCnt(BROOK)) > 1 Then
-      AttackUnits = 0: Safety = 258 ' MaxSafetyBonus
+      KingDanger = 0: Safety = 258 ' MaxSafetyBonus
       If WPawnCnt = 0 Then MinWKingPawnDistance = 0 Else MinWKingPawnDistance = MinWKingPawnDistance - 1
       If RankNum > 4 Then
         WKSafety.EG = WKSafety.EG - 16 * MinWKingPawnDistance
@@ -1349,7 +1415,7 @@ lblNextPiece3:
                 
                   ' Supported queen contact check
                   If CBool(r And QAttackBit) Then
-                    If r <> QAttackBit Then AttackUnits = AttackUnits + QueenContactCheck
+                    If r <> QAttackBit Then If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = WCOL) Then KingDanger = KingDanger + QueenContactCheck
                   End If
                 End If
               Else
@@ -1365,28 +1431,46 @@ lblNextPiece3:
                 ' Rook distance checks
                 If i < 4 Then
                   If CBool(r And RAttackBit) Then
-                    If WAttack(Target) = 0 Then
-                      If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = WCOL) Then AttackUnits = AttackUnits + RookCheck: MinusScore WKSafety, SafeCheck
-                    Else
-                      If Not CBool(WAttack(Target) And PAttackBit) Then MinusScore WKSafety, OtherCheck
+                    If Not (WDistanceChecksCounted And RAttackBit) Then ' count only once!
+                      If WAttack(Target) = 0 Or (WAttack(Target) = QAttackBit And r <> RAttackBit) Then ' not attacked or only by queen and attacked twice
+                        If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = WCOL) Then
+                          KingDanger = KingDanger + RookCheck: MinusScore WKSafety, SafeCheck
+                          WDistanceChecksCounted = (WDistanceChecksCounted Or RAttackBit)
+                          WOtherChecksCounted = WOtherChecksCounted And Not RAttackBit ' do not count both cases
+                        End If
+                      Else
+                        If Not CBool(WAttack(Target) And PAttackBit) Then WOtherChecksCounted = WOtherChecksCounted Or RAttackBit
+                      End If
                     End If
                   End If
+                  
                 Else ' i >= 4
                 ' Bishop distance checks
                   If CBool(r And BAttackBit) Then
-                    If WAttack(Target) = 0 Then
-                      If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = WCOL) Then AttackUnits = AttackUnits + BishopCheck: MinusScore WKSafety, SafeCheck
-                    Else
-                      If Not CBool(WAttack(Target) And PAttackBit) Then MinusScore WKSafety, OtherCheck
+                    If Not (WDistanceChecksCounted And BAttackBit) Then
+                      If WAttack(Target) = 0 Or (WAttack(Target) = QAttackBit And r <> BAttackBit) Then
+                        If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = WCOL) Then
+                          KingDanger = KingDanger + BishopCheck: MinusScore WKSafety, SafeCheck
+                          WDistanceChecksCounted = (WDistanceChecksCounted Or BAttackBit)
+                          WOtherChecksCounted = WOtherChecksCounted And Not BAttackBit
+                        End If
+                      Else
+                        If Not CBool(WAttack(Target) And PAttackBit) Then WOtherChecksCounted = WOtherChecksCounted Or BAttackBit
+                      End If
                     End If
                   End If
                 End If
                 
                 ' Queen distance checks
                 If CBool(r And QAttackBit) Then
-                  If WAttack(Target) = 0 Then
-                    If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = WCOL) Then AttackUnits = AttackUnits + QueenCheck: MinusScore WKSafety, SafeCheck
-                  End If
+                  If Not (WDistanceChecksCounted And QAttackBit) Then
+                    If WAttack(Target) = 0 Then
+                      If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = WCOL) Then
+                        KingDanger = KingDanger + QueenCheck: MinusScore WKSafety, SafeCheck
+                        WDistanceChecksCounted = (WDistanceChecksCounted Or QAttackBit)
+                      End If
+                    End If
+                 End If
                 End If
               End If
  
@@ -1400,10 +1484,10 @@ lblNextPiece3:
                 If i < 4 Then ' orthogonal
                   If CBool(BAttack(Target) And QRAttackBit) Then  ' rook or queen, direction not clear
                    For k = 1 To 8
-                    sq = Target + Offset * k: piece = Board(sq)
-                    If piece = FRAME Then Exit For
-                    If piece < NO_PIECE Then
-                      If piece = BQUEEN Or piece = BROOK Then If (PieceType(piece) <> PieceType(Board(Target))) Then WPinnedCnt = WPinnedCnt + 1
+                    sq = Target + Offset * k: Piece = Board(sq)
+                    If Piece = FRAME Then Exit For
+                    If Piece < NO_PIECE Then
+                      If Piece = BQUEEN Or Piece = BROOK Then If (PieceType(Piece) <> PieceType(Board(Target))) Then WPinnedCnt = WPinnedCnt + 1
                       Exit For
                     Else
                       If Not (CBool(BAttack(sq) And QRAttackBit)) Then Exit For
@@ -1413,10 +1497,10 @@ lblNextPiece3:
                 Else ' i>4 diagonal
                   If CBool(BAttack(Target) And QBAttackBit) Then  ' bishop or queen, direction not clear
                    For k = 1 To 8
-                    sq = Target + Offset * k: piece = Board(sq)
-                    If piece = FRAME Then Exit For
-                    If piece < NO_PIECE Then
-                      If piece = BQUEEN Or piece = BBISHOP Then If (PieceType(piece) <> PieceType(Board(Target))) Then WPinnedCnt = WPinnedCnt + 1
+                    sq = Target + Offset * k: Piece = Board(sq)
+                    If Piece = FRAME Then Exit For
+                    If Piece < NO_PIECE Then
+                      If Piece = BQUEEN Or Piece = BBISHOP Then If (PieceType(Piece) <> PieceType(Board(Target))) Then WPinnedCnt = WPinnedCnt + 1
                       Exit For
                     Else
                       If Not (CBool(BAttack(sq) And QBAttackBit)) Then Exit For
@@ -1425,53 +1509,62 @@ lblNextPiece3:
                   End If
                 End If
               End If
-                                                  
               ' --- Piece found - exit direction loop
               Exit Do
             Else
               ' empty square: potential danger for slider attacks
               'If rr > 1 Then WKSafety.MG = WKSafety.MG - (2 * PieceCnt(BQUEEN) + PieceCnt(BROOK) + PieceCnt(BBISHOP)) \ 2
             End If
-                        
             Target = Target + Offset: rr = rr + 1
           Loop
           
           ' Knight Check
-          If PieceCnt(BKNIGHT) > 0 Then
-            Target = WKingLoc + KnightOffsets(i)
-            If BAttack(Target) <> FRAME Then
-              If CBool(BAttack(Target) And NAttackBit) Then
-                If WAttack(Target) = 0 Then
-                  If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = WCOL) Then AttackUnits = AttackUnits + KnightCheck: MinusScore WKSafety, SafeCheck
+          Target = WKingLoc + KnightOffsets(i)
+          If Board(Target) <> FRAME Then
+            If CBool(BAttack(Target) And NAttackBit) Then
+              If Not (WDistanceChecksCounted And NAttackBit) Then
+                If WAttack(Target) = 0 Or (WAttack(Target) = QAttackBit And BAttack(Target) <> NAttackBit) Then
+                  If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = WCOL) Then
+                    KingDanger = KingDanger + KnightCheck: MinusScore WKSafety, SafeCheck
+                    WDistanceChecksCounted = (WDistanceChecksCounted Or NAttackBit)
+                    WOtherChecksCounted = (WOtherChecksCounted And Not NAttackBit)
+                  End If
                 Else
-                  If Not CBool(WAttack(Target) And PAttackBit) Then MinusScore WKSafety, OtherCheck
-                End If
-                ' Knight check fork?
-                If WAttack(Target) = 0 Or (WAttack(Target) = QAttackBit And (BAttack(Target) <> NAttackBit)) Then ' no attach
-                  For k = 0 To 7
-                    Select Case Board(Target + KnightOffsets(k))
-                    Case WQUEEN: If bWhiteToMove Then AddScoreVal BThreat, 25, 35 Else AddScoreVal BThreat, 45, 55
-                    Case WROOK: If bWhiteToMove Then AddScoreVal BThreat, 15, 20 Else AddScoreVal BThreat, 30, 40
-                    End Select
-                  Next
+                  If Not CBool(WAttack(Target) And PAttackBit) Then WOtherChecksCounted = WOtherChecksCounted Or NAttackBit
                 End If
               End If
-            End If
-            If (i = 1 Or i = 2) Then If CBool(BAttack(Target) And NAttackBit) Then LargerKingRingAttacksCount = LargerKingRingAttacksCount + 1 ' I=1>19, i=2>21
-          End If
+              ' Knight check fork?
+              If WAttack(Target) = 0 Or (WAttack(Target) = QAttackBit And (BAttack(Target) <> NAttackBit)) Then ' no attack
+                For k = 0 To 7
+                  Select Case Board(Target + KnightOffsets(k))
+                  Case WQUEEN: If bWhiteToMove Then AddScoreVal BThreat, 25, 35 Else AddScoreVal BThreat, 45, 55
+                  Case WROOK: If bWhiteToMove Then AddScoreVal BThreat, 15, 20 Else AddScoreVal BThreat, 30, 40
+                  End Select
+                Next
+              End If
+              If (i = 1 Or i = 2) Then ' for king G1 check F3 + H3 for LargerKingRingAttacks
+                If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = WCOL) Then LargerKingRingAttacksCount = LargerKingRingAttacksCount + 1
+              End If
+            End If ' CBool(BAttack(Target) And NAttackBit)
+          End If '  Board(Target) <> FRAME
           
         Next i ' direction
         
-        ' total attackunits
-        AttackUnits = AttackUnits + GetMin(807, WKingAttackersCount * WKingAttackersWeight) + 101 * WKingAdjacentZoneAttCnt _
+        ' Calc Other Checks
+        If WOtherChecksCounted > 0 Then
+          i = AttackBitCnt(WOtherChecksCounted): WKSafety.MG = WKSafety.MG - i * OtherCheck.MG: WKSafety.EG = WKSafety.EG - i * OtherCheck.EG
+        End If
+        
+        ' total KingDanger
+        KingDanger = KingDanger + GetMin(807, WKingAttackersCount * WKingAttackersWeight) + 101 * WKingAdjacentZoneAttCnt _
                     + 235 * Undefended + 134 * (LargerKingRingAttacksCount + Abs(WPinnedCnt > 0)) - 717 * Abs(PieceCnt(BQUEEN) = 0) - 7 * Bonus \ 5 - 5
         
         ' Penalty for king on open or semi-open file
         If NonPawnMaterial > 9000 And WPawns(FileNum) = 0 And WKingLoc <> WKING_START Then
-          If BPawns(FileNum) = 0 Then AttackUnits = AttackUnits + 18 Else AttackUnits = AttackUnits + 9
+          If BPawns(FileNum) = 0 Then KingDanger = KingDanger + 18 Else KingDanger = KingDanger + 9
         End If
               
-        r = AttackUnits + BPassedPawnAttack * 8 ' passed pawn attacking king?
+        r = KingDanger + BPassedPawnAttack * 8 ' passed pawn attacking king?
         
         If r > 0 Then
           r = GetMin((r * r) \ 4096, 2 * ScoreBishop.MG)
@@ -1495,6 +1588,13 @@ lblNextPiece3:
         Next
         If Bonus > 0 Then WKSafety.MG = WKSafety.MG - 7 * Bonus
         
+        ' Pawnless king flank penalty
+        k = 0
+        For i = r To rr
+          If WPawns(i) + BPawns(i) > 0 Then k = 1: Exit For
+        Next
+        If k = 0 Then MinusScore WKSafety, PawnlessFlank
+        
       End If
     End If
 
@@ -1506,7 +1606,7 @@ lblNextPiece3:
 
     RankNum = Rank(BKingLoc): RelRank = (9 - RankNum): FileNum = BKingFile: Bonus = 0: LargerKingRingAttacksCount = 0
     If (PieceCnt(WQUEEN) * 2 + PieceCnt(WROOK)) > 1 Then
-      AttackUnits = 0: Safety = 258 ' MaxSafetyBonus
+      KingDanger = 0: Safety = 258 ' MaxSafetyBonus
       If BPawnCnt = 0 Then MinBKingPawnDistance = 0 Else MinBKingPawnDistance = MinBKingPawnDistance - 1
             
       If RelRank > 4 Then
@@ -1550,7 +1650,7 @@ lblNextPiece3:
                   Undefended = Undefended + 1
 
                   If CBool(r And QAttackBit) Then
-                    If r <> QAttackBit Then AttackUnits = AttackUnits + QueenContactCheck
+                    If r <> QAttackBit Then If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = BCOL) Then KingDanger = KingDanger + QueenContactCheck 'Supported check
                   End If
                 End If
               Else
@@ -1565,26 +1665,43 @@ lblNextPiece3:
                 '---Distance check for r > 1 (i=0-3: orthogonal offset, 4-7:diagonal)
                 If i < 4 Then
                   If CBool(r And RAttackBit) Then
-                    If BAttack(Target) = 0 Then
-                      If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = BCOL) Then AttackUnits = AttackUnits + RookCheck: MinusScore BKSafety, SafeCheck
-                    Else
-                      If Not CBool(BAttack(Target) And PAttackBit) Then MinusScore BKSafety, OtherCheck
+                    If Not (BDistanceChecksCounted And RAttackBit) Then
+                      If BAttack(Target) = 0 Or (BAttack(Target) = QAttackBit And r <> RAttackBit) Then
+                        If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = BCOL) Then
+                          KingDanger = KingDanger + RookCheck: MinusScore BKSafety, SafeCheck
+                          BDistanceChecksCounted = (BDistanceChecksCounted Or RAttackBit)
+                          BOtherChecksCounted = BOtherChecksCounted And Not RAttackBit
+                        End If
+                      Else
+                        If Not CBool(BAttack(Target) And PAttackBit) Then BOtherChecksCounted = BOtherChecksCounted Or RAttackBit
+                      End If
                     End If
                   End If
                 Else ' i >= 4
                   If CBool(r And BAttackBit) Then
-                    If BAttack(Target) = 0 Then
-                      If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = BCOL) Then AttackUnits = AttackUnits + BishopCheck: MinusScore BKSafety, SafeCheck
-                    Else
-                      If Not CBool(BAttack(Target) And PAttackBit) Then MinusScore BKSafety, OtherCheck
+                    If Not (BDistanceChecksCounted And BAttackBit) Then
+                      If BAttack(Target) = 0 Or (BAttack(Target) = QAttackBit And r <> BAttackBit) Then
+                        If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = BCOL) Then
+                          KingDanger = KingDanger + BishopCheck: MinusScore BKSafety, SafeCheck
+                          BDistanceChecksCounted = (BDistanceChecksCounted Or BAttackBit)
+                          BOtherChecksCounted = BOtherChecksCounted And Not BAttackBit
+                        End If
+                      Else
+                        If Not CBool(BAttack(Target) And PAttackBit) Then BOtherChecksCounted = BOtherChecksCounted Or BAttackBit
+                      End If
                     End If
                   End If
                 End If
                 
                 ' Queen distance checks
                 If CBool(r And QAttackBit) Then
-                  If BAttack(Target) = 0 Then
-                    If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = BCOL) Then AttackUnits = AttackUnits + QueenCheck: MinusScore BKSafety, SafeCheck
+                  If Not (BDistanceChecksCounted And QAttackBit) Then
+                    If BAttack(Target) = 0 Then
+                      If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = BCOL) Then
+                        KingDanger = KingDanger + QueenCheck: MinusScore BKSafety, SafeCheck
+                        BDistanceChecksCounted = (BDistanceChecksCounted Or QAttackBit)
+                      End If
+                    End If
                   End If
                 End If
              End If
@@ -1599,10 +1716,10 @@ lblNextPiece3:
                 If i < 4 Then ' orthogonal
                   If CBool(WAttack(Target) And QRAttackBit) Then  ' rook or queen, direction not clear
                    For k = 1 To 8
-                    sq = Target + Offset * k: piece = Board(sq)
-                    If piece = FRAME Then Exit For
-                    If piece < NO_PIECE Then
-                      If piece = WQUEEN Or piece = WROOK Then If (PieceType(piece) <> PieceType(Board(Target))) Then BPinnedCnt = BPinnedCnt + 1
+                    sq = Target + Offset * k: Piece = Board(sq)
+                    If Piece = FRAME Then Exit For
+                    If Piece < NO_PIECE Then
+                      If Piece = WQUEEN Or Piece = WROOK Then If (PieceType(Piece) <> PieceType(Board(Target))) Then BPinnedCnt = BPinnedCnt + 1
                       Exit For
                     Else
                       If Not (CBool(WAttack(sq) And QRAttackBit)) Then Exit For
@@ -1612,10 +1729,10 @@ lblNextPiece3:
                 Else ' i>4 diagonal
                   If CBool(WAttack(Target) And QBAttackBit) Then  ' bishop or queen, direction not clear
                    For k = 1 To 8
-                    sq = Target + Offset * k: piece = Board(sq)
-                    If piece = FRAME Then Exit For
-                    If piece < NO_PIECE Then
-                      If piece = WQUEEN Or piece = WBISHOP Then BPinnedCnt = BPinnedCnt + 1
+                    sq = Target + Offset * k: Piece = Board(sq)
+                    If Piece = FRAME Then Exit For
+                    If Piece < NO_PIECE Then
+                      If Piece = WQUEEN Or Piece = WBISHOP Then BPinnedCnt = BPinnedCnt + 1
                       Exit For
                     Else
                       If Not (CBool(WAttack(sq) And QBAttackBit)) Then Exit For
@@ -1624,53 +1741,62 @@ lblNextPiece3:
                   End If
                 End If
               End If
-              
               ' --- Piece found - exit direction loop
               Exit Do
             Else
               ' empty square: potential danger for slider attacks
              ' If rr > 1 Then BKSafety.MG = BKSafety.MG - (2 * PieceCnt(WQUEEN) + PieceCnt(WROOK) + PieceCnt(WBISHOP)) \ 2
             End If
-                        
             Target = Target + Offset: rr = rr + 1
           Loop
           
           ' Knight Check
-          If PieceCnt(WKNIGHT) > 0 Then
-            Target = BKingLoc + KnightOffsets(i)
-            If BAttack(Target) <> FRAME Then
-              If CBool(WAttack(Target) And NAttackBit) Then
-                If BAttack(Target) = 0 Then
-                  If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = BCOL) Then AttackUnits = AttackUnits + KnightCheck: MinusScore BKSafety, SafeCheck
+          Target = BKingLoc + KnightOffsets(i)
+          If Board(Target) <> FRAME Then
+            If CBool(WAttack(Target) And NAttackBit) Then
+              If Not (BDistanceChecksCounted And NAttackBit) Then
+                If BAttack(Target) = 0 Or (BAttack(Target) = QAttackBit And WAttack(Target) <> NAttackBit) Then
+                  If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = BCOL) Then
+                    KingDanger = KingDanger + KnightCheck: MinusScore BKSafety, SafeCheck
+                    BDistanceChecksCounted = (BDistanceChecksCounted Or NAttackBit)
+                    BOtherChecksCounted = (BOtherChecksCounted And Not NAttackBit)
+                  End If
                 Else
-                  If Not CBool(BAttack(Target) And PAttackBit) Then MinusScore BKSafety, OtherCheck
-                End If
-                ' Knight check fork?
-                If BAttack(Target) = 0 Or (BAttack(Target) = QAttackBit And (WAttack(Target) <> NAttackBit)) Then ' field not defended or by queen only but other attacker
-                  For k = 0 To 7
-                    Select Case Board(Target + KnightOffsets(k))
-                    Case BQUEEN: If Not bWhiteToMove Then AddScoreVal WThreat, 25, 35 Else AddScoreVal WThreat, 45, 55
-                    Case BROOK: If Not bWhiteToMove Then AddScoreVal WThreat, 15, 20 Else AddScoreVal WThreat, 30, 40
-                    End Select
-                  Next
+                  If Not CBool(BAttack(Target) And PAttackBit) Then BOtherChecksCounted = BOtherChecksCounted Or NAttackBit
                 End If
               End If
-            End If
-            If (i = 5 Or i = 6) Then If CBool(WAttack(Target) And NAttackBit) Then LargerKingRingAttacksCount = LargerKingRingAttacksCount + 1 ' I=5>-19, i=6>-21
-          End If
+              ' Knight check fork?
+              If BAttack(Target) = 0 Or (BAttack(Target) = QAttackBit And (WAttack(Target) <> NAttackBit)) Then ' field not defended or by queen only but other attacker
+                For k = 0 To 7
+                  Select Case Board(Target + KnightOffsets(k))
+                  Case BQUEEN: If Not bWhiteToMove Then AddScoreVal WThreat, 25, 35 Else AddScoreVal WThreat, 45, 55
+                  Case BROOK: If Not bWhiteToMove Then AddScoreVal WThreat, 15, 20 Else AddScoreVal WThreat, 30, 40
+                  End Select
+                Next
+              End If
+              If (i = 5 Or i = 6) Then ' for king g8 check F6 + H7 for LargerKingRingAttacks
+                If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = BCOL) Then LargerKingRingAttacksCount = LargerKingRingAttacksCount + 1
+              End If
+            End If  ' CBool(WAttack(Target) And NAttackBit)
+          End If '  Board(Target) <> FRAME
           
         Next i ' direction
         
-        ' total attackunits
-        AttackUnits = AttackUnits + GetMin(807, BKingAttackersCount * BKingAttackersWeight) + 101 * BKingAdjacentZoneAttCnt _
+        ' Calc Other Checks
+        If BOtherChecksCounted > 0 Then
+          i = AttackBitCnt(BOtherChecksCounted): BKSafety.MG = BKSafety.MG - i * OtherCheck.MG: BKSafety.EG = BKSafety.EG - i * OtherCheck.EG
+        End If
+        
+        ' total KingDanger
+        KingDanger = KingDanger + GetMin(807, BKingAttackersCount * BKingAttackersWeight) + 101 * BKingAdjacentZoneAttCnt _
                     + 235 * Undefended + 134 * (LargerKingRingAttacksCount + Abs(BPinnedCnt > 0)) - 717 * Abs(PieceCnt(WQUEEN) = 0) - 7 * Bonus \ 5 - 5
         
         ' Penalty for king on open or semi-open file
         If NonPawnMaterial > 9000 And BPawns(FileNum) = 0 And BKingLoc <> BKING_START Then
-          If WPawns(FileNum) = 0 Then AttackUnits = AttackUnits + 18 Else AttackUnits = AttackUnits + 9
+          If WPawns(FileNum) = 0 Then KingDanger = KingDanger + 18 Else KingDanger = KingDanger + 9
         End If
               
-        r = AttackUnits + WPassedPawnAttack * 8 ' passed pawn attacking king?
+        r = KingDanger + WPassedPawnAttack * 8 ' passed pawn attacking king?
         
         If r > 0 Then
           r = GetMin((r * r) \ 4096, 2 * ScoreBishop.MG)
@@ -1693,6 +1819,13 @@ lblNextPiece3:
          Next
         Next
         If Bonus > 0 Then BKSafety.MG = BKSafety.MG - 7 * Bonus
+        
+        ' Pawnless king flank penalty
+        k = 0
+        For i = r To rr
+          If WPawns(i) + BPawns(i) > 0 Then k = 1: Exit For
+        Next
+        If k = 0 Then MinusScore BKSafety, PawnlessFlank
         
       End If
     End If
@@ -1722,27 +1855,50 @@ lblNextPiece3:
   Else
     '--- Midgame
     '-- Bonus for double pawn control as center fields  E4,D4, E5, D5
-    If Board(SQ_E4 + SQ_DOWN_LEFT) = WPAWN And Board(SQ_E4 + SQ_DOWN_RIGHT) = WPAWN Then AddScoreVal WPos, 35, 0
-    If Board(SQ_E5 + SQ_DOWN_LEFT) = WPAWN And Board(SQ_E5 + SQ_DOWN_RIGHT) = WPAWN Then AddScoreVal WPos, 35, 0
-    If Board(SQ_D4 + SQ_DOWN_LEFT) = WPAWN And Board(SQ_D4 + SQ_DOWN_RIGHT) = WPAWN Then AddScoreVal WPos, 35, 0
-    If Board(SQ_D5 + SQ_DOWN_LEFT) = WPAWN And Board(SQ_D5 + SQ_DOWN_RIGHT) = WPAWN Then AddScoreVal WPos, 35, 0
+    ''r = Abs(AttackBitCnt(WAttack(SQ_E4) And PAttackBit) = 2) + Abs(AttackBitCnt(WAttack(SQ_E5) And PAttackBit) = 2) + _
+    ''    Abs(AttackBitCnt(WAttack(SQ_D4) And PAttackBit) = 2) + Abs(AttackBitCnt(WAttack(SQ_D5) And PAttackBit) = 2)
+    ''If r > 0 Then WPos.MG = WPos.MG + r * 35
+    ' or this way, faster?
+    'If Board(SQ_E4 + SQ_DOWN_LEFT) = WPAWN then if  Board(SQ_E4 + SQ_DOWN_RIGHT) = WPAWN Then AddScoreVal WPos, 35, 0
+    'If Board(SQ_E5 + SQ_DOWN_LEFT) = WPAWN then if  Board(SQ_E5 + SQ_DOWN_RIGHT) = WPAWN Then AddScoreVal WPos, 35, 0
+    'If Board(SQ_D4 + SQ_DOWN_LEFT) = WPAWN then if  Board(SQ_D4 + SQ_DOWN_RIGHT) = WPAWN Then AddScoreVal WPos, 35, 0
+    'If Board(SQ_D5 + SQ_DOWN_LEFT) = WPAWN then if  Board(SQ_D5 + SQ_DOWN_RIGHT) = WPAWN Then AddScoreVal WPos, 35, 0
 
-    If Board(SQ_E4 + SQ_UP_LEFT) = BPAWN And Board(SQ_E4 + SQ_UP_RIGHT) = BPAWN Then AddScoreVal BPos, 35, 0
-    If Board(SQ_E5 + SQ_UP_LEFT) = BPAWN And Board(SQ_E5 + SQ_UP_RIGHT) = BPAWN Then AddScoreVal BPos, 35, 0
-    If Board(SQ_D4 + SQ_UP_LEFT) = BPAWN And Board(SQ_D4 + SQ_UP_RIGHT) = BPAWN Then AddScoreVal BPos, 35, 0
-    If Board(SQ_D5 + SQ_UP_LEFT) = BPAWN And Board(SQ_D5 + SQ_UP_RIGHT) = BPAWN Then AddScoreVal BPos, 35, 0
+    ''r = Abs(AttackBitCnt(BAttack(SQ_E4) And PAttackBit) = 2) + Abs(AttackBitCnt(BAttack(SQ_E5) And PAttackBit) = 2) + _
+    ''    Abs(AttackBitCnt(BAttack(SQ_D4) And PAttackBit) = 2) + Abs(AttackBitCnt(BAttack(SQ_D5) And PAttackBit) = 2)
+    ''If r > 0 Then BPos.MG = BPos.MG + r * 35
+    ' or this way, faster?
+    'If Board(SQ_E4 + SQ_UP_LEFT) = BPAWN then if  Board(SQ_E4 + SQ_UP_RIGHT) = BPAWN Then AddScoreVal BPos, 35, 0
+    'If Board(SQ_E5 + SQ_UP_LEFT) = BPAWN then if  Board(SQ_E5 + SQ_UP_RIGHT) = BPAWN Then AddScoreVal BPos, 35, 0
+    'If Board(SQ_D4 + SQ_UP_LEFT) = BPAWN then if  Board(SQ_D4 + SQ_UP_RIGHT) = BPAWN Then AddScoreVal BPos, 35, 0
+    'If Board(SQ_D5 + SQ_UP_LEFT) = BPAWN then if  Board(SQ_D5 + SQ_UP_RIGHT) = BPAWN Then AddScoreVal BPos, 35, 0
   End If
 
   ' add kings to attack array
+  r = 0: rr = 0
   For i = 0 To 7
     Offset = QueenOffsets(i)
-    Target = WKingLoc + Offset: piece = Board(Target)
-    WAttack(Target) = WAttack(Target) Or KAttackBit
-    
-    Target = BKingLoc + Offset: piece = Board(Target)
-    BAttack(Target) = BAttack(Target) Or KAttackBit
- 
+    Target = WKingLoc + Offset
+    If Board(Target) <> FRAME Then
+      WAttack(Target) = WAttack(Target) Or KAttackBit
+      If PieceColor(Board(Target)) = COL_BLACK Then
+        If AttackBitCnt(WAttack(Target)) > AttackBitCnt(BAttack(Target)) Then r = r + 1  ' King attacks unprotected piece
+      End If
+    End If
+    Target = BKingLoc + Offset
+    If Board(Target) <> FRAME Then
+      BAttack(Target) = BAttack(Target) Or KAttackBit
+      If PieceColor(Board(Target)) = COL_WHITE Then
+        If AttackBitCnt(BAttack(Target)) > AttackBitCnt(WAttack(Target)) Then rr = rr + 1  ' King attacks unprotected piece
+      End If
+    End If
   Next
+  If r > 0 Then
+    If r = 1 Then AddScore WThreat, KingOnOneBonus Else AddScore WThreat, KingOnManyBonus
+  End If
+  If rr > 0 Then
+    If rr = 1 Then AddScore BThreat, KingOnOneBonus Else AddScore BThreat, KingOnManyBonus
+  End If
 
   '
   '--- Eval threats -------------------------------------------
@@ -1794,7 +1950,7 @@ lblNextPiece3:
     
     If PieceColor(Board(Square)) = COL_WHITE Then
       ' White piece
-      OwnCol = COL_WHITE: OppCol = COL_BLACK: MoveUp = 10
+      OwnCol = COL_WHITE: OppCol = COL_BLACK: MoveUp = SQ_UP
       RelRank = RankNum: RelRank8 = 8: OwnKingLoc = WKingLoc: OppKingLoc = BKingLoc
       ' Attack Opp King?
       If RelRank > WFrontMostPassedPawnRank Then WFrontMostPassedPawnRank = RankNum
@@ -1810,7 +1966,7 @@ lblNextPiece3:
         End If
       End If
     Else
-      OwnCol = COL_BLACK: OppCol = COL_WHITE: MoveUp = -10
+      OwnCol = COL_BLACK: OppCol = COL_WHITE: MoveUp = SQ_DOWN
       ' Black piece
       RelRank = (9 - RankNum): RelRank8 = 1: OwnKingLoc = BKingLoc: OppKingLoc = WKingLoc
       If RelRank > BFrontMostPassedPawnRank Then BFrontMostPassedPawnRank = RelRank
@@ -1831,7 +1987,7 @@ lblNextPiece3:
     r = RelRank - 2: rr = (r * (r - 1))
     MBonus = PassedPawnRankBonus(r).MG: EBonus = PassedPawnRankBonus(r).EG
 
-    ' Bonus based in rank ' SF6
+    ' Bonus based on rank ' SF6
     If rr <> 0 Then
       BlockSq = Square + MoveUp
       If Board(BlockSq) <> FRAME Then
@@ -1876,17 +2032,24 @@ lblNextPiece3:
             If OwnAttCnt = 0 And sq <> OwnKingLoc Then
               bAllDefended = False: If sq = BlockSq Then BlockSqDefended = False
             End If
-            If PieceColor(Board(sq)) = OppCol Or OppAttCnt > 0 Then
+            If PieceColor(Board(sq)) = OppCol Then
               If sq = BlockSq Then BlockSqUnsafe = True Else UnsafeCnt = UnsafeCnt + 1
+            ElseIf OppAttCnt > 0 Then
+              If CBool(AttackByCol(OwnCol, sq) And PAttackBit) And Not CBool(AttackByCol(OppCol, sq) And PAttackBit) Then
+                 ' Own pawn support but no enemy pawn attack: square is safe ( NOT SF LOGIC )
+                 ' Stop
+              Else
+                If sq = BlockSq Then BlockSqUnsafe = True Else UnsafeCnt = UnsafeCnt + 1
+              End If
             End If
           Next RankPath
               
           If BlockSqUnsafe Then UnsafeCnt = UnsafeCnt + 1
               
           If UnsafeCnt = 0 Then
-            k = 15
+            k = 18
           ElseIf Not BlockSqUnsafe Then
-            k = 9 '- UnsafeCnt
+            k = 8 '- UnsafeCnt
           Else
             k = 0
           End If
@@ -1897,7 +2060,7 @@ lblNextPiece3:
           End If
           If k <> 0 Then MBonus = MBonus + k * rr: EBonus = EBonus + k * rr
         Else
-          If PieceColor(Board(BlockSq)) = OwnCol Then MBonus = MBonus + rr * 3 + r * 2 + 3: EBonus = EBonus + rr + r * 2
+          If PieceColor(Board(BlockSq)) = OwnCol Then MBonus = MBonus + rr + r * 2: EBonus = EBonus + rr + r * 2
         End If
       End If
       
@@ -1906,6 +2069,7 @@ lblNextPiece3:
     If OwnCol = COL_WHITE Then
       If WPawnCnt < BPawnCnt Then EBonus = EBonus + EBonus \ 4
       MBonus = MBonus + PassedPawnFileBonus(FileNum).MG: EBonus = EBonus + PassedPawnFileBonus(FileNum).EG
+      If BNonPawnMaterial = 0 Then EBonus = EBonus + 20
       AddScoreVal WPassed, MBonus, EBonus
       If 1000 + EBonus > WBestPawnVal Then WBestPawn = Square: WBestPawnVal = 1000 + EBonus ' new best pawn
       If bEvalTrace Then WriteTrace "WPassed: " & LocCoord(Square) & ">" & MBonus & ", " & EBonus
@@ -1913,6 +2077,7 @@ lblNextPiece3:
     ElseIf OwnCol = COL_BLACK Then
       If BPawnCnt < WPawnCnt Then EBonus = EBonus + EBonus \ 4
       MBonus = MBonus + PassedPawnFileBonus(FileNum).MG: EBonus = EBonus + PassedPawnFileBonus(FileNum).EG
+      If WNonPawnMaterial = 0 Then EBonus = EBonus + 20
       AddScoreVal BPassed, MBonus, EBonus
       If 1000 + EBonus > BBestPawnVal Then BBestPawn = Square: BBestPawnVal = 1000 + EBonus ' new best pawn
       If bEvalTrace Then WriteTrace "BPassed: " & LocCoord(Square) & ">" & MBonus & ", " & EBonus
@@ -2075,6 +2240,7 @@ lblEndEval:
   If Not bWhiteToMove Then Eval = -Eval '--- Invert for black
 
   Eval = Eval + TEMPO_BONUS ' Tempo for side to move
+  If Eval = DrawContempt Then Eval = Eval + 1
 End Function
 '---------------------------------
 '-------- END OF EVAL ------------
@@ -2131,17 +2297,17 @@ Public Function CalcWeight(Score As TScore, Weight As TScore)
   Score.MG = (Score.MG * Weight.MG) \ 256&:  Score.EG = (Score.EG * Weight.EG) \ 256&
 End Function
 
-Public Function AdvancedPawnPush(ByVal piece As Long, _
+Public Function AdvancedPawnPush(ByVal Piece As Long, _
                                  ByVal Target As Long) As Boolean
   AdvancedPawnPush = False
-  If piece = WPAWN Then
+  If Piece = WPAWN Then
     Select Case Rank(Target)
       Case 7, 8: AdvancedPawnPush = True
       Case 6:
         '--- if no enemy in front and no enemy pawns left or right
         If (Board(Target + SQ_UP) >= NO_PIECE Or Board(Target + SQ_UP) Mod 2 = WCOL) Then If Board(Target + SQ_UP_LEFT) <> BPAWN And Board(Target + SQ_UP_RIGHT) <> BPAWN Then AdvancedPawnPush = True
     End Select
-  ElseIf piece = BPAWN Then
+  ElseIf Piece = BPAWN Then
     Select Case Rank(Target)
       Case 1, 2: AdvancedPawnPush = True
       Case 3:
@@ -2150,14 +2316,14 @@ Public Function AdvancedPawnPush(ByVal piece As Long, _
   End If
 End Function
 
-Public Function PieceSquareValDiff(ByVal piece As Long, _
+Public Function PieceSquareValDiff(ByVal Piece As Long, _
                                    ByVal From As Long, _
                                    ByVal Target As Long) As Long
   '--- Score difference in piece square table for moving a piece
   PieceSquareValDiff = 0
   
   If bEndgame Then
-    Select Case piece
+    Select Case Piece
       Case NO_PIECE
       Case WPAWN
         PieceSquareValDiff = PsqtWP(Target).EG - PsqtWP(From).EG
@@ -2185,7 +2351,7 @@ Public Function PieceSquareValDiff(ByVal piece As Long, _
         PieceSquareValDiff = PsqtBK(Target).EG - PsqtBK(From).EG
     End Select
   Else
-    Select Case piece
+    Select Case Piece
       Case NO_PIECE
       Case WPAWN
         PieceSquareValDiff = PsqtWP(Target).MG - PsqtWP(From).MG
@@ -2216,12 +2382,12 @@ Public Function PieceSquareValDiff(ByVal piece As Long, _
 End Function
 
 
-Public Function PieceSquareVal(ByVal piece As Long, ByVal Square As Long) As Long
+Public Function PieceSquareVal(ByVal Piece As Long, ByVal Square As Long) As Long
   '--- Piece value for a square
   PieceSquareVal = 0
   
   If bEndgame Then
-    Select Case piece
+    Select Case Piece
       Case NO_PIECE
       Case WPAWN
         PieceSquareVal = PsqtWP(Square).EG
@@ -2249,7 +2415,7 @@ Public Function PieceSquareVal(ByVal piece As Long, ByVal Square As Long) As Lon
         PieceSquareVal = PsqtBK(Square).EG
     End Select
   Else
-    Select Case piece
+    Select Case Piece
       Case NO_PIECE
       Case WPAWN
         PieceSquareVal = PsqtWP(Square).MG
@@ -2280,13 +2446,13 @@ Public Function PieceSquareVal(ByVal piece As Long, ByVal Square As Long) As Lon
 End Function
 
 Public Sub FillPieceSquareVal()
-Dim piece As Long, Target As Long
-  For piece = 1 To 16
+Dim Piece As Long, Target As Long
+  For Piece = 1 To 16
     For Target = SQ_A1 To SQ_H8
         bEndgame = False
-        PsqVal(0, piece, Target) = PieceSquareVal(piece, Target)
+        PsqVal(0, Piece, Target) = PieceSquareVal(Piece, Target)
         bEndgame = True
-        PsqVal(1, piece, Target) = PieceSquareVal(piece, Target)
+        PsqVal(1, Piece, Target) = PieceSquareVal(Piece, Target)
     Next
   Next
 End Sub
@@ -2381,7 +2547,7 @@ Public Sub AddThreat(ByVal HangCol As enumColor, _
 End Sub
 
 Public Sub CalcThreats()
-  Dim i As Long, IsMinor As Boolean, IsMajor As Boolean, Defended As Boolean, WToMoveFactor As Long, BToMoveFactor As Long
+  Dim i As Long, Defended As Boolean, WToMoveFactor As Long, BToMoveFactor As Long, StronglyProtected As Boolean, Weak As Boolean
   If ThreatCnt = 0 Then Exit Sub
   
   ' if threat but side can move piece out of danger then reduced threat value > asymmetric eval result!
@@ -2393,65 +2559,58 @@ Public Sub CalcThreats()
   
   For i = 1 To ThreatCnt
     With ThreatList(i)
-      IsMinor = False: IsMajor = False
-      Select Case .AttackerPieceType
-        Case PT_BISHOP, PT_KNIGHT: IsMinor = True ' minor
-        Case PT_ROOK, PT_QUEEN, PT_KING: IsMajor = True ' major
-        Case Else
-          GoTo lblNext
-      End Select
          
       ' Add a bonus according to the kind of attacking pieces
       If .HangCol = COL_WHITE Then
-        If .HangPieceType = PT_PAWN And WAttack(.AttackedSquare) <> 0 Then GoTo lblNext ' ignore defended pawns
-        Defended = CBool(WAttack(.AttackedSquare) And PAttackBit) ' Defended by pawn
-        If Defended Then
-          If IsMinor Then
-            AddScore BThreat, ScaleScore100(ThreatDefendedMinor(.HangPieceType), WToMoveFactor)
-          ElseIf .AttackerPieceType = PT_ROOK Then
-            AddScore BThreat, ScaleScore100(ThreatDefendedMajor(.HangPieceType), WToMoveFactor)
-          End If
-        Else ' weak: Attacked and not defended by pawn
-          If IsMinor Then
-            AddScore BThreat, ScaleScore100(ThreatWeakMinor(.HangPieceType), WToMoveFactor)
-          ElseIf IsMajor Then
-            AddScore BThreat, ScaleScore100(ThreatWeakMajor(.HangPieceType), WToMoveFactor)
-          End If
-          If WAttack(.AttackedSquare) = 0 Then ' not defended by any piece: hanging
-            AddScore BThreat, ScaleScore100(Hanging, WToMoveFactor)
-          Else
-            ' Defended piece less valuable than attacker? Simple SEE . reduce threat penalty
-            If PieceTypeValue(.AttackerPieceType) > PieceTypeValue(.HangPieceType) Then
-              MinusScore BThreat, ScaleScore100(ThreatWeakMinor(.HangPieceType), WToMoveFactor \ 3)
+        ' StronglyProtected: by pawn or by more defenders then attackers
+        StronglyProtected = CBool(WAttack(.AttackedSquare) And PAttackBit) Or AttackBitCnt(WAttack(.AttackedSquare)) > AttackBitCnt(BAttack(.AttackedSquare))
+        ' Non-pawn enemies strongly defended
+        Defended = .HangPieceType <> PT_PAWN And StronglyProtected
+        ' Enemies not strongly defended and under our attack
+        Weak = Not StronglyProtected
+        
+        If Defended Or Weak Then
+          If .AttackerPieceType = PT_BISHOP Or .AttackerPieceType = PT_KNIGHT Then
+            AddScore BThreat, ScaleScore100(ThreatByMinor(.HangPieceType), WToMoveFactor)
+            If .HangPieceType <> PT_PAWN Then
+              AddScoreVal BThreat, ThreatByRank.MG * Rank(.AttackedSquare), ThreatByRank.EG * Rank(.AttackedSquare)
             End If
+          End If
+            End If
+        
+        If (.HangPieceType = PT_QUEEN Or Weak) And .AttackerPieceType = PT_ROOK Then
+          AddScore BThreat, ScaleScore100(ThreatByRook(.HangPieceType), WToMoveFactor)
+          If .HangPieceType <> PT_PAWN Then
+            AddScoreVal BThreat, ThreatByRank.MG * Rank(.AttackedSquare), ThreatByRank.EG * Rank(.AttackedSquare)
           End If
         End If
   
+        If Weak Then If WAttack(.AttackedSquare) = 0 Then AddScore BThreat, Hanging
+        
       Else ' Black
-        If .HangPieceType = PT_PAWN And BAttack(.AttackedSquare) <> 0 Then GoTo lblNext ' ignore defended pawns
-        Defended = CBool(BAttack(.AttackedSquare) And PAttackBit)
-        If Defended Then
-          If IsMinor Then
-            AddScore WThreat, ScaleScore100(ThreatDefendedMinor(.HangPieceType), BToMoveFactor)
-          ElseIf .AttackerPieceType = PT_ROOK Then
-            AddScore WThreat, ScaleScore100(ThreatDefendedMajor(.HangPieceType), BToMoveFactor)
+        ' StronglyProtected: by pawn or by more defenders then attackers
+        StronglyProtected = CBool(BAttack(.AttackedSquare) And PAttackBit) Or AttackBitCnt(BAttack(.AttackedSquare)) > AttackBitCnt(WAttack(.AttackedSquare))
+        ' Non-pawn enemies strongly defended
+        Defended = .HangPieceType <> PT_PAWN And StronglyProtected
+        ' Enemies not strongly defended and under our attack
+        Weak = Not StronglyProtected
+        
+        If Defended Or Weak Then
+          If .AttackerPieceType = PT_BISHOP Or .AttackerPieceType = PT_KNIGHT Then
+            AddScore WThreat, ScaleScore100(ThreatByMinor(.HangPieceType), BToMoveFactor)
+            If .HangPieceType <> PT_PAWN Then
+              AddScoreVal WThreat, ThreatByRank.MG * (9 - Rank(.AttackedSquare)), ThreatByRank.EG * (9 - Rank(.AttackedSquare))
           End If
-        Else ' weak: Attacked and not defended by pawn
-          If IsMinor Then
-            AddScore WThreat, ScaleScore100(ThreatWeakMinor(.HangPieceType), BToMoveFactor)
-          ElseIf IsMajor Then
-            AddScore WThreat, ScaleScore100(ThreatWeakMajor(.HangPieceType), BToMoveFactor)
           End If
-          If BAttack(.AttackedSquare) = 0 Then
-            AddScore WThreat, ScaleScore100(Hanging, BToMoveFactor)
-          Else
-            ' Defended piece less valuable than attacker? Simple SEE . reduce threat penalty
-            If PieceTypeValue(.AttackerPieceType) > PieceTypeValue(.HangPieceType) Then
-              MinusScore WThreat, ScaleScore100(ThreatWeakMinor(.HangPieceType), BToMoveFactor \ 3)
             End If
+        
+        If (.HangPieceType = PT_QUEEN Or Weak) And .AttackerPieceType = PT_ROOK Then
+          AddScore WThreat, ScaleScore100(ThreatByRook(.HangPieceType), BToMoveFactor)
+          If .HangPieceType <> PT_PAWN Then
+            AddScoreVal WThreat, ThreatByRank.MG * (9 - Rank(.AttackedSquare)), ThreatByRank.EG * (9 - Rank(.AttackedSquare))
           End If
         End If
-           
+        If Weak Then If BAttack(.AttackedSquare) = 0 Then AddScore WThreat, Hanging
       End If
     End With
     
@@ -2459,6 +2618,7 @@ lblNext:
   Next
 
 End Sub
+
 
 Private Sub AddKingZoneDefendCnt(ByVal DefendBits As Long, _
                                  ByVal AttackBits As Long, _
@@ -2793,7 +2953,7 @@ End Sub
 
 Public Function PinnedPieceW(ByVal PinnedLoc As Long, ByVal Direction As Long) As Boolean
   ' white pieces it threatend by pinned pieces and slider attack?
-  Dim k As Long, sq As Long, Offset As Long, AttackBit As Long, piece As Long
+  Dim k As Long, sq As Long, Offset As Long, AttackBit As Long, Piece As Long
   PinnedPieceW = False
   If Direction < 4 Then ' Queen or rook orthogonal
     If Not CBool(BAttack(PinnedLoc) And QRAttackBit) Then Exit Function
@@ -2805,12 +2965,12 @@ Public Function PinnedPieceW(ByVal PinnedLoc As Long, ByVal Direction As Long) A
   
   Offset = QueenOffsets(Direction)
   For k = 1 To 8
-   sq = PinnedLoc + Offset * k: piece = Board(sq)
-   If piece = FRAME Then Exit For
-   If piece < NO_PIECE Then
-     If piece = BQUEEN Then PinnedPieceW = True: Exit Function
-     If piece = BROOK Then If Direction < 4 Then PinnedPieceW = True: Exit Function
-     If piece = BBISHOP Then If Direction >= 4 Then PinnedPieceW = True: Exit Function
+   sq = PinnedLoc + Offset * k: Piece = Board(sq)
+   If Piece = FRAME Then Exit For
+   If Piece < NO_PIECE Then
+     If Piece = BQUEEN Then PinnedPieceW = True: Exit Function
+     If Piece = BROOK Then If Direction < 4 Then PinnedPieceW = True: Exit Function
+     If Piece = BBISHOP Then If Direction >= 4 Then PinnedPieceW = True: Exit Function
      Exit For
    Else
      If Not (CBool(BAttack(sq) And AttackBit)) Then Exit For
@@ -2820,7 +2980,7 @@ End Function
 
 Public Function PinnedPieceB(ByVal PinnedLoc As Long, ByVal Direction As Long) As Boolean
   ' black pieces it threatend by pinned pieces and slider attack?
-  Dim k As Long, sq As Long, Offset As Long, AttackBit As Long, piece As Long
+  Dim k As Long, sq As Long, Offset As Long, AttackBit As Long, Piece As Long
   PinnedPieceB = False
   If Direction < 4 Then ' Queen or rook orthogonal
     If Not CBool(WAttack(PinnedLoc) And QRAttackBit) Then Exit Function
@@ -2832,15 +2992,23 @@ Public Function PinnedPieceB(ByVal PinnedLoc As Long, ByVal Direction As Long) A
   
   Offset = QueenOffsets(Direction)
   For k = 1 To 8
-   sq = PinnedLoc + Offset * k: piece = Board(sq)
-   If piece = FRAME Then Exit For
-   If piece < NO_PIECE Then
-     If piece = WQUEEN Then PinnedPieceB = True: Exit Function
-     If piece = WROOK Then If Direction < 4 Then PinnedPieceB = True: Exit Function
-     If piece = WBISHOP Then If Direction >= 4 Then PinnedPieceB = True: Exit Function
+   sq = PinnedLoc + Offset * k: Piece = Board(sq)
+   If Piece = FRAME Then Exit For
+   If Piece < NO_PIECE Then
+     If Piece = WQUEEN Then PinnedPieceB = True: Exit Function
+     If Piece = WROOK Then If Direction < 4 Then PinnedPieceB = True: Exit Function
+     If Piece = WBISHOP Then If Direction >= 4 Then PinnedPieceB = True: Exit Function
      Exit For
    Else
      If Not (CBool(WAttack(sq) And AttackBit)) Then Exit For
    End If
   Next k
 End Function
+
+Public Sub InitOutpostSq()
+  Dim sq  As Long
+  For sq = SQ_A1 To SQ_H8
+    If Rank(sq) >= 4 And Rank(sq) <= 6 Then WOutpostSq(sq) = True
+    If Rank(sq) >= 3 And Rank(sq) <= 5 Then BOutpostSq(sq) = True
+  Next sq
+End Sub
