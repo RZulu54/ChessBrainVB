@@ -471,7 +471,7 @@ Function WriteINISetting(ByVal sSetting As String, ByVal sValue As String) As Bo
   If lBufferLen > 0 Then
     WriteINISetting = True
   Else
-    LogWrite "Error writing setting: " & sSetting & "=" & sValue, True, True
+    LogWrite "Error writing setting: " & sSetting & "=" & sValue, True
     WriteINISetting = False
   End If
 
@@ -480,11 +480,9 @@ End Function
 '---------------------------------------------------------------------------
 'LogWrite: Write log file
 'bTime adds the time
-'bForce write even if Logmode ist not set
 '---------------------------------------------------------------------------
 Public Sub LogWrite(sLogString As String, _
-                    Optional ByVal bTime As Boolean, _
-                    Optional ByVal bForce As Boolean)
+                    Optional ByVal bTime As Boolean)
 
   Dim sStr As String
   sStr = sLogString
@@ -669,7 +667,7 @@ Public Function ProbeTablebases(ByVal sFEN As String, ByRef GameResultScore As L
  ' function returns false if no result
  Static bInitDone As Boolean
  Static bInitOK As Boolean
- Dim sResult As String, sMoves As String
+ Dim sResult As String
  
   GameResultScore = UNKNOWN_SCORE: BestMove = "": BestMovesList = "": ProbeTablebases = False
   If Not bInitDone Then
@@ -734,3 +732,5 @@ Public Function ExtractFirstTbMove(ByVal sMoveList As String) As String
     ExtractFirstTbMove = ""
   End If
 End Function
+
+

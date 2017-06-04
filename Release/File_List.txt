@@ -1,6 +1,6 @@
 ==================================
 = File_List.txt
-= for ChessBrainVB V3.20 by Roger Zuehlsdorf
+= for ChessBrainVB V2.0 by Roger Zuehlsdorf
 ==================================
 
 BookEdit.exe :  Opening book editor for *.opi,*.opn file. Sources see engine LarsenVB at "xoomer.virgilio.it/ludormio/download.htm"

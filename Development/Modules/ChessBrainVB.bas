@@ -1,7 +1,7 @@
 Attribute VB_Name = "ChessBrainVBbas"
 '==================================================
-'= ChessBrainVB V3.20:
-'=   by Roger Zuehlsdorf (Copyright 2016)
+'= ChessBrainVB V3.30:
+'=   by Roger Zuehlsdorf (Copyright 2017)
 '=   based on LarsenVB by Luca Dormio (http://xoomer.virgilio.it/ludormio/download.htm) and Faile by Adrien M. Regimbald
 '=        and Stockfish by Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
 '= start of program
@@ -141,7 +141,7 @@ Public Sub InitEngine()
   Erase Moved()
 
   InitPieceColor
-  
+
   '-------------------------------------
   '--- move offsets  ---
   '-------------------------------------
@@ -157,7 +157,7 @@ Public Sub InitEngine()
   ReadIntArr WPromotions(), 0, WQUEEN, WROOK, WKNIGHT, WBISHOP
   ReadIntArr BPromotions(), 0, BQUEEN, BROOK, BKNIGHT, BBISHOP
 
-  ReadIntArr PieceType, 0, PT_PAWN, PT_PAWN, PT_KNIGHT, PT_KNIGHT, PT_KING, PT_KING, PT_ROOK, PT_ROOK, PT_QUEEN, PT_QUEEN, PT_BISHOP, PT_BISHOP, NO_PIECE_TYPE, PT_PAWN, PT_PAWN
+  ReadIntArr PieceType, 0, PT_PAWN, PT_PAWN, PT_KNIGHT, PT_KNIGHT, PT_BISHOP, PT_BISHOP, PT_ROOK, PT_ROOK, PT_QUEEN, PT_QUEEN, PT_KING, PT_KING, NO_PIECE_TYPE, PT_PAWN, PT_PAWN
 
   InitRankFile ' must be before InitMaxDistance
   InitBoardColors
@@ -175,7 +175,17 @@ Public Sub InitEngine()
   '--------------------------------------------
   '--- startup board
   '--------------------------------------------
-  ReadIntArr StartupBoard(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 3, 11, 9, 5, 11, 3, 7, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 13, 13, 13, 13, 13, 13, 13, 13, 0, 0, 13, 13, 13, 13, 13, 13, 13, 13, 0, 0, 13, 13, 13, 13, 13, 13, 13, 13, 0, 0, 13, 13, 13, 13, 13, 13, 13, 13, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 8, 4, 12, 10, 6, 12, 4, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+  ReadIntArr StartupBoard(), _
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, _
+        0, WROOK, WKNIGHT, WBISHOP, WQUEEN, WKING, WBISHOP, WKNIGHT, WROOK, 0, _
+        0, WPAWN, WPAWN, WPAWN, WPAWN, WPAWN, WPAWN, WPAWN, WPAWN, 0, _
+        0, 13, 13, 13, 13, 13, 13, 13, 13, 0, _
+        0, 13, 13, 13, 13, 13, 13, 13, 13, 0, _
+        0, 13, 13, 13, 13, 13, 13, 13, 13, 0, _
+        0, 13, 13, 13, 13, 13, 13, 13, 13, 0, _
+        0, BPAWN, BPAWN, BPAWN, BPAWN, BPAWN, BPAWN, BPAWN, BPAWN, 0, _
+        0, BROOK, BKNIGHT, BBISHOP, BQUEEN, BKING, BBISHOP, BKNIGHT, BROOK, 0, _
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
   '-------------------------------------------------------------
   '--- Piece square table: bonus for piece position on board ---
@@ -244,32 +254,32 @@ Public Sub InitEngine()
 
   ' King safety eval
   ' Weakness of our pawn shelter in front of the king by [distance from edge][rank]
-  ReadIntArr2 ShelterWeakness(), 1, 0, 97, 21, 26, 51, 87, 89, 99 ' 1 = ArrIndex, 0: fill Array(0)
-  ReadIntArr2 ShelterWeakness(), 2, 0, 120, 0, 28, 76, 88, 103, 104
-  ReadIntArr2 ShelterWeakness(), 3, 0, 101, 7, 54, 78, 77, 92, 101
-  ReadIntArr2 ShelterWeakness(), 4, 0, 80, 11, 44, 68, 87, 90, 119
+  ReadIntArr2 ShelterWeakness(), 1, 0, 100, 10, 46, 82, 87, 86, 98 ' 1 = ArrIndex, 0: fill Array(0)
+  ReadIntArr2 ShelterWeakness(), 2, 0, 116, 4, 28, 87, 94, 108, 104
+  ReadIntArr2 ShelterWeakness(), 3, 0, 109, 1, 59, 87, 62, 91, 116
+  ReadIntArr2 ShelterWeakness(), 4, 0, 75, 12, 43, 59, 90, 84, 112
   
   ' Danger of enemy pawns moving toward our king by [type][distance from edge][rank]
-  ReadIntArr3 StormDanger(), 1, 1, 0, 0, 67, 134, 38, 32
-  ReadIntArr3 StormDanger(), 1, 2, 0, 0, 57, 139, 37, 22
-  ReadIntArr3 StormDanger(), 1, 3, 0, 0, 43, 115, 43, 27
-  ReadIntArr3 StormDanger(), 1, 4, 0, 0, 68, 124, 57, 32
-  
-  ReadIntArr3 StormDanger(), 2, 1, 0, 20, 43, 100, 56, 20
-  ReadIntArr3 StormDanger(), 2, 2, 0, 23, 20, 98, 40, 15
-  ReadIntArr3 StormDanger(), 2, 3, 0, 23, 39, 103, 36, 18
-  ReadIntArr3 StormDanger(), 2, 4, 0, 28, 19, 108, 42, 26
-  
-  ReadIntArr3 StormDanger(), 3, 1, 0, 0, 0, 75, 14, 2
-  ReadIntArr3 StormDanger(), 3, 2, 0, 0, 0, 150, 30, 4
-  ReadIntArr3 StormDanger(), 3, 3, 0, 0, 0, 160, 22, 5
-  ReadIntArr3 StormDanger(), 3, 4, 0, 0, 0, 166, 24, 13
-  
-  ReadIntArr3 StormDanger(), 4, 1, 0, 0, -283, -281, 57, 31
-  ReadIntArr3 StormDanger(), 4, 2, 0, 0, 58, 141, 39, 18
-  ReadIntArr3 StormDanger(), 4, 3, 0, 0, 65, 142, 48, 32
-  ReadIntArr3 StormDanger(), 4, 4, 0, 0, 60, 126, 51, 19
-  
+  ' BlockedByKing
+  ReadIntArr3 StormDanger(), 1, 1, 0, 0, -290, -274, 57, 41
+  ReadIntArr3 StormDanger(), 1, 2, 0, 0, 60, 144, 39, 13
+  ReadIntArr3 StormDanger(), 1, 3, 0, 0, 65, 141, 41, 34
+  ReadIntArr3 StormDanger(), 1, 4, 0, 0, 53, 127, 56, 14
+  ' Unopposed
+  ReadIntArr3 StormDanger(), 2, 1, 0, 4, 73, 132, 46, 31
+  ReadIntArr3 StormDanger(), 2, 2, 0, 1, 64, 143, 26, 13
+  ReadIntArr3 StormDanger(), 2, 3, 0, 1, 47, 110, 44, 24
+  ReadIntArr3 StormDanger(), 2, 4, 0, 0, 72, 127, 50, 31
+  ' BlockedByPawn
+  ReadIntArr3 StormDanger(), 3, 1, 0, 0, 0, 79, 23, 1
+  ReadIntArr3 StormDanger(), 3, 2, 0, 0, 0, 148, 27, 2
+  ReadIntArr3 StormDanger(), 3, 3, 0, 0, 0, 161, 16, 1
+  ReadIntArr3 StormDanger(), 3, 4, 0, 0, 0, 171, 22, 15
+  ' Unblocked
+  ReadIntArr3 StormDanger(), 4, 1, 0, 22, 45, 104, 62, 6
+  ReadIntArr3 StormDanger(), 4, 2, 0, 31, 30, 99, 39, 19
+  ReadIntArr3 StormDanger(), 4, 3, 0, 23, 29, 96, 41, 15
+  ReadIntArr3 StormDanger(), 4, 4, 0, 21, 23, 116, 41, 15
   '--- Endgame helper tables: Tables used to drive a piece towards or away from another piece
   ReadIntArr PushClose(), 0, 0, 100, 80, 60, 40, 20, 10
   ReadIntArr PushAway(), 0, 5, 20, 40, 60, 80, 90, 100
@@ -288,7 +298,7 @@ Public Sub InitEngine()
   ' Threats
   ReadScoreArr ThreatByMinor, 0, 0, 0, 33, 45, 43, 46, 47, 72, 107, 48, 118 'Minor on Defended
   ReadScoreArr ThreatByRook, 0, 0, 0, 25, 40, 62, 40, 59, 0, 34, 35, 48 'Major on Defended
-   
+  
   SetScoreVal ThreatenedByHangingPawn, 71, 61
   SetScoreVal KingOnOneBonus, 3, 62
   SetScoreVal KingOnManyBonus, 9, 138
@@ -416,7 +426,7 @@ Public Sub ParseCommand(ByVal sCommand As String)
       Else
         ' do game move
         PlayMove PlayerMove
-        HashKey = HashBoard(EmptyMove)
+        HashKey = HashBoard()
         If Is3xDraw(HashKey, GameMovesCnt, 0) Then
           ' Result = DRAW3REP_RESULT
           If bWinboardTrace Then LogWrite "ParseCommand: Return Draw3Rep"
@@ -699,7 +709,6 @@ Public Sub InitGame()
   End If
   Erase arFiftyMove()
   Fifty = 0
-  OldTotalMaterial = 0
 
   Nodes = 0
   QNodes = 0
@@ -748,7 +757,7 @@ Public Sub GameMovesAdd(mMove As TMove)
     EpPosArr(0) = 0
   End If
   ClearEasyMove
-  GamePosHash(GameMovesCnt) = HashBoard(EmptyMove) ' for 3x repetition draw
+  GamePosHash(GameMovesCnt) = HashBoard() ' for 3x repetition draw
 End Sub
 
 Public Sub GameMovesTakeBack(ByVal iPlies As Long)

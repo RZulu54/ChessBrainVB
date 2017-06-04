@@ -1,6 +1,6 @@
 =======================================================================================
 = ChessBrainVB_Notes.txt
-= by Roger Zuehlsdorf (2017 / V3.20)
+= by Roger Zuehlsdorf (2016 / V3.02)
 =======================================================================================
 
 This chess engine (32 bit Windows) for winboard and MsOfficeVBA (EXCEL/WORD) is based on the source of the engine "LarsenVB" 

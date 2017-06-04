@@ -4,6 +4,13 @@
 = Release notes for ChessBrainVB chess engine 
 =======================================================================================
 
+Changes from version 3.20 to 3.30 (Roger Zuehlsdorf 4-JUN-2017)
+-----------------es-----------------------------------------------
+- several small fixes and code cleanup 
+- speed optimized
+- changed move heuristic
+- ELO increase about 20 ELO
+
 Changes from version 3.03 to 3.20 (Roger Zuehlsdorf 10-MAR-2017)
 ----------------------------------------------------------------
 - bugfix in king safety

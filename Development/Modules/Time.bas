@@ -14,8 +14,7 @@ Public TimeLeftCorr As Single
 
 Public Function AllocateTime(ByVal CurrScore As Long) As Single
 
-  Dim Score         As Long
-  Dim GameMovesDone As Long, RemainingMovesToTC As Long, TimeBase As Single
+  Dim GameMovesDone As Long, RemainingMovesToTC As Long, TimeBase As Single, Score As Long
 
   If bTimeTrace Then WriteTrace ">> Start AllocateTime  MTOC:" & MovesToTC & ", MoveCnt=" & CStr(GameMovesCnt) & ", Left:" & Format$(TimeLeft, "0.00")
 
@@ -201,18 +200,13 @@ End Function
 Public Function CalcExtraTime(ByVal TimeTarget As Single, _
                               ByVal TimeIncr As Single, _
                               ByVal TimeLeftCorr As Single) As Single
-  Dim GameMovesDone As Long, RemainingMovesToTC As Long
+  Dim GameMovesDone As Long
   
   If FixedDepth <> NO_FIXED_DEPTH Then
     CalcExtraTime = 0
   Else
     CalcExtraTime = 0
     GameMovesDone = GameMovesCnt \ 2 ' Full move = 2* Half move
-    If MovesToTC = 0 Then
-      RemainingMovesToTC = 0
-    Else
-      RemainingMovesToTC = MovesToTC - (GameMovesDone Mod MovesToTC)
-    End If
     
     If (TimeIncr = 0 And TimeLeftCorr > TimeTarget * 5#) Or (TimeIncr > 0 And TimeLeftCorr > TimeTarget * 8#) Then
       CalcExtraTime = TimeTarget * 1.25
@@ -231,17 +225,6 @@ End Sub
 Public Function AvailableTime() As Single
   AvailableTime = TotalTimeGiven * UnstablePvFactor * 0.71
   If bTimeTrace Then WriteTrace "AvailableTime:" & Format(AvailableTime, "0.00") & ", Given:" & Format(TotalTimeGiven, "0.00") & ", Unstable:" & Format(UnstablePvFactor, "0.00")
-End Function
-
-Public Function CheckTimeExit() As Boolean
-  Dim bStillAtFirstMove As Boolean, Elapsed As Single
-  If FixedDepth <> NO_FIXED_DEPTH Then CheckTimeExit = False: Exit Function
-  Elapsed = TimerDiff(StartThinkingTime, Timer)
-  bStillAtFirstMove = bFirstRootMove And Not bFailedLowAtRoot And (Elapsed > AvailableTime() * 0.75)
-  
-  If bStillAtFirstMove Or Elapsed > MaximumTime Then
-    bTimeExit = True
-  End If
 End Function
 
 Public Function MoveImportance(ByVal GamePly As Long) As Single

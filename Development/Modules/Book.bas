@@ -173,7 +173,7 @@ Public Function InitBook() As Boolean
   Exit Function
 
 BookErr:
-  If bWinboardTrace Then LogWrite "Opening book error: " & Error, , True
+  If bWinboardTrace Then LogWrite "Opening book error: " & Error
 
 End Function
 '---------------------------------------------------------------------------

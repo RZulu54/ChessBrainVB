@@ -39,15 +39,15 @@ Public EmptyHash As THashKey
 Private Type HashTableEntry
   Position1 As Long ' 2x32 bit position hash key
   Position2 As Long
-  Depth As Long ' negative values possible for QSearch
+  Depth As Integer ' negative values possible for QSearch
+  Generation As Byte
+  IsChecking As Boolean
   MoveFrom As Byte
   MoveTarget As Byte
   MovePromoted As Byte
   EvalType As Byte
   Eval As Long
   StaticEval As Long
-  Generation As Byte
-  IsChecking As Boolean
 End Type
 
 Public HashSize                            As Long
@@ -77,34 +77,31 @@ Public Sub InitHash()
   If bHashTrace Then WriteTrace "Init hash size done " & HashSize & " entries " & Now()
 End Sub
 
-Public Function HashBoard(ExcludedMove As TMove) As THashKey
+Public Function HashBoard() As THashKey
   Dim i As Long, sq As Long
+  
   ZobristHash1 = 0: ZobristHash2 = 0
-  For i = 1 To NumPieces: sq = Pieces(i): HashSetPiece sq, Board(sq): Next i
+  For i = 1 To NumPieces
+    sq = Pieces(i): If sq <> 0 Then ZobristHash1 = ZobristHash1 Xor ZobristTable(sq, Board(sq)): ZobristHash2 = ZobristHash2 Xor ZobristTable2(sq, Board(sq))
+  Next
   If EpPosArr(Ply) > 0 Then HashSetPiece EpPosArr(Ply), Board(EpPosArr(Ply))
   If bWhiteToMove Then
     ZobristHash1 = ZobristHash1 Xor HashWhiteToMove: ZobristHash2 = ZobristHash2 Xor HashWhiteToMove2
   End If
   If WhiteCastled = NO_CASTLE Then
     If Moved(WKING_START) = 0 Then
-      If WCanCastleOO() Or WCanCastleOOO() Then
-        ZobristHash1 = ZobristHash1 Xor HashWCanCastle: ZobristHash2 = ZobristHash2 Xor HashWCanCastle2
-      End If
+      If Moved(SQ_H1) = 0 Then ZobristHash1 = ZobristHash1 Xor HashWCanCastle
+      If Moved(SQ_A1) = 0 Then ZobristHash2 = ZobristHash2 Xor HashWCanCastle2
     End If
   End If
   If BlackCastled = NO_CASTLE Then
     If Moved(BKING_START) = 0 Then
-      If BCanCastleOO() Or BCanCastleOOO() Then
-        ZobristHash1 = ZobristHash1 Xor HashBCanCastle: ZobristHash2 = ZobristHash2 Xor HashBCanCastle2
-      End If
+      If Moved(SQ_H8) = 0 Then ZobristHash1 = ZobristHash1 Xor HashBCanCastle
+      If Moved(SQ_A8) = 0 Then ZobristHash2 = ZobristHash2 Xor HashBCanCastle2
     End If
   End If
  
-  If ExcludedMove.From > 0 Then ' different hash für excluded move positions
-    HashSetPiece ExcludedMove.From, ExcludedMove.Piece: HashSetPiece ExcludedMove.Target, ExcludedMove.Piece
-  End If
   HashBoard.HashKey1 = ZobristHash1: HashBoard.HashKey2 = ZobristHash2
-  
 End Function
 
 Public Function HashGetKey() As THashKey
@@ -131,6 +128,7 @@ Public Function InsertIntoHashTable(HashKey As THashKey, _
   Dim IndexKey As Long, TmpMove As TMove, i As Long, ReplaceIndex As Long, MaxReplaceValue As Long, ReplaceValue As Long, bPosFound As Boolean
     
   Debug.Assert HashMove.From = 0 Or HashMove.Piece <> NO_PIECE
+  If bTimeExit Then Exit Function ' score not exact
   
   TmpMove = HashMove ' Don't overwrite
   bHashUsed = True: bPosFound = False
@@ -176,6 +174,7 @@ Public Function InsertIntoHashTable(HashKey As THashKey, _
       .StaticEval = StaticEval: .Depth = Depth
       .Generation = HashGeneration
       .IsChecking = TmpMove.IsChecking
+      Debug.Assert .MoveFrom = 0 Or Board(.MoveFrom) <> NO_PIECE
     End If
   End With
 End Function

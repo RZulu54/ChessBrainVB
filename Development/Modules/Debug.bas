@@ -130,6 +130,10 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
  '   EPD(1) = "4r1k1/4bp1p/p2pp1pP/q5P1/Np2b3/1P2BN2/P1rQ4/1K2RBR1 w - - 0 22"  ' d2xc2 ok, d2d4 >Rc2c4 illegal move, IsCHecking no detected
   
  'EPD(1) = "r2r2k1/pb3p1p/1qn1p2Q/5p2/1p1P4/1NPB4/P4PPP/2R1R1K1 b - - 0 22 " ' KSafety test
+    
+ ' EPD(1) = "8/5pk1/1p4Pp/q6P/Q7/1P6/8/6K1 b - - 0 1 " ' ShelterStorm test
+'EPD(1) = "5k2/6b1/8/4N3/8/8/3P1K2/8 w - - 3 1  " ' Scale factor 1 pawn test
+  '"6k1/5ppp/1p6/q7/Q7/1P6/5PPP/6K1 b - - 0 1 "
   
   EPD(1) = "r1bqk2r/p2p1pp1/1p2pn1p/n1pP2B1/1bP5/2N2N2/PPQ1PPPP/R3KB1R w KQkq - 0 9" '<<<<< AKT
   EPD(2) = "1rb2rk1/p3nppp/1p1qp3/3n2N1/2pP4/2P3P1/PP3PBP/R1BQR11K w - -"  'TEST 2
@@ -238,3 +242,61 @@ Public Sub DMoves()
   DoEvents
 End Sub
 
+Public Sub DEBUGLoadGame(ByVal iDepth As Long)
+  ' ORIGINAL
+  Dim i         As Long, StartTime As Single, EndTime As Single, x As Long, c As Long, s As String
+  Dim arTime(2) As Single
+
+  iDepth = 8
+  DEBUGReadGame "bug001.txt"
+  bForceMode = False
+
+    For i = 0 To 0 ' number of time measure runs  > 1x
+        FixedDepth = iDepth
+    
+        bCompIsWhite = False ' True  'False:
+        bWhiteToMove = False ' True  '---False
+    
+      bPostMode = True
+    
+      StartTime = Timer
+      StartEngine
+      EndTime = Timer
+    
+      arTime(i) = EndTime - StartTime
+      If arTime(i) = 0 Then arTime(i) = 1
+      bPostMode = True
+      SendCommand vbCrLf & "time: " & Format$(arTime(i), "0.000") & " nod: " & Nodes & " qn: " & QNodes & " ev:" & EvalCnt & " sc: " & EvalSFTo100(BestScore) & " Ply:" & MaxPly & " " & s & vbCrLf
+    Next
+
+    SendCommand "-------------------"
+ 
+End Sub
+
+Public Sub DEBUGReadGame(sFile As String)
+  ' Read PGN File
+  Dim h            As Long, s As String, m As Long, sInp As String, m1 As String, m2 As String
+  Dim asMoveList() As String
+ 
+  InitGame
+  bForceMode = True
+ 
+  h = 10 'FreeFile()
+  Open sFile For Input As #h
+
+  Do Until EOF(h)
+    Line Input #h, sInp
+    sInp = Trim(sInp) & "  "
+    s = Trim(sInp)
+    'Debug.Print s
+    m1 = Trim(Left(s, 4))
+
+    If Len(m1) = 4 Then
+      'Debug.Print m1, asMoveList(m)
+      ParseCommand m1 & vbLf
+    End If
+
+  Loop
+
+  Close #h
+End Sub
