@@ -25,14 +25,14 @@ Public Const WPAWN               As Long = 1
 Public Const BPAWN               As Long = 2
 Public Const WKNIGHT             As Long = 3
 Public Const BKNIGHT             As Long = 4
-Public Const WKING               As Long = 5
-Public Const BKING               As Long = 6
+Public Const WBISHOP             As Long = 5
+Public Const BBISHOP             As Long = 6
 Public Const WROOK               As Long = 7
 Public Const BROOK               As Long = 8
 Public Const WQUEEN              As Long = 9
 Public Const BQUEEN              As Long = 10
-Public Const WBISHOP             As Long = 11
-Public Const BBISHOP             As Long = 12
+Public Const WKING               As Long = 11
+Public Const BKING               As Long = 12
 Public Const NO_PIECE            As Long = 13   ' empty field
 Public Const WEP_PIECE           As Long = 15  ' en passant
 Public Const BEP_PIECE           As Long = 16  ' en passant
@@ -78,7 +78,7 @@ Public Const VALUE_KNOWN_WIN     As Long = 10000
 '--------------------------------------------------
 Public Const MAX_BOARD           As Long = 119
 Public Const MAX_MOVES           As Long = 500
-Public Const MAX_PV              As Long = 250
+Public Const MAX_PV              As Long = 255
 
 Public Const LIGHTNING_DEPTH     As Long = 3
 Public Const MAX_DEPTH           As Long = 100
@@ -99,6 +99,10 @@ Public Const DEPTH_QS_RECAPTURES As Long = -5
 Public Const DEPTH_NONE          As Long = -6
 Public Const DEPTH_MAX           As Long = 50
 
+'--- Move ordering value groups
+Public Const MOVE_ORDER_QUIETS         As Long = -30000
+Public Const MOVE_ORDER_BAD_CAPTURES   As Long = -60000
+
 '--------------------------------------------------
 ' Opening book
 '--------------------------------------------------
@@ -110,17 +114,16 @@ Public Const BOOK_MAX_PLY        As Long = BOOK_MAX_LEN \ 4
 '--------------------------------------------------
 
 Public Type TMove
-  From             As Long
-  Target           As Long
-  Piece            As Long
-  Captured         As Long
-  EnPassant        As Long
-  Promoted         As Long
-  Castle           As Long ' enumCastleFlag
-  CapturedNumber   As Long
+  From             As Integer
+  Target           As Integer
+  Piece            As Integer
+  Captured         As Integer
+  EnPassant        As Integer
+  Promoted         As Integer
+  Castle           As Integer ' enumCastleFlag
+  CapturedNumber   As Integer
   OrderValue       As Long
   SeeValue         As Long
-  IsInCheck        As Boolean
   IsLegal          As Boolean
   IsChecking       As Boolean
 End Type

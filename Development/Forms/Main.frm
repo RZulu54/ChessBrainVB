@@ -53,7 +53,7 @@ Begin VB.Form frmMain
    End
    Begin VB.Label lblDescr 
       BackStyle       =   0  'Transparent
-      Caption         =   "ChessBrainVB 3.02"
+      Caption         =   "ChessBrainVB 3.31"
       BeginProperty Font 
          Name            =   "MS Sans Serif"
          Size            =   13.5
@@ -63,13 +63,13 @@ Begin VB.Form frmMain
          Italic          =   0   'False
          Strikethrough   =   0   'False
       EndProperty
-      Height          =   504
+      Height          =   510
       Index           =   0
-      Left            =   864
+      Left            =   840
       TabIndex        =   5
-      Top             =   216
+      Top             =   210
       UseMnemonic     =   0   'False
-      Width           =   3408
+      Width           =   3405
    End
    Begin VB.Label lblDescr 
       AutoSize        =   -1  'True

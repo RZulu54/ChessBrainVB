@@ -65,7 +65,9 @@ Public WhitePiecesEnd                      As Long
 Public BlackPiecesStart                    As Long
 Public BlackPiecesEnd                      As Long
 
-Public TotalMoveCnt                        As Long
+
+Public WNonPawnPieces As Long
+Public BNonPawnPieces As Long
 
 '--- SEE data
 Dim PieceList(0 To 32)                     As Long, Cnt As Long
@@ -78,8 +80,9 @@ Public Board(MAX_BOARD)                    As Long ' Game board for all moves
 Public StartupBoard(MAX_BOARD)             As Long ' Start Position
 Public Moved(MAX_BOARD)                    As Long ' Track for moved pieces (castle checks + eval)
 
-Public KingCheckW(MAX_BOARD)               As Long ' for fast checking moves detection
-Public KingCheckB(MAX_BOARD)               As Long ' for fast checking moves detection
+
+Public KingCheckW(MAX_BOARD)               As Integer ' for fast checking moves detection, integer for faster ERASE
+Public KingCheckB(MAX_BOARD)               As Integer ' for fast checking moves detection
 
 ' Offsets for move generation
 Public QueenOffsets(7)                     As Long
@@ -94,6 +97,7 @@ Public MovesPly(0 To 128 + 1)              As String
 Public MaxDistance(0 To SQ_H8, 0 To SQ_H8) As Long
 
 Private bGenCapturesOnly                   As Boolean
+Private bGenQsChecks                       As Boolean
 '------------------------------------
 
 '---------------------------------------------------------------------------
@@ -107,11 +111,12 @@ Public Function GenerateMoves(ByVal Ply As Long, _
                               ByVal bCapturesOnly As Boolean, _
                               NumMoves As Long) As Long
 
-  Dim From As Long, Target As Long, i As Long
+  Dim From As Long, i As Long
 
   '--- Init special board for fast detection of checking moves
   If bWhiteToMove Then FillKingCheckB Else FillKingCheckW
   bGenCapturesOnly = bCapturesOnly: NumMoves = 0
+  bGenQsChecks = (MovePickerDat(Ply).GenerateQSChecksCnt > 0)
 
   If bWhiteToMove Then
     For i = WhitePiecesStart To WhitePiecesEnd
@@ -120,10 +125,12 @@ Public Function GenerateMoves(ByVal Ply As Long, _
         Case NO_PIECE, FRAME
         Case WPAWN
           ' note: FRAME has Bit 1 not set - like BCOL
-          If (Board(From + 11) Mod 2 = BCOL) And Board(From + 11) <> FRAME Then TryMoveWPawn Ply, NumMoves, From, From + 11
-          If (Board(From + 9) Mod 2 = BCOL) And Board(From + 9) <> FRAME Then TryMoveWPawn Ply, NumMoves, From, From + 9
-          If Rank(From) = 2 Then If Board(From + 20) = NO_PIECE And Board(From + 10) = NO_PIECE Then TryMoveWPawn Ply, NumMoves, From, From + 20
-          If Board(From + 10) = NO_PIECE Then TryMoveWPawn Ply, NumMoves, From, From + 10
+          If (Board(From + 11) Mod 2 = BCOL) Then If Board(From + 11) <> FRAME Then TryMoveWPawn Ply, NumMoves, From, From + 11
+          If (Board(From + 9) Mod 2 = BCOL) Then If Board(From + 9) <> FRAME Then TryMoveWPawn Ply, NumMoves, From, From + 9
+          If Board(From + 10) = NO_PIECE Then
+            If Rank(From) = 2 Then If Board(From + 20) = NO_PIECE Then TryMoveWPawn Ply, NumMoves, From, From + 20
+            TryMoveWPawn Ply, NumMoves, From, From + 10
+          End If
         Case WKNIGHT
           TryMoveListKnight Ply, NumMoves, From
         Case WBISHOP
@@ -170,8 +177,10 @@ Public Function GenerateMoves(ByVal Ply As Long, _
           ' note: NO_PIECE hat Bit 1 set like WCOL
           If (Board(From - 11) Mod 2 = WCOL) And Board(From - 11) <> NO_PIECE Then TryMoveBPawn Ply, NumMoves, From, From - 11
           If (Board(From - 9) Mod 2 = WCOL) And Board(From - 9) <> NO_PIECE Then TryMoveBPawn Ply, NumMoves, From, From - 9
-          If Rank(From) = 7 Then If Board(From - 20) = NO_PIECE And Board(From - 10) = NO_PIECE Then TryMoveBPawn Ply, NumMoves, From, From - 20
-          If Board(From - 10) = NO_PIECE Then TryMoveBPawn Ply, NumMoves, From, From - 10
+          If Board(From - 10) = NO_PIECE Then
+            If Rank(From) = 7 Then If Board(From - 20) = NO_PIECE Then TryMoveBPawn Ply, NumMoves, From, From - 20
+            TryMoveBPawn Ply, NumMoves, From, From - 10
+          End If
         Case BKNIGHT
           TryMoveListKnight Ply, NumMoves, From
         Case BBISHOP
@@ -208,177 +217,7 @@ Public Function GenerateMoves(ByVal Ply As Long, _
       End Select
     Next
   End If
-
   GenerateMoves = NumMoves ' return move count
-
-End Function
-
-'---------------------------------------------------------------------------
-' TryMove() - adds move to move list if pseudo-legal
-' returns true if sliding piece can move on
-'---------------------------------------------------------------------------
-Private Function TryMove(ByVal Ply As Long, _
-                         NumMoves As Long, _
-                         ByVal From As Long, _
-                         ByVal Target As Long) As Boolean
-
-  If Board(Target) = FRAME Then Exit Function
-
-  Dim CurrentMove As TMove, PieceFrom As Long, PieceTarget As Long, PromotePiece As Long
-  TryMove = True: PieceFrom = Board(From): PieceTarget = Board(Target)
-
-  If CastleFlag <> NO_CASTLE Then
-    If Not bGenCapturesOnly Then
-      CurrentMove.From = From
-      CurrentMove.Target = Target
-      CurrentMove.piece = PieceFrom
-      CurrentMove.Captured = PieceTarget
-      CurrentMove.EnPassant = 0
-      CurrentMove.Castle = CastleFlag
-      CurrentMove.Promoted = 0
-      CastleFlag = NO_CASTLE
-      
-      Moves(Ply, NumMoves) = CurrentMove
-      NumMoves = NumMoves + 1
-    Else
-      TryMove = False
-    End If
-    Exit Function
-
-  ElseIf PieceTarget = BEP_PIECE Then
-   If PieceFrom = WPAWN Then
-    CurrentMove.From = From
-    CurrentMove.Target = Target
-    CurrentMove.piece = PieceFrom
-    CurrentMove.Captured = PieceTarget
-    CurrentMove.EnPassant = 3
-    CurrentMove.Castle = NO_CASTLE
-    CurrentMove.Promoted = 0
-    
-    Moves(Ply, NumMoves) = CurrentMove
-    NumMoves = NumMoves + 1
-    Exit Function
-   End If
-
-  ElseIf PieceTarget = WEP_PIECE Then
-   If PieceFrom = BPAWN Then
-    CurrentMove.From = From
-    CurrentMove.Target = Target
-    CurrentMove.piece = PieceFrom
-    CurrentMove.Captured = PieceTarget
-    CurrentMove.EnPassant = 3
-    CurrentMove.Castle = NO_CASTLE
-    CurrentMove.Promoted = 0
-    
-    Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
-    Exit Function
-   End If
-
-  ElseIf PieceTarget < NO_PIECE Then
-    '---  Captures ----
-    
-    ' Capture of own piece not allowed
-    If (PieceFrom Mod 2) = (PieceTarget Mod 2) Then
-      TryMove = False
-      Exit Function
-    ElseIf PieceFrom = WPAWN And Rank(From) = 7 Then
-      ' White Promotion with capture
-      For PromotePiece = 1 To 4
-        CurrentMove.From = From
-        CurrentMove.Target = Target
-        CurrentMove.Captured = PieceTarget
-        CurrentMove.EnPassant = 0
-        CurrentMove.Castle = NO_CASTLE
-        CurrentMove.Promoted = WPromotions(PromotePiece)
-        CurrentMove.piece = CurrentMove.Promoted
-          
-        Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
-      Next
-      Exit Function
-    
-    ElseIf PieceFrom = BPAWN And Rank(From) = 2 Then
-      ' Black Promotion with capture
-      For PromotePiece = 1 To 4
-        CurrentMove.From = From
-        CurrentMove.Target = Target
-        CurrentMove.Captured = PieceTarget
-        CurrentMove.EnPassant = 0
-        CurrentMove.Castle = NO_CASTLE
-        CurrentMove.Promoted = BPromotions(PromotePiece)
-        CurrentMove.piece = CurrentMove.Promoted
-        Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
-      Next
-      Exit Function
-    Else
-      ' Normal capture.
-      CurrentMove.From = From
-      CurrentMove.Target = Target
-      CurrentMove.piece = PieceFrom
-      CurrentMove.Captured = PieceTarget
-      CurrentMove.EnPassant = 0
-      CurrentMove.Castle = NO_CASTLE
-      CurrentMove.Promoted = 0
-      Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
-      TryMove = False
-      Exit Function
-    End If
-  End If
-
-  If PieceFrom = WPAWN And Rank(From) = 7 Then
-    ' White Promotion no capture
-    For PromotePiece = 1 To 4
-      CurrentMove.From = From
-      CurrentMove.Target = Target
-      CurrentMove.Captured = PieceTarget
-      CurrentMove.EnPassant = 0
-      CurrentMove.Castle = NO_CASTLE
-      CurrentMove.Promoted = WPromotions(PromotePiece)
-      CurrentMove.piece = CurrentMove.Promoted
-      Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
-    Next
-    Exit Function
-        
-  ElseIf PieceFrom = BPAWN And Rank(From) = 2 Then
-  
-    ' Black Promotion no capture
-    For PromotePiece = 1 To 4
-      CurrentMove.From = From
-      CurrentMove.Target = Target
-      CurrentMove.Captured = PieceTarget
-      CurrentMove.EnPassant = 0
-      CurrentMove.Castle = NO_CASTLE
-      CurrentMove.Promoted = BPromotions(PromotePiece)
-      CurrentMove.piece = CurrentMove.Promoted
-      Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
-    Next
-    Exit Function
-
-  Else
-
-    '--- Normal move, not a capture, castle, promotion ---
-    Dim bDoCheckMove As Boolean
-    bDoCheckMove = False
-    If bGenCapturesOnly Then
-      '--- in QSearch: Generate checking moves only for first QSearch ply
-      If PieceType(PieceFrom) <> PT_KING Then ' King cannot give check
-        If MovePickerDat(Ply).GenerateQSChecksCnt > 0 Then If IsCheckingMove(PieceFrom, From, Target, 0) Then bDoCheckMove = True
-      End If
-    End If
-    If Not bGenCapturesOnly Or bDoCheckMove Then
-      '---Normal move, not generated in QSearch (exception: when in check)
-      CurrentMove.From = From: CurrentMove.Target = Target: CurrentMove.piece = PieceFrom: CurrentMove.Captured = PieceTarget
-      If PieceFrom = WPAWN Then
-        If Target - From = 20 Then CurrentMove.EnPassant = 1
-      ElseIf PieceFrom = BPAWN Then
-        If From - Target = 20 Then CurrentMove.EnPassant = 2
-      Else
-        CurrentMove.EnPassant = 0
-      End If
-      CurrentMove.Castle = NO_CASTLE: CurrentMove.Promoted = 0
-      Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
-      Exit Function
-    End If
-  End If
 
 End Function
 
@@ -392,9 +231,9 @@ Private Function TryMoveWPawn(ByVal Ply As Long, _
   PieceFrom = Board(From): PieceTarget = Board(Target)
 
   If PieceTarget = BEP_PIECE Then
-    CurrentMove.From = From: CurrentMove.Target = Target: CurrentMove.piece = PieceFrom
+    CurrentMove.From = From: CurrentMove.Target = Target: CurrentMove.Piece = PieceFrom
     CurrentMove.Captured = PieceTarget: CurrentMove.EnPassant = 3
-    CurrentMove.Castle = NO_CASTLE: CurrentMove.Promoted = 0
+    CurrentMove.Castle = NO_CASTLE: CurrentMove.Promoted = 0: CurrentMove.IsChecking = False
     Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
     Exit Function
   End If
@@ -409,15 +248,15 @@ Private Function TryMoveWPawn(ByVal Ply As Long, _
       For PromotePiece = 1 To 4
         CurrentMove.From = From: CurrentMove.Target = Target: CurrentMove.Captured = PieceTarget
         CurrentMove.EnPassant = 0: CurrentMove.Castle = NO_CASTLE
-        CurrentMove.Promoted = WPromotions(PromotePiece)
-        CurrentMove.piece = CurrentMove.Promoted
+        CurrentMove.Promoted = WPromotions(PromotePiece): CurrentMove.IsChecking = False
+        CurrentMove.Piece = CurrentMove.Promoted
         Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
       Next
       Exit Function
     Else
       ' Normal capture.
-      CurrentMove.From = From: CurrentMove.Target = Target: CurrentMove.piece = PieceFrom: CurrentMove.Captured = PieceTarget
-      CurrentMove.EnPassant = 0: CurrentMove.Castle = NO_CASTLE: CurrentMove.Promoted = 0
+      CurrentMove.From = From: CurrentMove.Target = Target: CurrentMove.Piece = PieceFrom: CurrentMove.Captured = PieceTarget
+      CurrentMove.EnPassant = 0: CurrentMove.Castle = NO_CASTLE: CurrentMove.Promoted = 0: CurrentMove.IsChecking = False
       Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
       Exit Function
     End If
@@ -428,7 +267,7 @@ Private Function TryMoveWPawn(ByVal Ply As Long, _
     For PromotePiece = 1 To 4
       CurrentMove.From = From: CurrentMove.Target = Target: CurrentMove.Captured = PieceTarget
       CurrentMove.EnPassant = 0: CurrentMove.Castle = NO_CASTLE
-      CurrentMove.Promoted = WPromotions(PromotePiece): CurrentMove.piece = CurrentMove.Promoted
+      CurrentMove.Promoted = WPromotions(PromotePiece): CurrentMove.Piece = CurrentMove.Promoted: CurrentMove.IsChecking = False
       Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
     Next
     Exit Function
@@ -440,13 +279,13 @@ Private Function TryMoveWPawn(ByVal Ply As Long, _
     bDoCheckMove = False
     If bGenCapturesOnly Then
       '--- in QSearch: Generate checking moves only for first QSearch ply
-      If MovePickerDat(Ply).GenerateQSChecksCnt > 0 Then If IsCheckingMove(PieceFrom, From, Target, 0) Then bDoCheckMove = True
+      If bGenQsChecks Then If IsCheckingMove(PieceFrom, From, Target, 0) Then bDoCheckMove = True
     End If
     If Not bGenCapturesOnly Or bDoCheckMove Then
       '---Normal move, not generated in QSearch (exception: when in check)
-      CurrentMove.From = From: CurrentMove.Target = Target: CurrentMove.piece = PieceFrom: CurrentMove.Captured = PieceTarget
+      CurrentMove.From = From: CurrentMove.Target = Target: CurrentMove.Piece = PieceFrom: CurrentMove.Captured = PieceTarget
       If Target - From = 20 Then CurrentMove.EnPassant = 1
-      CurrentMove.Castle = NO_CASTLE: CurrentMove.Promoted = 0
+      CurrentMove.Castle = NO_CASTLE: CurrentMove.Promoted = 0: CurrentMove.IsChecking = bDoCheckMove
       Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
       Exit Function
     End If
@@ -464,9 +303,9 @@ Private Function TryMoveBPawn(ByVal Ply As Long, _
   PieceFrom = Board(From): PieceTarget = Board(Target)
 
   If PieceTarget = WEP_PIECE Then
-    CurrentMove.From = From: CurrentMove.Target = Target: CurrentMove.piece = PieceFrom
+    CurrentMove.From = From: CurrentMove.Target = Target: CurrentMove.Piece = PieceFrom
     CurrentMove.Captured = PieceTarget: CurrentMove.EnPassant = 3
-    CurrentMove.Castle = NO_CASTLE: CurrentMove.Promoted = 0
+    CurrentMove.Castle = NO_CASTLE: CurrentMove.Promoted = 0: CurrentMove.IsChecking = False
     Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
     Exit Function
   End If
@@ -481,14 +320,14 @@ Private Function TryMoveBPawn(ByVal Ply As Long, _
       For PromotePiece = 1 To 4
         CurrentMove.From = From: CurrentMove.Target = Target: CurrentMove.Captured = PieceTarget
         CurrentMove.EnPassant = 0: CurrentMove.Castle = NO_CASTLE
-        CurrentMove.Promoted = BPromotions(PromotePiece): CurrentMove.piece = CurrentMove.Promoted
+        CurrentMove.Promoted = BPromotions(PromotePiece): CurrentMove.Piece = CurrentMove.Promoted: CurrentMove.IsChecking = False
         Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
       Next
       Exit Function
     Else
       ' Normal capture.
-      CurrentMove.From = From: CurrentMove.Target = Target: CurrentMove.piece = PieceFrom: CurrentMove.Captured = PieceTarget
-      CurrentMove.EnPassant = 0: CurrentMove.Castle = NO_CASTLE: CurrentMove.Promoted = 0
+      CurrentMove.From = From: CurrentMove.Target = Target: CurrentMove.Piece = PieceFrom: CurrentMove.Captured = PieceTarget
+      CurrentMove.EnPassant = 0: CurrentMove.Castle = NO_CASTLE: CurrentMove.Promoted = 0: CurrentMove.IsChecking = False
       Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
       Exit Function
     End If
@@ -499,7 +338,7 @@ Private Function TryMoveBPawn(ByVal Ply As Long, _
     For PromotePiece = 1 To 4
       CurrentMove.From = From: CurrentMove.Target = Target: CurrentMove.Captured = PieceTarget
       CurrentMove.EnPassant = 0: CurrentMove.Castle = NO_CASTLE
-      CurrentMove.Promoted = BPromotions(PromotePiece): CurrentMove.piece = CurrentMove.Promoted
+      CurrentMove.Promoted = BPromotions(PromotePiece): CurrentMove.Piece = CurrentMove.Promoted: CurrentMove.IsChecking = False
       Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
     Next
     Exit Function
@@ -511,13 +350,13 @@ Private Function TryMoveBPawn(ByVal Ply As Long, _
     bDoCheckMove = False
     If bGenCapturesOnly Then
       '--- in QSearch: Generate checking moves only for first QSearch ply
-      If MovePickerDat(Ply).GenerateQSChecksCnt > 0 Then If IsCheckingMove(PieceFrom, From, Target, 0) Then bDoCheckMove = True
+      If bGenQsChecks Then If IsCheckingMove(PieceFrom, From, Target, 0) Then bDoCheckMove = True
     End If
     If Not bGenCapturesOnly Or bDoCheckMove Then
       '---Normal move, not generated in QSearch (exception: when in check)
-      CurrentMove.From = From: CurrentMove.Target = Target: CurrentMove.piece = PieceFrom: CurrentMove.Captured = PieceTarget
+      CurrentMove.From = From: CurrentMove.Target = Target: CurrentMove.Piece = PieceFrom: CurrentMove.Captured = PieceTarget
       If Target - From = -20 Then CurrentMove.EnPassant = 2
-      CurrentMove.Castle = NO_CASTLE: CurrentMove.Promoted = 0
+      CurrentMove.Castle = NO_CASTLE: CurrentMove.Promoted = 0: CurrentMove.IsChecking = bDoCheckMove
       Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
       Exit Function
     End If
@@ -531,10 +370,10 @@ Private Function TryMoveListKnight(ByVal Ply As Long, _
                          ByVal From As Long) As Boolean
   '--- Knights only
 
-  Dim Target As Long, m As Long, CurrentMove As TMove, PieceFrom As Long, PieceTarget As Long, PromotePiece As Long, bDoCheckMove As Boolean
+  Dim Target As Long, m As Long, CurrentMove As TMove, PieceFrom As Long, PieceTarget As Long, bDoCheckMove As Boolean
 
   PieceFrom = Board(From)
-  CurrentMove.From = From: CurrentMove.piece = PieceFrom: CurrentMove.Promoted = 0: CurrentMove.EnPassant = 0: CurrentMove.Castle = NO_CASTLE
+  CurrentMove.From = From: CurrentMove.Piece = PieceFrom: CurrentMove.Promoted = 0: CurrentMove.EnPassant = 0: CurrentMove.Castle = NO_CASTLE
 
  For m = 0 To 7
   Target = From + KnightOffsets(m): PieceTarget = Board(Target)
@@ -546,7 +385,7 @@ Private Function TryMoveListKnight(ByVal Ply As Long, _
     If (PieceFrom Mod 2) = (PieceTarget Mod 2) Then
       GoTo NextMove
     Else
-      CurrentMove.Target = Target: CurrentMove.Captured = PieceTarget ' Normal capture.
+      CurrentMove.Target = Target: CurrentMove.Captured = PieceTarget: CurrentMove.IsChecking = False ' Normal capture.
       Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
       GoTo NextMove
     End If
@@ -556,10 +395,10 @@ Private Function TryMoveListKnight(ByVal Ply As Long, _
   bDoCheckMove = False
   If bGenCapturesOnly Then
     '--- in QSearch: Generate checking moves only for first QSearch ply
-    If MovePickerDat(Ply).GenerateQSChecksCnt > 0 Then If IsCheckingMove(PieceFrom, From, Target, 0) Then bDoCheckMove = True
+    If bGenQsChecks Then bDoCheckMove = IsCheckingMove(PieceFrom, From, Target, 0)
   End If
   If Not bGenCapturesOnly Or bDoCheckMove Then
-    CurrentMove.Target = Target: CurrentMove.Captured = PieceTarget
+    CurrentMove.Target = Target: CurrentMove.Captured = PieceTarget: CurrentMove.IsChecking = bDoCheckMove
     '---Normal move, not generated in QSearch (exception: when in check)
     Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
   End If
@@ -573,10 +412,10 @@ Private Function TryMoveListKing(ByVal Ply As Long, _
                          ByVal From As Long) As Boolean
 '--- Kings only
 
-Dim Target As Long, m As Long, CurrentMove As TMove, PieceFrom As Long, PieceTarget As Long, bDoCheckMove As Boolean
+Dim Target As Long, m As Long, CurrentMove As TMove, PieceFrom As Long, PieceTarget As Long
 
 PieceFrom = Board(From)
-CurrentMove.From = From: CurrentMove.piece = PieceFrom: CurrentMove.Promoted = 0: CurrentMove.EnPassant = 0: CurrentMove.Castle = NO_CASTLE
+CurrentMove.From = From: CurrentMove.Piece = PieceFrom: CurrentMove.Promoted = 0: CurrentMove.EnPassant = 0: CurrentMove.Castle = NO_CASTLE: CurrentMove.IsChecking = False
 
 For m = 0 To 7
   Target = From + QueenOffsets(m): PieceTarget = Board(Target)
@@ -618,11 +457,11 @@ Private Function TryCastleMove(ByVal Ply As Long, _
     If Not bGenCapturesOnly Then
       CurrentMove.From = From
       CurrentMove.Target = Target
-      CurrentMove.piece = PieceFrom
+      CurrentMove.Piece = PieceFrom
       CurrentMove.Captured = PieceTarget
       CurrentMove.EnPassant = 0
       CurrentMove.Castle = CastleFlag
-      CurrentMove.Promoted = 0
+      CurrentMove.Promoted = 0: CurrentMove.IsChecking = False
       CastleFlag = NO_CASTLE
       
       Moves(Ply, NumMoves) = CurrentMove
@@ -640,24 +479,26 @@ Private Sub TryMoveSliderList(ByVal Ply As Long, _
                          ByVal PieceType As Long)
 
 Dim Target As Long, m As Long, Offset As Long
-Dim CurrentMove As TMove, PieceFrom As Long, PieceTarget As Long, bDoCheckMove As Boolean, bGenQSChecks As Boolean
+Dim CurrentMove As TMove, PieceFrom As Long, PieceTarget As Long, bDoCheckMove As Boolean, DirStart As Long, DirEnd As Long
 
 CurrentMove.EnPassant = 0: CurrentMove.Castle = NO_CASTLE: CurrentMove.Promoted = 0
-PieceFrom = Board(From): CurrentMove.From = From: CurrentMove.piece = PieceFrom
-bGenQSChecks = (bGenCapturesOnly And MovePickerDat(Ply).GenerateQSChecksCnt > 0)
+PieceFrom = Board(From): CurrentMove.From = From: CurrentMove.Piece = PieceFrom
   
-For m = 0 To 7
-  If PieceType = PT_ROOK And m > 3 Then GoTo lblNextDir
-  If PieceType = PT_BISHOP And m < 4 Then GoTo lblNextDir
+Select Case PieceType
+Case PT_ROOK: DirStart = 0: DirEnd = 3
+Case PT_BISHOP: DirStart = 4: DirEnd = 7
+Case Else: DirStart = 0: DirEnd = 7
+End Select
+  
+For m = DirStart To DirEnd
   Offset = QueenOffsets(m): Target = From + Offset: If Board(Target) = FRAME Then GoTo lblNextDir
-
   Do '--- Slide loop
     PieceTarget = Board(Target)
     If PieceTarget < NO_PIECE Then ' Captures
       If (PieceFrom And 1) = (PieceTarget And 1) Then ' Capture of own piece not allowed
         GoTo lblNextDir
       Else
-        CurrentMove.Target = Target: CurrentMove.Captured = PieceTarget ' Normal capture.
+        CurrentMove.Target = Target: CurrentMove.Captured = PieceTarget: CurrentMove.IsChecking = False ' Normal capture.
         Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
         GoTo lblNextDir
       End If
@@ -666,9 +507,9 @@ For m = 0 To 7
     '--- Normal move, not a capture, castle, promotion ---
     bDoCheckMove = False
     '--- in QSearch: Generate checking moves only for first QSearch ply
-    If bGenQSChecks Then If IsCheckingMove(PieceFrom, From, Target, 0) Then bDoCheckMove = True
+    If bGenQsChecks Then If IsCheckingMove(PieceFrom, From, Target, 0) Then bDoCheckMove = True
     If Not bGenCapturesOnly Or bDoCheckMove Then '---Normal move, not generated in QSearch (exception: when in check)
-      CurrentMove.Target = Target: CurrentMove.Captured = PieceTarget
+      CurrentMove.Target = Target: CurrentMove.Captured = PieceTarget: CurrentMove.IsChecking = bDoCheckMove
       Moves(Ply, NumMoves) = CurrentMove: NumMoves = NumMoves + 1
     End If
     Target = Target + Offset
@@ -680,7 +521,7 @@ End Sub
 
 
 '---------------------------------------------------------------------------
-'CheckLegal() - Legal move?
+'- CheckLegal() - Legal move?
 '---------------------------------------------------------------------------
 Public Function CheckLegal(mMove As TMove) As Boolean
   CheckLegal = False
@@ -688,9 +529,9 @@ Public Function CheckLegal(mMove As TMove) As Boolean
 
   If mMove.Castle = NO_CASTLE Then
     If bWhiteToMove Then
-      If IsAttackedByW(BKingLoc) Then Exit Function ' King mate?
+      If IsAttackedByW(BKingLoc) Then Exit Function ' BKing mate?
     Else
-      If IsAttackedByB(WKingLoc) Then Exit Function ' King mate?
+      If IsAttackedByB(WKingLoc) Then Exit Function ' WKing mate?
     End If
   Else
     ' Castling
@@ -745,22 +586,22 @@ End Function
 '---------------------------------------------------------------------------
 Public Function IsAttackedByW(ByVal Location As Long) As Boolean
 
-  Dim i As Long, Target As Long, Offset As Long, piece As Long
+  Dim i As Long, Target As Long, Offset As Long, Piece As Long
   Dim OppQRCnt As Long, OppQBCnt As Long
   
-  TestCnt(2) = TestCnt(2) + 1
+  'TestCnt(2) = TestCnt(2) + 1
   IsAttackedByW = True
   OppQRCnt = PieceCnt(WQUEEN) + PieceCnt(WROOK): OppQBCnt = PieceCnt(WQUEEN) + PieceCnt(WBISHOP)
   
   ' vertical+horizontal: Queen, Rook, King
   For i = 0 To 3
-    Offset = QueenOffsets(i): Target = Location + Offset: piece = Board(Target)
-    If piece <> FRAME Then
-      If piece = WKING Then Exit Function
+    Offset = QueenOffsets(i): Target = Location + Offset: Piece = Board(Target)
+    If Piece <> FRAME Then
+      If Piece = WKING Then Exit Function
       If OppQRCnt > 0 Then
-        Do While piece <> FRAME
-          If piece < NO_PIECE Then If piece = WROOK Or piece = WQUEEN Then Exit Function Else Exit Do
-          Target = Target + Offset: piece = Board(Target)
+        Do While Piece <> FRAME
+          If Piece < NO_PIECE Then If Piece = WROOK Or Piece = WQUEEN Then Exit Function Else Exit Do
+          Target = Target + Offset: Piece = Board(Target)
         Loop
       End If
     End If
@@ -768,14 +609,14 @@ Public Function IsAttackedByW(ByVal Location As Long) As Boolean
 
   ' diagonal: Queen, Bishop, Pawn, King
   For i = 4 To 7
-    Offset = QueenOffsets(i): Target = Location + Offset: piece = Board(Target)
-    If piece <> FRAME Then
-      If piece = WPAWN Then If ((i = 5) Or (i = 7)) Then Exit Function
-      If piece = WKING Then Exit Function
+    Offset = QueenOffsets(i): Target = Location + Offset: Piece = Board(Target)
+    If Piece <> FRAME Then
+      If Piece = WPAWN Then If ((i = 5) Or (i = 7)) Then Exit Function
+      If Piece = WKING Then Exit Function
       If OppQBCnt > 0 Then
-        Do While piece <> FRAME
-          If piece < NO_PIECE Then If piece = WBISHOP Or piece = WQUEEN Then Exit Function Else Exit Do
-          Target = Target + Offset: piece = Board(Target)
+        Do While Piece <> FRAME
+          If Piece < NO_PIECE Then If Piece = WBISHOP Or Piece = WQUEEN Then Exit Function Else Exit Do
+          Target = Target + Offset: Piece = Board(Target)
         Loop
       End If
     End If
@@ -795,22 +636,22 @@ End Function
 '---------------------------------------------------------------------------
 Public Function IsAttackedByB(ByVal Location As Long) As Boolean
 
-  Dim i As Long, Target As Long, Offset As Long, piece As Long
+  Dim i As Long, Target As Long, Offset As Long, Piece As Long
   Dim OppQRCnt As Long, OppQBCnt As Long
   
-  TestCnt(2) = TestCnt(2) + 1
+  'TestCnt(2) = TestCnt(2) + 1
   IsAttackedByB = True
   OppQRCnt = PieceCnt(BQUEEN) + PieceCnt(BROOK): OppQBCnt = PieceCnt(BQUEEN) + PieceCnt(BBISHOP)
   
   ' vertical+horizontal: Queen, Rook, King
   For i = 0 To 3
-    Offset = QueenOffsets(i): Target = Location + Offset: piece = Board(Target)
-    If piece <> FRAME Then
-      If piece = BKING Then Exit Function
+    Offset = QueenOffsets(i): Target = Location + Offset: Piece = Board(Target)
+    If Piece <> FRAME Then
+      If Piece = BKING Then Exit Function
       If OppQRCnt > 0 Then
-        Do While piece <> FRAME
-          If piece < NO_PIECE Then If piece = BROOK Or piece = BQUEEN Then Exit Function Else Exit Do
-          Target = Target + Offset: piece = Board(Target)
+        Do While Piece <> FRAME
+          If Piece < NO_PIECE Then If Piece = BROOK Or Piece = BQUEEN Then Exit Function Else Exit Do
+          Target = Target + Offset: Piece = Board(Target)
         Loop
       End If
     End If
@@ -818,14 +659,14 @@ Public Function IsAttackedByB(ByVal Location As Long) As Boolean
 
   ' diagonal: Queen, Bishop, Pawn, King
   For i = 4 To 7
-    Offset = QueenOffsets(i): Target = Location + Offset: piece = Board(Target)
-    If piece <> FRAME Then
-      If piece = BPAWN Then If ((i = 4) Or (i = 6)) Then Exit Function
-      If piece = BKING Then Exit Function
+    Offset = QueenOffsets(i): Target = Location + Offset: Piece = Board(Target)
+    If Piece <> FRAME Then
+      If Piece = BPAWN Then If ((i = 4) Or (i = 6)) Then Exit Function
+      If Piece = BKING Then Exit Function
       If OppQBCnt > 0 Then
-        Do While piece <> FRAME
-          If piece < NO_PIECE Then If piece = BBISHOP Or piece = BQUEEN Then Exit Function Else Exit Do
-          Target = Target + Offset: piece = Board(Target)
+        Do While Piece <> FRAME
+          If Piece < NO_PIECE Then If Piece = BBISHOP Or Piece = BQUEEN Then Exit Function Else Exit Do
+          Target = Target + Offset: Piece = Board(Target)
         Loop
       End If
     End If
@@ -1052,79 +893,82 @@ Public Sub MakeMove(mMove As TMove)
   If PieceFrom = WPAWN Or PieceFrom = BPAWN Or Board(Target) < NO_PIECE Or Promoted > 0 Then Fifty = 0 Else Fifty = Fifty + 1
 
   ' En Passant
-  If EnPassant = 1 Then
-    Board(From + 10) = WEP_PIECE
-    EpPosArr(Ply + 1) = From + 10
-  ElseIf EnPassant = 2 Then
-    Board(From - 10) = BEP_PIECE
-    EpPosArr(Ply + 1) = From - 10
-  Else
-    EpPosArr(Ply + 1) = 0
-  End If
-
-  If EnPassant = 3 Then '--- EP capture move
-    If PieceFrom = WPAWN Then
-      Board(Target) = PieceFrom
-      Board(Target - 10) = NO_PIECE: PieceCntMinus BPAWN
-      mMove.CapturedNumber = Squares(Target - 10)
-      Pieces(Squares(Target - 10)) = 0: Squares(Target - 10) = 0
-    ElseIf PieceFrom = BPAWN Then
-      Board(Target) = PieceFrom
-      Board(Target + 10) = NO_PIECE: PieceCntMinus WPAWN
-      mMove.CapturedNumber = Squares(Target + 10)
-      Pieces(Squares(Target + 10)) = 0: Squares(Target + 10) = 0
+  EpPosArr(Ply + 1) = 0
+  If EnPassant <> 0 Then
+    If EnPassant = 1 Then
+      Board(From + 10) = WEP_PIECE
+      EpPosArr(Ply + 1) = From + 10
+    ElseIf EnPassant = 2 Then
+      Board(From - 10) = BEP_PIECE
+      EpPosArr(Ply + 1) = From - 10
     End If
-    GoTo lblExit
+  
+    If EnPassant = 3 Then '--- EP capture move
+      If PieceFrom = WPAWN Then
+        Board(Target) = PieceFrom
+        Board(Target - 10) = NO_PIECE: PieceCntMinus BPAWN
+        mMove.CapturedNumber = Squares(Target - 10)
+        Pieces(Squares(Target - 10)) = 0: Squares(Target - 10) = 0
+      ElseIf PieceFrom = BPAWN Then
+        Board(Target) = PieceFrom
+        Board(Target + 10) = NO_PIECE: PieceCntMinus WPAWN
+        mMove.CapturedNumber = Squares(Target + 10)
+        Pieces(Squares(Target + 10)) = 0: Squares(Target + 10) = 0
+      End If
+      GoTo lblExit
+    End If
   End If
-
+  
   'Castle: additional rook move here, King later as normal move
-  Select Case Castle
-    Case NO_CASTLE
-    Case WHITEOO
-      WhiteCastled = WHITEOO
-      Board(SQ_H1) = NO_PIECE: Moved(SQ_H1) = Moved(SQ_H1) + 1
-      Board(SQ_F1) = WROOK: Moved(SQ_F1) = Moved(SQ_F1) + 1
-      Pieces(Squares(SQ_H1)) = SQ_F1: Squares(SQ_F1) = Squares(SQ_H1): Squares(SQ_H1) = 0
-      Board(SQ_G1) = WKING: Moved(SQ_G1) = Moved(SQ_G1) + 1: WKingLoc = SQ_G1
-      GoTo lblExit
-    Case WHITEOOO
-      WhiteCastled = WHITEOOO
-      Board(SQ_A1) = NO_PIECE: Moved(SQ_A1) = Moved(SQ_A1) + 1
-      Board(SQ_D1) = WROOK: Moved(SQ_D1) = Moved(SQ_D1) + 1
-      Pieces(Squares(SQ_A1)) = SQ_D1: Squares(SQ_D1) = Squares(SQ_A1): Squares(SQ_A1) = 0
-      Board(SQ_C1) = WKING: Moved(SQ_C1) = Moved(SQ_C1) + 1: WKingLoc = SQ_C1
-      GoTo lblExit
-    Case BLACKOO
-      BlackCastled = BLACKOO
-      Board(SQ_H8) = NO_PIECE: Moved(SQ_H8) = Moved(SQ_H8) + 1
-      Board(SQ_F8) = BROOK: Moved(SQ_F8) = Moved(SQ_F8) + 1
-      Pieces(Squares(SQ_H8)) = SQ_F8: Squares(SQ_F8) = Squares(SQ_H8): Squares(SQ_H8) = 0
-      Board(SQ_G8) = BKING: Moved(SQ_G8) = Moved(SQ_G8) + 1: BKingLoc = SQ_G8
-      GoTo lblExit
-    Case BLACKOOO
-      BlackCastled = BLACKOOO
-      Board(SQ_A8) = NO_PIECE: Moved(SQ_A8) = Moved(SQ_A8) + 1
-      Board(SQ_D8) = BROOK: Moved(SQ_D8) = Moved(SQ_D8) + 1
-      Pieces(Squares(SQ_A8)) = SQ_D8: Squares(SQ_D8) = Squares(SQ_A8): Squares(SQ_A8) = 0
-      Board(SQ_C8) = BKING: Moved(SQ_C8) = Moved(SQ_C8) + 1: BKingLoc = SQ_C8
-      GoTo lblExit
-  End Select
-
+  If Castle <> NO_CASTLE Then
+    Select Case Castle
+      Case WHITEOO
+        WhiteCastled = WHITEOO
+        Board(SQ_H1) = NO_PIECE: Moved(SQ_H1) = Moved(SQ_H1) + 1
+        Board(SQ_F1) = WROOK: Moved(SQ_F1) = Moved(SQ_F1) + 1
+        Pieces(Squares(SQ_H1)) = SQ_F1: Squares(SQ_F1) = Squares(SQ_H1): Squares(SQ_H1) = 0
+        Board(SQ_G1) = WKING: Moved(SQ_G1) = Moved(SQ_G1) + 1: WKingLoc = SQ_G1
+        GoTo lblExit
+      Case WHITEOOO
+        WhiteCastled = WHITEOOO
+        Board(SQ_A1) = NO_PIECE: Moved(SQ_A1) = Moved(SQ_A1) + 1
+        Board(SQ_D1) = WROOK: Moved(SQ_D1) = Moved(SQ_D1) + 1
+        Pieces(Squares(SQ_A1)) = SQ_D1: Squares(SQ_D1) = Squares(SQ_A1): Squares(SQ_A1) = 0
+        Board(SQ_C1) = WKING: Moved(SQ_C1) = Moved(SQ_C1) + 1: WKingLoc = SQ_C1
+        GoTo lblExit
+      Case BLACKOO
+        BlackCastled = BLACKOO
+        Board(SQ_H8) = NO_PIECE: Moved(SQ_H8) = Moved(SQ_H8) + 1
+        Board(SQ_F8) = BROOK: Moved(SQ_F8) = Moved(SQ_F8) + 1
+        Pieces(Squares(SQ_H8)) = SQ_F8: Squares(SQ_F8) = Squares(SQ_H8): Squares(SQ_H8) = 0
+        Board(SQ_G8) = BKING: Moved(SQ_G8) = Moved(SQ_G8) + 1: BKingLoc = SQ_G8
+        GoTo lblExit
+      Case BLACKOOO
+        BlackCastled = BLACKOOO
+        Board(SQ_A8) = NO_PIECE: Moved(SQ_A8) = Moved(SQ_A8) + 1
+        Board(SQ_D8) = BROOK: Moved(SQ_D8) = Moved(SQ_D8) + 1
+        Pieces(Squares(SQ_A8)) = SQ_D8: Squares(SQ_D8) = Squares(SQ_A8): Squares(SQ_A8) = 0
+        Board(SQ_C8) = BKING: Moved(SQ_C8) = Moved(SQ_C8) + 1: BKingLoc = SQ_C8
+        GoTo lblExit
+    End Select
+  End If
+  
   If Promoted <> 0 Then
     PieceCntPlus Promoted
     Board(Target) = Promoted
     PieceCntMinus PieceFrom
     Moved(Target) = Moved(Target) + 1
   Else
+    '--- normal move
     Select Case PieceFrom
-      Case WKING: WKingLoc = Target
-      Case BKING: BKingLoc = Target
+    Case WKING: WKingLoc = Target
+    Case BKING: BKingLoc = Target
     End Select
         
     Board(Target) = PieceFrom: Moved(Target) = Moved(Target) + 1
   End If
   
-  If Captured > 0 And Captured < NO_PIECE Then PieceCntMinus Captured
+  If Captured > 0 Then If Captured < NO_PIECE Then PieceCntMinus Captured
 
 lblExit:
   bWhiteToMove = Not bWhiteToMove
@@ -1146,67 +990,72 @@ Public Sub UnmakeMove(mMove As TMove)
   Pieces(Squares(Target)) = Target: Pieces(Squares(From)) = From
   Fifty = arFiftyMove(Ply)
 
-  Select Case Castle
-    Case NO_CASTLE
-    Case WHITEOO
-      WhiteCastled = NO_CASTLE
-      Board(SQ_F1) = NO_PIECE: Moved(SQ_F1) = Moved(SQ_F1) - 1
-      Board(SQ_H1) = WROOK: Moved(SQ_H1) = Moved(SQ_H1) - 1
-      Squares(SQ_H1) = Squares(SQ_F1): Squares(SQ_F1) = 0: Pieces(Squares(SQ_H1)) = SQ_H1
-      Board(SQ_E1) = WKING: Moved(SQ_E1) = Moved(SQ_E1) - 1: WKingLoc = SQ_E1
-      Board(SQ_G1) = NO_PIECE: Moved(SQ_G1) = Moved(SQ_G1) - 1
-      GoTo lblExit
-    Case WHITEOOO
-      WhiteCastled = NO_CASTLE
-      Board(SQ_D1) = NO_PIECE: Moved(SQ_D1) = Moved(SQ_D1) - 1
-      Board(SQ_A1) = WROOK: Moved(SQ_A1) = Moved(SQ_A1) - 1
-      Squares(SQ_A1) = Squares(SQ_D1): Squares(SQ_D1) = 0: Pieces(Squares(SQ_A1)) = SQ_A1
-      Board(SQ_E1) = WKING: Moved(SQ_E1) = Moved(SQ_E1) - 1: WKingLoc = SQ_E1
-      Board(SQ_C1) = NO_PIECE: Moved(SQ_C1) = Moved(SQ_C1) - 1
-      GoTo lblExit
-    Case BLACKOO
-      BlackCastled = NO_CASTLE
-      Board(SQ_F8) = NO_PIECE: Moved(SQ_F8) = Moved(SQ_F8) - 1
-      Board(SQ_H8) = BROOK: Moved(SQ_H8) = Moved(SQ_H8) - 1
-      Squares(SQ_H8) = Squares(SQ_F8): Squares(SQ_F8) = 0: Pieces(Squares(SQ_H8)) = SQ_H8
-      Board(SQ_E8) = BKING: Moved(SQ_E8) = Moved(SQ_E8) - 1: BKingLoc = SQ_E8
-      Board(SQ_G8) = NO_PIECE: Moved(SQ_G8) = Moved(SQ_G8) - 1
-      GoTo lblExit
-    Case BLACKOOO
-      BlackCastled = NO_CASTLE
-      Board(SQ_D8) = NO_PIECE: Moved(SQ_D8) = Moved(SQ_D8) - 1
-      Board(SQ_A8) = BROOK: Moved(SQ_A8) = Moved(SQ_A8) - 1
-      Squares(SQ_A8) = Squares(SQ_D8): Squares(SQ_D8) = 0: Pieces(Squares(SQ_A8)) = SQ_A8
-      Board(SQ_E8) = BKING: Moved(SQ_E8) = Moved(SQ_E8) - 1: BKingLoc = SQ_E8
-      Board(SQ_C8) = NO_PIECE: Moved(SQ_C8) = Moved(SQ_C8) - 1
-      GoTo lblExit
-  End Select
-
-  If EnPassant = 1 Then
-    Board(From + 10) = NO_PIECE
-  ElseIf EnPassant = 2 Then
-    Board(From - 10) = NO_PIECE
+  If Castle <> NO_CASTLE Then
+    Select Case Castle
+      Case WHITEOO
+        WhiteCastled = NO_CASTLE
+        Board(SQ_F1) = NO_PIECE: Moved(SQ_F1) = Moved(SQ_F1) - 1
+        Board(SQ_H1) = WROOK: Moved(SQ_H1) = Moved(SQ_H1) - 1
+        Squares(SQ_H1) = Squares(SQ_F1): Squares(SQ_F1) = 0: Pieces(Squares(SQ_H1)) = SQ_H1
+        Board(SQ_E1) = WKING: Moved(SQ_E1) = Moved(SQ_E1) - 1: WKingLoc = SQ_E1
+        Board(SQ_G1) = NO_PIECE: Moved(SQ_G1) = Moved(SQ_G1) - 1
+        GoTo lblExit
+      Case WHITEOOO
+        WhiteCastled = NO_CASTLE
+        Board(SQ_D1) = NO_PIECE: Moved(SQ_D1) = Moved(SQ_D1) - 1
+        Board(SQ_A1) = WROOK: Moved(SQ_A1) = Moved(SQ_A1) - 1
+        Squares(SQ_A1) = Squares(SQ_D1): Squares(SQ_D1) = 0: Pieces(Squares(SQ_A1)) = SQ_A1
+        Board(SQ_E1) = WKING: Moved(SQ_E1) = Moved(SQ_E1) - 1: WKingLoc = SQ_E1
+        Board(SQ_C1) = NO_PIECE: Moved(SQ_C1) = Moved(SQ_C1) - 1
+        GoTo lblExit
+      Case BLACKOO
+        BlackCastled = NO_CASTLE
+        Board(SQ_F8) = NO_PIECE: Moved(SQ_F8) = Moved(SQ_F8) - 1
+        Board(SQ_H8) = BROOK: Moved(SQ_H8) = Moved(SQ_H8) - 1
+        Squares(SQ_H8) = Squares(SQ_F8): Squares(SQ_F8) = 0: Pieces(Squares(SQ_H8)) = SQ_H8
+        Board(SQ_E8) = BKING: Moved(SQ_E8) = Moved(SQ_E8) - 1: BKingLoc = SQ_E8
+        Board(SQ_G8) = NO_PIECE: Moved(SQ_G8) = Moved(SQ_G8) - 1
+        GoTo lblExit
+      Case BLACKOOO
+        BlackCastled = NO_CASTLE
+        Board(SQ_D8) = NO_PIECE: Moved(SQ_D8) = Moved(SQ_D8) - 1
+        Board(SQ_A8) = BROOK: Moved(SQ_A8) = Moved(SQ_A8) - 1
+        Squares(SQ_A8) = Squares(SQ_D8): Squares(SQ_D8) = 0: Pieces(Squares(SQ_A8)) = SQ_A8
+        Board(SQ_E8) = BKING: Moved(SQ_E8) = Moved(SQ_E8) - 1: BKingLoc = SQ_E8
+        Board(SQ_C8) = NO_PIECE: Moved(SQ_C8) = Moved(SQ_C8) - 1
+        GoTo lblExit
+    End Select
   End If
   
-  If EnPassant = 3 Then
-    If PieceTarget = WPAWN Then
-      Board(From) = PieceTarget
-      Board(Target) = NO_PIECE
-      Board(Target - 10) = BPAWN: PieceCntPlus BPAWN
-      Squares(Target - 10) = CapturedNumber
-      Pieces(CapturedNumber) = Target - 10
-      Squares(Target) = 0
-    ElseIf PieceTarget = BPAWN Then
-      Board(From) = PieceTarget
-      Board(Target) = NO_PIECE
-      Board(Target + 10) = WPAWN: PieceCntPlus WPAWN
-      Squares(Target + 10) = CapturedNumber
-      Pieces(CapturedNumber) = Target + 10
-      Squares(Target) = 0
+  If EnPassant <> 0 Then
+    If EnPassant = 1 Then
+      Board(From + 10) = NO_PIECE
+    ElseIf EnPassant = 2 Then
+      Board(From - 10) = NO_PIECE
     End If
-      Moved(From) = Moved(From) - 1
-      GoTo lblExit
-  ElseIf Promoted <> 0 Then
+    
+    If EnPassant = 3 Then
+      If PieceTarget = WPAWN Then
+        Board(From) = PieceTarget
+        Board(Target) = NO_PIECE
+        Board(Target - 10) = BPAWN: PieceCntPlus BPAWN
+        Squares(Target - 10) = CapturedNumber
+        Pieces(CapturedNumber) = Target - 10
+        Squares(Target) = 0
+      ElseIf PieceTarget = BPAWN Then
+        Board(From) = PieceTarget
+        Board(Target) = NO_PIECE
+        Board(Target + 10) = WPAWN: PieceCntPlus WPAWN
+        Squares(Target + 10) = CapturedNumber
+        Pieces(CapturedNumber) = Target + 10
+        Squares(Target) = 0
+      End If
+        Moved(From) = Moved(From) - 1
+        GoTo lblExit
+    End If
+  End If
+  
+  If Promoted <> 0 Then
     If Promoted Mod 2 = WCOL Then
     Board(From) = WPAWN: PieceCntPlus WPAWN
     PieceCntMinus Board(Target)
@@ -1223,15 +1072,15 @@ Public Sub UnmakeMove(mMove As TMove)
   Else
     '--- normal move
     Select Case PieceTarget
-      Case WKING: WKingLoc = From
-      Case BKING: BKingLoc = From
+    Case WKING: WKingLoc = From
+    Case BKING: BKingLoc = From
     End Select
         
     Board(From) = PieceTarget: Moved(From) = Moved(From) - 1
     Board(Target) = Captured: Moved(Target) = Moved(Target) - 1
   End If
 
-  If Captured > 0 And Captured < NO_PIECE Then PieceCntPlus Captured
+  If Captured > 0 Then If Captured < NO_PIECE Then PieceCntPlus Captured
 
 lblExit:
   bWhiteToMove = Not bWhiteToMove ' switch side to move
@@ -1251,6 +1100,7 @@ Public Sub InitPieceSquares()
   Erase PieceCnt()
   Erase Squares()
   Erase Pieces()
+  WNonPawnPieces = 0: BNonPawnPieces = 0
   
   '--- White --
   WhitePiecesStart = 1
@@ -1286,12 +1136,22 @@ Public Sub InitPieceSquares()
 
 End Sub
 
-Public Sub PieceCntPlus(ByVal piece As Long)
-  If piece > FRAME And piece < NO_PIECE Then PieceCnt(piece) = PieceCnt(piece) + 1
+Public Sub PieceCntPlus(ByVal Piece As Long)
+  If Piece > FRAME And Piece < NO_PIECE Then
+    PieceCnt(Piece) = PieceCnt(Piece) + 1
+    If Piece > BPAWN And Piece < WKING Then
+      If CBool(Piece And 1) Then WNonPawnPieces = WNonPawnPieces + 1 Else BNonPawnPieces = BNonPawnPieces + 1
+    End If
+  End If
 End Sub
 
-Public Sub PieceCntMinus(ByVal piece As Long)
-  If piece > FRAME And piece < NO_PIECE Then PieceCnt(piece) = PieceCnt(piece) - 1
+Public Sub PieceCntMinus(ByVal Piece As Long)
+  If Piece > FRAME And Piece < NO_PIECE Then
+    PieceCnt(Piece) = PieceCnt(Piece) - 1
+    If Piece > BPAWN And Piece < WKING Then
+      If CBool(Piece And 1) Then WNonPawnPieces = WNonPawnPieces - 1 Else BNonPawnPieces = BNonPawnPieces - 1
+    End If
+  End If
 End Sub
 
 
@@ -1370,18 +1230,18 @@ Public Function TextToMove(ByVal sMoveText As String) As TMove
   TextToMove = EmptyMove
   sMoveText = Trim(Replace(sMoveText, "-", ""))
   TextToMove.From = CoordToLoc(Left$(sMoveText, 2))
-  TextToMove.piece = Board(TextToMove.From)
+  TextToMove.Piece = Board(TextToMove.From)
   TextToMove.Target = CoordToLoc(Mid$(sMoveText, 3, 2))
   TextToMove.Captured = Board(TextToMove.Target)
   Select Case LCase(Mid$(sMoveText, 5, 1))
   Case "q":
-    If PieceColor(TextToMove.piece) = COL_WHITE Then TextToMove.Promoted = WQUEEN Else TextToMove.Promoted = BQUEEN
+    If PieceColor(TextToMove.Piece) = COL_WHITE Then TextToMove.Promoted = WQUEEN Else TextToMove.Promoted = BQUEEN
   Case "r":
-    If PieceColor(TextToMove.piece) = COL_WHITE Then TextToMove.Promoted = WROOK Else TextToMove.Promoted = BROOK
+    If PieceColor(TextToMove.Piece) = COL_WHITE Then TextToMove.Promoted = WROOK Else TextToMove.Promoted = BROOK
   Case "b":
-    If PieceColor(TextToMove.piece) = COL_WHITE Then TextToMove.Promoted = WBISHOP Else TextToMove.Promoted = BBISHOP
+    If PieceColor(TextToMove.Piece) = COL_WHITE Then TextToMove.Promoted = WBISHOP Else TextToMove.Promoted = BBISHOP
   Case "n":
-    If PieceColor(TextToMove.piece) = COL_WHITE Then TextToMove.Promoted = WKNIGHT Else TextToMove.Promoted = BKNIGHT
+    If PieceColor(TextToMove.Piece) = COL_WHITE Then TextToMove.Promoted = WKNIGHT Else TextToMove.Promoted = BKNIGHT
   Case Else
     TextToMove.Promoted = 0
   End Select
@@ -1756,19 +1616,12 @@ Public Sub FillKingCheckW()
   Erase KingCheckW()
 
   For i = 0 To 7
-    Offset = QueenOffsets(i)
-    Target = WKingLoc + Offset
-    Do While Board(Target) <> FRAME
-      If Board(Target) < NO_PIECE Then
-        KingCheckW(Target) = Offset ' - not color critical: Opp piece can be captured, own piece can move away
-        Exit Do
-      End If
-      KingCheckW(Target) = Offset
-      Target = Target + Offset
+    Offset = QueenOffsets(i): Target = WKingLoc + Offset
+    Do While Board(Target) <> FRAME ' - not color critical: Opp piece can be captured, own piece can move away
+      KingCheckW(Target) = Offset: If Board(Target) < NO_PIECE Then Exit Do Else Target = Target + Offset
     Loop
   
-    Target = WKingLoc + KnightOffsets(i)
-    If Board(Target) >= NO_PIECE Or Board(Target) Mod 2 = WCOL Then KingCheckW(Target) = KnightOffsets(i)
+    Target = WKingLoc + KnightOffsets(i): If Board(Target) <> FRAME Then KingCheckW(Target) = KnightOffsets(i)
   Next
 
 End Sub
@@ -1780,19 +1633,11 @@ Public Sub FillKingCheckB()
   Erase KingCheckB()
   
   For i = 0 To 7
-    Offset = QueenOffsets(i)
-    Target = BKingLoc + Offset
+    Offset = QueenOffsets(i): Target = BKingLoc + Offset
     Do While Board(Target) <> FRAME
-      If Board(Target) < NO_PIECE Then
-        KingCheckB(Target) = Offset ' - not color critical: Opp piece can be captured, own piece can move away
-        Exit Do
-      End If
-      KingCheckB(Target) = Offset
-      Target = Target + Offset
+      KingCheckB(Target) = Offset: If Board(Target) < NO_PIECE Then Exit Do Else Target = Target + Offset
     Loop
-  
-    Target = BKingLoc + KnightOffsets(i)
-    If Board(Target) <> FRAME Then If Board(Target) >= NO_PIECE Or Board(Target) Mod 2 = BCOL Then KingCheckB(Target) = KnightOffsets(i)
+    Target = BKingLoc + KnightOffsets(i): If Board(Target) <> FRAME Then KingCheckB(Target) = KnightOffsets(i)
   Next
 
 End Sub
@@ -1800,8 +1645,8 @@ End Sub
 Public Function IsBlockingMove(ThreatM As TMove, BlockM As TMove) As Boolean
   IsBlockingMove = False
   If MaxDistance(ThreatM.From, ThreatM.Target) <= 1 Then Exit Function
-  If ThreatM.piece = WKNIGHT Or ThreatM.piece = BKNIGHT Then Exit Function
-  If BlockM.piece = WKING Or BlockM.piece = BKING Then Exit Function
+  If ThreatM.Piece = WKNIGHT Or ThreatM.Piece = BKNIGHT Then Exit Function
+  If BlockM.Piece = WKING Or BlockM.Piece = BKING Then Exit Function
   
   If SqBetween(BlockM.Target, ThreatM.From, ThreatM.Target) Then IsBlockingMove = True
 End Function
@@ -1811,11 +1656,11 @@ Public Function SeeSign(Move As TMove) As Long
   ' Early return if SEE cannot be negative because captured piece value
   ' is not less then capturing one. Note that king moves always return
   ' here
-  If Move.Castle > 0 Or Move.Target = 0 Or Move.piece = NO_PIECE Or Board(Move.Target) = FRAME Then Exit Function
-  If PieceType(Move.piece) = PT_KING Then SeeSign = VALUE_KNOWN_WIN: Exit Function   ' King move always good because legal checked before
+  If Move.Castle > 0 Or Move.Target = 0 Or Move.Piece = NO_PIECE Or Board(Move.Target) = FRAME Then Exit Function
+  If PieceType(Move.Piece) = PT_KING Then SeeSign = VALUE_KNOWN_WIN: Exit Function   ' King move always good because legal checked before
  
   If Move.SeeValue = UNKNOWN_SCORE Then
-    If PieceAbsValue(Move.piece) + MAX_SEE_DIFF <= PieceAbsValue(Move.Captured) Then SeeSign = VALUE_KNOWN_WIN: Exit Function ' winning or equal  move
+    If PieceAbsValue(Move.Piece) + MAX_SEE_DIFF <= PieceAbsValue(Move.Captured) Then SeeSign = VALUE_KNOWN_WIN: Exit Function ' winning or equal  move
     ' Calculate exchange score
     Move.SeeValue = GetSEE(Move) ' Returned for future use
   End If
@@ -1825,11 +1670,11 @@ End Function
 
 Public Function BadSEEMove(Move As TMove) As Boolean
   BadSEEMove = False
-  If Move.Castle > 0 Or Move.Target = 0 Or Move.piece = NO_PIECE Or Board(Move.Target) = FRAME Then Exit Function
-  If PieceType(Move.piece) = PT_KING Then Exit Function   ' King move always good because legal checked before
+  If Move.Castle > 0 Or Move.Target = 0 Or Move.Piece = NO_PIECE Or Board(Move.Target) = FRAME Then Exit Function
+  If PieceType(Move.Piece) = PT_KING Then Exit Function   ' King move always good because legal checked before
   
   If Move.SeeValue = UNKNOWN_SCORE Then
-    If PieceAbsValue(Move.piece) + MAX_SEE_DIFF <= PieceAbsValue(Move.Captured) Then Exit Function ' winning or equal  move
+    If PieceAbsValue(Move.Piece) + MAX_SEE_DIFF <= PieceAbsValue(Move.Captured) Then Exit Function ' winning or equal  move
     Move.SeeValue = GetSEE(Move) ' Returned for future use
   End If
   BadSEEMove = (Move.SeeValue < -MAX_SEE_DIFF)
@@ -1837,11 +1682,11 @@ End Function
 
 Public Function GoodSEEMove(Move As TMove) As Boolean
   GoodSEEMove = True
-  If Move.Castle > 0 Or Move.Target = 0 Or Move.piece = NO_PIECE Or Board(Move.Target) = FRAME Then Exit Function
-  If PieceType(Move.piece) = PT_KING Then Exit Function   ' King move always good because legal checked before
+  If Move.Castle > 0 Or Move.Target = 0 Or Move.Piece = NO_PIECE Or Board(Move.Target) = FRAME Then Exit Function
+  If PieceType(Move.Piece) = PT_KING Then Exit Function   ' King move always good because legal checked before
  
   If Move.SeeValue = UNKNOWN_SCORE Then
-    If PieceAbsValue(Move.piece) + MAX_SEE_DIFF <= PieceAbsValue(Move.Captured) Then Exit Function ' winning or equal move
+    If PieceAbsValue(Move.Piece) + MAX_SEE_DIFF <= PieceAbsValue(Move.Captured) Then Exit Function ' winning or equal move
     Move.SeeValue = GetSEE(Move) ' Returned for future use
   End If
   GoodSEEMove = (Move.SeeValue >= -MAX_SEE_DIFF)
@@ -1850,12 +1695,12 @@ End Function
 Public Function SEEGreaterOrEqual(Move As TMove, ByVal Score As Long) As Boolean
   '--- Optimized call of Static Exchange Evaluation (SEE): True if SEE greater or equal given Score
   SEEGreaterOrEqual = True
-  If Move.Castle > 0 Or Move.Target = 0 Or Move.piece = NO_PIECE Or Board(Move.Target) = FRAME Then Exit Function
+  If Move.Castle > 0 Or Move.Target = 0 Or Move.Piece = NO_PIECE Or Board(Move.Target) = FRAME Then Exit Function
   If PieceAbsValue(Move.Captured) < Score Then SEEGreaterOrEqual = False: Exit Function ' only for positice 'score' values
-  If PieceType(Move.piece) = PT_KING Then Exit Function   ' King move always good because legal checked before
+  If PieceType(Move.Piece) = PT_KING Then Exit Function   ' King move always good because legal checked before
   
   If Move.SeeValue = UNKNOWN_SCORE Then
-    If PieceAbsValue(Move.Captured) - PieceAbsValue(Move.piece) >= Score - MAX_SEE_DIFF Then Exit Function ' winning or equal move
+    If PieceAbsValue(Move.Captured) - PieceAbsValue(Move.Piece) >= Score - MAX_SEE_DIFF Then Exit Function ' winning or equal move
     Move.SeeValue = GetSEE(Move) ' Returned for future use
   End If
   SEEGreaterOrEqual = (Move.SeeValue >= Score - MAX_SEE_DIFF) ' MAX_SEE_DIFF do handle bishop equal knight
@@ -1869,20 +1714,20 @@ Public Function GetSEE(Move As TMove) As Long
   Dim i               As Long, From As Long, MoveTo As Long, Target As Long
   Dim CapturedVal     As Long, PieceMoved As Boolean
   Dim SideToMove      As enumColor, SideNotToMove As enumColor
-  Dim NumAttackers(2) As Long, CurrSgn As Long, MinValIndex As Long, piece As Long, Offset As Long
+  Dim NumAttackers(2) As Long, CurrSgn As Long, MinValIndex As Long, Piece As Long, Offset As Long
 
   GetSEE = 0
-  If PieceType(Move.piece) = PT_KING Then GetSEE = PieceAbsValue(Move.Captured): Exit Function
+  If PieceType(Move.Piece) = PT_KING Then GetSEE = PieceAbsValue(Move.Captured): Exit Function
   If Move.Castle <> NO_CASTLE Then Exit Function
   'TestCnt(11) = TestCnt(11) + 1
   From = Move.From: MoveTo = Move.Target: PieceMoved = CBool(Board(From) = NO_PIECE)
   If Not PieceMoved Then
-    piece = Board(From): Board(From) = NO_PIECE ' Remove piece to open sliding xrays
+    Piece = Board(From): Board(From) = NO_PIECE ' Remove piece to open sliding xrays
     If Move.EnPassant = 3 Then  ' remove captured pawn not on target field
-      If piece = WPAWN Then Board(MoveTo + SQ_DOWN) = NO_PIECE Else Board(MoveTo + SQ_UP) = NO_PIECE
+      If Piece = WPAWN Then Board(MoveTo + SQ_DOWN) = NO_PIECE Else Board(MoveTo + SQ_UP) = NO_PIECE
     End If
   Else
-    piece = Board(MoveTo)
+    Piece = Board(MoveTo)
   End If
 
   Cnt = 0 ' Counter for PieceList array of attackers (both sides)
@@ -1963,14 +1808,14 @@ lblContinue:
   SwapList(0) = PieceAbsValue(Move.Captured)
   slIndex = 1
 
-  SideToMove = PieceColor(Move.piece)
+  SideToMove = PieceColor(Move.Piece)
   ' Switch side
   SideNotToMove = SideToMove: SideToMove = SwitchColor(SideToMove)
 
   ' If the opponent has no attackers we are finished
 
   If NumAttackers(SideToMove) = 0 Then
-    If Not PieceMoved Then Board(From) = piece
+    If Not PieceMoved Then Board(From) = Piece
     GetSEE = SwapList(0): Exit Function
   End If
 
@@ -1978,7 +1823,7 @@ lblContinue:
 
   '---- CALCULATE SEE ---
 
-  CapturedVal = PieceAbsValue(Move.piece)
+  CapturedVal = PieceAbsValue(Move.Piece)
   Do
     SwapList(slIndex) = -SwapList(slIndex - 1) + CapturedVal
   
@@ -2017,9 +1862,9 @@ lblContinue:
   Loop
 
   If Not PieceMoved Then
-    Board(From) = piece
+    Board(From) = Piece
     If Move.EnPassant = 3 Then  ' restore captured pawn not on target field
-      If piece = WPAWN Then Board(MoveTo + SQ_DOWN) = BPAWN Else Board(MoveTo + SQ_UP) = WPAWN
+      If Piece = WPAWN Then Board(MoveTo + SQ_DOWN) = BPAWN Else Board(MoveTo + SQ_UP) = WPAWN
     End If
   End If
   GetSEE = SwapList(0)
@@ -2027,14 +1872,14 @@ lblContinue:
 End Function
 
 Public Sub InitPieceColor()
- Dim piece As Long, PieceCol As Long
- For piece = 0 To 16
-  If piece < 1 Or piece >= NO_PIECE Then
-    PieceCol = 0
+ Dim Piece As Long, PieceCol As Long
+ For Piece = 0 To 16
+  If Piece < 1 Or Piece >= NO_PIECE Then
+    PieceCol = 0 ' NO_PIECE, or EP-PIECE  or FRAME
   Else
-    If piece Mod 2 = WCOL Then PieceCol = COL_WHITE Else PieceCol = COL_BLACK
+    If Piece Mod 2 = WCOL Then PieceCol = COL_WHITE Else PieceCol = COL_BLACK
   End If
-  PieceColor(piece) = PieceCol
+  PieceColor(Piece) = PieceCol
  Next
 End Sub
 
@@ -2199,7 +2044,7 @@ Public Sub InitBoardColors()
   Next
 End Sub
 
-Public Function CoordToLoc(isCoord As String) As Long
+Public Function CoordToLoc(ByVal isCoord As String) As Long
   '  "A1" => 21  ( board array index )
   If Len(isCoord) = 2 Then
     CoordToLoc = 10 + Asc(Left$(LCase$(isCoord), 1)) - 96 + Val(Mid$(isCoord, 2)) * 10

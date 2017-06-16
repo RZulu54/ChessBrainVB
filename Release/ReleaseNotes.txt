@@ -4,6 +4,26 @@
 = Release notes for ChessBrainVB chess engine 
 =======================================================================================
 
+
+Changes from version 3.30 to 3.31 (Roger Zuehlsdorf 16-JUN-2017)
+----------------------------------------------------------------
+- fixed problem in time management (sometimes time forfeit if played until mate)
+- fix settings in file Chessbrain.ini: disable online endgame table access (may hang)
+
+Changes from version 3.20 to 3.30 (Roger Zuehlsdorf 4-JUN-2017)
+----------------------------------------------------------------
+- several small fixes and code cleanup 
+- speed optimized
+- changed move heuristic
+- ELO increase about 20 ELO
+
+Changes from version 3.03 to 3.20 (Roger Zuehlsdorf 10-MAR-2017)
+----------------------------------------------------------------
+- bugfix in king safety
+- several small fixes and code cleanup 
+- move counter added to Office GUI
+- ELO increase about 20 ELO
+
 Changes from version 3.03 to 3.03a (Roger Zuehlsdorf 15-DEC-2016)
 ----------------------------------------------------------------
 - compact edition for WORD and POWERPOINT added

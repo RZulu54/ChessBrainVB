@@ -151,7 +151,7 @@ Public Function ReadEPD(ByVal sEpdString As String) As Boolean
   
   InitPieceSquares
   ClearEasyMove
-  GamePosHash(GameMovesCnt) = HashBoard(EmptyMove) ' for 3x repetition draw
+  GamePosHash(GameMovesCnt) = HashBoard() ' for 3x repetition draw
   ReadEPD = True
 
 End Function
