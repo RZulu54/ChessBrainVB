@@ -26,7 +26,11 @@ HelpContextID="0"
 CompatibleMode="0"
 MajorVer=3
 MinorVer=3
+<<<<<<< HEAD
 RevisionVer=1
+=======
+RevisionVer=0
+>>>>>>> origin/master
 AutoIncrementVer=0
 ServerSupportFiles=0
 VersionComments="ChessBrainVB based on LarsenVB by Luca Dormio and Faile by Adrien M.Regimbald / Stockfish "

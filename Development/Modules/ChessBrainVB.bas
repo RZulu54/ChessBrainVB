@@ -1,6 +1,10 @@
 Attribute VB_Name = "ChessBrainVBbas"
 '==================================================
+<<<<<<< HEAD
 '= ChessBrainVB V3.31:
+=======
+'= ChessBrainVB V3.30:
+>>>>>>> origin/master
 '=   by Roger Zuehlsdorf (Copyright 2017)
 '=   based on LarsenVB by Luca Dormio (http://xoomer.virgilio.it/ludormio/download.htm) and Faile by Adrien M. Regimbald
 '=        and Stockfish by Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad

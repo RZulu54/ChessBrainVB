@@ -11,8 +11,11 @@ Option Explicit
 '----------------
 
 Public TimeLeftCorr As Single
+<<<<<<< HEAD
 Public LastAddTimeMoveCnt As Long  ' minor time adjustments
 Public LastExtraTimeMoveCnt As Long ' big extra time if in trouble
+=======
+>>>>>>> origin/master
 
 Public Function AllocateTime(ByVal CurrScore As Long) As Single
 
@@ -29,12 +32,19 @@ Public Function AllocateTime(ByVal CurrScore As Long) As Single
   If bTimeTrace Then WriteTrace "before CalcTime: RMTOC:" & RemainingMovesToTC & " MToTC:" & MovesToTC
 
   ' Subtract overhead for move transfer/execution
+<<<<<<< HEAD
   If MovesToTC > 0 And MovesToTC < 10 Then
     '-- Compensate move overhead ( difference WB2 time value diffenrence ,inis engine used time)
     ' Arena 0.2 sec, ChessGU 0.4 sec overhead
     TimeLeftCorr = TimeLeft - 0.5 * CDbl(GetMax(1, GetMin(40, RemainingMovesToTC)))
   Else
     TimeLeftCorr = TimeLeft - TimeLeft / 20 - 0.5 * CDbl(GetMax(1, GetMin(40, RemainingMovesToTC)))
+=======
+  If MovesToTC > 0 And MovesToTC < 15 Then
+    TimeLeftCorr = TimeLeft - 1 - 0.2 * CDbl(GetMax(1, GetMin(40, RemainingMovesToTC)))
+  Else
+    TimeLeftCorr = TimeLeft
+>>>>>>> origin/master
   End If
   If TimeLeftCorr < 0.1 Then TimeLeftCorr = 0.2
   
@@ -94,17 +104,24 @@ Public Function AllocateExtraTime() As Boolean
   
   TimeBase = TimeLeftCorr / CDbl(GetMax(1, RemainingMovesToTC))
 
+<<<<<<< HEAD
   If GameMovesDone <= LastExtraTimeMoveCnt + 3 Then
     If bTimeTrace Then WriteTrace "ExtraTime ignored:LastExtraTimeMoveCnt "
   End If
   
   If (MovesToTC >= 0 And RemainingMovesToTC < 3) Then
     If bTimeTrace Then WriteTrace "ExtraTime ignored:RemainMoves <3"
+=======
+  If MovesToTC > 0 And RemainingMovesToTC < 3 Then
+>>>>>>> origin/master
     bExtraTime = True
     Exit Function
   End If
     
+<<<<<<< HEAD
   LastExtraTimeMoveCnt = GameMovesDone
+=======
+>>>>>>> origin/master
   If MovesToTC > 0 And RemainingMovesToTC < 10 Then
     TimeBase = TimeLeftCorr / CDbl(GetMax(1, RemainingMovesToTC))
     ExtraTimeForMove = TimeBase * 0.2: AllocateExtraTime = True
@@ -205,7 +222,11 @@ Public Function CalcTimeLimit(ByVal RemainingMovesToTC As Long, _
    
   If TimeTarget + 0.25 >= TimeLeftCorr Then
     If bTimeTrace Then WriteTrace "Limit2:" & Format(TimeTarget, "0.00") & " : " & Format(TimeLeftCorr, "0.00") * 0.25
+<<<<<<< HEAD
     TimeTarget = GetMaxSingle(0.5, TimeLeftIn * 0.75)
+=======
+    TimeTarget = GetMaxSingle(0.25, TimeLeftIn * 0.75)
+>>>>>>> origin/master
   End If
 
   If TimeTarget < 0.1 Then TimeTarget = 0.1

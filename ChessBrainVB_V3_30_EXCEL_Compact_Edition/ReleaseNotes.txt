@@ -4,19 +4,8 @@
 = Release notes for ChessBrainVB chess engine 
 =======================================================================================
 
-<<<<<<< HEAD
-
-Changes from version 3.30 to 3.31 (Roger Zuehlsdorf 16-JUN-2017)
-----------------------------------------------------------------
-- fixed problem in time management (sometimes time forfeit if played until mate)
-- fix settings in file Chessbrain.ini: disable online endgame table access (may hang)
-
-Changes from version 3.20 to 3.30 (Roger Zuehlsdorf 4-JUN-2017)
-----------------------------------------------------------------
-=======
 Changes from version 3.20 to 3.30 (Roger Zuehlsdorf 4-JUN-2017)
 -----------------es-----------------------------------------------
->>>>>>> origin/master
 - several small fixes and code cleanup 
 - speed optimized
 - changed move heuristic

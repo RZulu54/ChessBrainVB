@@ -1,0 +1,79 @@
+;--- ChessBrainVB translate file for German / Deutsch
+Depth#Tiefe#
+Move#Zug#
+move#Zug#
+Score#Bewert#
+Time#Zeit#
+Sec#Sek#
+sec#Sek#
+Nodes#Knoten#
+Line#Folge#
+White Mates#Weiss setzt matt#
+Black Mates#Schwarz setzt matt#
+Draw by repetition#Remis weil 3x gleiche Stellung"
+50 Move Rule#Remis durch 50 Zuege Regel#
+Draw#Remis weil kein Zug#
+
+New Game#Neue Partie#
+Computer plays#Computer spielt#
+White#Weiss#
+Black#Schwarz#
+White to move#Weiss am Zug#
+Black to move#Schwarz am Zug#
+flip board#Drehe Brett#
+Think !#Rechne !#
+Auto-Think#Auto-Rechnen#
+Show Office#Zeige Office#
+Hide Office#Verberge Office#
+Time Control#Zeitkontrolle#
+Seconds/ Move#Sekunden/Zug#
+Minutes/ Game#Minuten/Spiel#
+Fix depth#Feste Tiefe#
+Blitz= Base for game:#Blitz= Spielbasis:#
++ bonus per move:# Bonus pro Zug:#
+
+Enable online endgame tablebases (20sec needed)#Online Tablebases einschalten (20Sek notwendig)#
+
+Move list#Zugliste#
+Piece count for white#Figuren aus Sicht Weiss#
+Total#Summe#
+< undo move#Zug zurueck#
+
+Thinking#Rechne#
+Think#Rechne#
+Stop thinking#Rechnen stoppen#
+
+Setup board#Figuren aufstellen#
+Switch side to move#Wechsel Seite am Zug#
+Clear board#Brett leeren#
+End setup#Ende aufstellen#
+Select piece and click at square#Waehle Figur und klicke auf Feld#
+OO-White#OO-Weiss#
+OOO-White#OOO-Weiss#
+OO-Black#OO-Schwarz#
+OOO-Black#OOO-Schwarz#
+Promote to queen#Umwandeln in Dame?#
+
+Show hint#Zugvorschlag#
+Winboard command input#Winboard Befehlseingabe#
+Clear#loeschen#
+Send#Senden#
+Save Game#Partie sichern#
+Load Game#Partie laden#
+Load FEN position#Lade FEN position#
+Write FEN#Schreibe FEN#
+show thinking#zeige rechnen#
+
+Hint#Hinweis#
+Illegal positition: only one White King allowed!#Ungueltige Stellung: nur ein weisser Koenig erlaubt!#
+Illegal positition: only one Black King allowed!#Ungueltige Stellung: nur ein schwarzer Koenig erlaubt!#
+Illegal positition: Pawn rank must between 2 and 7!#Ungueltige Stellung: Bauern nur auf Reihe 2-7 erlaubt!#
+Illegal positition: White King needed!# Ungueltige Stellung: Kein weisser Koenig!#
+Illegal positition: Black King needed!# Ungueltige Stellung: Kein schwarzer Koenig!#
+please copy#bitte kopieren#
+EPD position string#EPD Position#
+Enter FEN position:#FEN Position eingeben:#
+Enter file name to save:#Dateiname zum Speichern eingeben:#
+Enter file name to load:#Lade Datei:#
+File not found!#Datei nicht gefunden!#
+Stopped#Gestoppt#
