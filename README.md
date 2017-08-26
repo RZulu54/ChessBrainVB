@@ -7,6 +7,7 @@ There are two ways to use this chess engine:
    Files needed: ChessBrainVB.ini  for settings, ChessBrainVB_Book.opn, ChessBrainVB_Book.opi for opening book.
   Playing strength 2900 ELO (CCRL 40/40 conditions, see http://www.computerchess.org.uk/ccrl/4040/rating_list_all.html)
   Compiled with Visual Basic 6
+  Since V3.50: Multi core version for up to 8 threads
  
 2. Use ExcelChessBrainX.xlsm, WordChessBrainX.docm or PowerpointChessBrainX.pptm (full install needed, viewer not working)
    to play games using the GUI implemented in VBA forms.
