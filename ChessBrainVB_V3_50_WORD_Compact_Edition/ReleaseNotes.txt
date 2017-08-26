@@ -4,18 +4,24 @@
 = Release notes for ChessBrainVB chess engine 
 =======================================================================================
 
+Changes from version 3.31 to 3.50 (Roger Zuehlsdorf 26-AUG-2017)
+-----------------es-----------------------------------------------
+- multi-processor support up to 8 threads (not for VBA office)
+  using CreateFileMapping-API for shared hash and PV. (see file MultiCore_Notes.txt)
+  Note: Used memory may not show up in task mananger (but displayed correcty in ARENA)
+- keep history values for next game move (don't delete values at begin of search)
+- better move count pruning exceptions for threat move evasions
+- bug fix in pawn eval
+- speed optimized
+- ELO gain in self-play against V3.31: 60 ELO at 40/4, 30 ELo at 40/40.
 
-Changes from version 3.30 to 3.31 (Roger Zuehlsdorf 16-JUN-2017)
-----------------------------------------------------------------
-- fixed problem in time management (sometimes time forfeit if played until mate)
-- fix settings in file Chessbrain.ini: disable online endgame table access (may hang)
-
-Changes from version 3.20 to 3.30 (Roger Zuehlsdorf 4-JUN-2017)
-----------------------------------------------------------------
+Changes from version 3.20 to 3.31 (Roger Zuehlsdorf 4-JUN-2017)
+-----------------es-----------------------------------------------
 - several small fixes and code cleanup 
 - speed optimized
 - changed move heuristic
 - ELO increase about 20 ELO
+- time management bug fixed
 
 Changes from version 3.03 to 3.20 (Roger Zuehlsdorf 10-MAR-2017)
 ----------------------------------------------------------------

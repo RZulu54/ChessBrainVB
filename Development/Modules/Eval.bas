@@ -41,11 +41,11 @@ Public UnstablePvFactor           As Single
 Public MaximumTime                As Single
 Public OptimalTime                As Single
 
-Public DoubledPenalty(8)          As TScore
-Public IsolatedPenalty(1, 8)      As TScore
-Public IsolatedNotPassed          As TScore
+Public IsolatedPenalty(1)         As TScore
 Public BackwardPenalty(1)         As TScore
-Public ConnectedBonus(1, 1, 1, 8) As TScore
+Public DoubledPenalty             As TScore
+Public ConnectedBonus(1, 1, 2, 8) As TScore
+Public LeverBonus(8)              As TScore
 Public ShelterWeakness(4, 8)      As Long
 Public StormDanger(4, 4, 8)       As Long
 
@@ -95,8 +95,9 @@ Public PawnsBMax(9)               As Long
 Public PawnsBMin(9)               As Long
 Public BPawns(9)                  As Long
 
-Public RootMove                   As TMove
+Public RootMove                   As TMOVE
 Public LastNodesCnt               As Long
+Public LastThreadCheckNodesCnt    As Long
 
 Public StaticEvalArr(MAX_PV)      As Long ' Eval history
 
@@ -135,7 +136,7 @@ Public ReachableOutpostKnight(1)  As TScore
 Public ReachableOutpostBishop(1)  As TScore
 
 Public KingAttackWeights(6)       As Long
-
+Public QueenMinorsImbalance(12)   As Long
 
 Public WBestPawnVal               As Long, BBestPawnVal As Long, WBestPawn As Long, BBestPawn As Long
 Public GamePhase                  As Long
@@ -146,6 +147,7 @@ Public bEvalTrace                 As Boolean
 Public bTimeTrace                 As Boolean
 Public bHashTrace                 As Boolean
 Public bWinboardTrace             As Boolean
+Public bThreadTrace             As Boolean
 
 Dim PassedPawns(16)               As Long ' List of passed pawns (Square)
 Dim PassedPawnsCnt                As Long
@@ -170,8 +172,8 @@ End Type
 Dim ThreatList(32)            As TThreatList
 
 ' Pawn Eval
-Dim Passed                    As Boolean, Isolated As Boolean, Opposed As Boolean, Backward As Boolean
-Dim Stoppers As Boolean, Neighbours As Boolean, Doubled As Boolean, Lever As Boolean, Connected As Boolean, Supported As Boolean, Phalanx As Long, LeverPush As Long
+Dim Passed As Boolean, Isolated As Boolean, Opposed As Boolean, Backward As Boolean
+Dim Stoppers As Boolean, Neighbours As Boolean, Doubled As Boolean, Lever As Boolean, Supported As Boolean, Phalanx As Long, LeverPush As Long
 Public PassedPawnFileBonus(8) As TScore
 Public PassedPawnRankBonus(8) As TScore
 Private OwnAttCnt As Long, OppAttCnt As Long
@@ -183,17 +185,13 @@ Public KingOnOneBonus         As TScore
 Public KingOnManyBonus        As TScore
 
 ' King protection
-Public KnightProtection(8)    As TScore
-Public BishopProtection(8)    As TScore
-Public RookProtection(8)      As TScore
-Public QueenProtection(8)     As TScore
+Public KingProtector(5) As TScore
 
-   
 ' Material imbalance (SF6)
 Public QuadraticOurs(5, 5)    As Long
 Public QuadraticTheirs(5, 5)  As Long
 Public PawnSet(8)             As Long
-Public ImbPieceCount(2, 5)    As Long
+Public ImbPieceCount(COL_WHITE, 5)    As Long
    
 Private bWIsland As Boolean, bBIsland As Boolean
 
@@ -225,26 +223,27 @@ Public Sub InitEval()
     CompKingDefScaleFactor = Val(ReadINISetting("COMPKINGDEF_FACTOR", "100"))
     
     '
-    '--- Piece values  MG=midgame / EG=endgame
+    '--- Piece values  MG=midgame / EG=endgame58
+    
     '--- SF6 values  ( scale to centipawns: \256 )
     '
-    ScorePawn.MG = Val(ReadINISetting("PAWN_VAL_MG", "198"))
-    ScorePawn.EG = Val(ReadINISetting("PAWN_VAL_EG", "258"))
+    ScorePawn.MG = Val(ReadINISetting("PAWN_VAL_MG", "171"))
+    ScorePawn.EG = Val(ReadINISetting("PAWN_VAL_EG", "240"))
   
-    ScoreKnight.MG = Val(ReadINISetting("KNIGHT_VAL_MG", "817"))
-    ScoreKnight.EG = Val(ReadINISetting("KNIGHT_VAL_EG", "896"))
+    ScoreKnight.MG = Val(ReadINISetting("KNIGHT_VAL_MG", "764"))
+    ScoreKnight.EG = Val(ReadINISetting("KNIGHT_VAL_EG", "848"))
   
-    ScoreBishop.MG = Val(ReadINISetting("BISHOP_VAL_MG", "836"))
-    ScoreBishop.EG = Val(ReadINISetting("BISHOP_VAL_EG", "907"))
+    ScoreBishop.MG = Val(ReadINISetting("BISHOP_VAL_MG", "826"))
+    ScoreBishop.EG = Val(ReadINISetting("BISHOP_VAL_EG", "891"))
   
-    ScoreRook.MG = Val(ReadINISetting("ROOK_VAL_MG", "1270"))
-    ScoreRook.EG = Val(ReadINISetting("ROOK_VAL_EG", "1356"))
+    ScoreRook.MG = Val(ReadINISetting("ROOK_VAL_MG", "1282"))
+    ScoreRook.EG = Val(ReadINISetting("ROOK_VAL_EG", "1373"))
   
-    ScoreQueen.MG = Val(ReadINISetting("QUEEN_VAL_MG", "2521"))
-    ScoreQueen.EG = Val(ReadINISetting("QUEEN_VAL_EG", "2658"))
+    ScoreQueen.MG = Val(ReadINISetting("QUEEN_VAL_MG", "2526"))
+    ScoreQueen.EG = Val(ReadINISetting("QUEEN_VAL_EG", "2646"))
   
-    MidGameLimit = Val(ReadINISetting("MIDGAME_LIMIT", "15581")) ' for game phase
-    EndgameLimit = Val(ReadINISetting("ENDGAME_LIMIT", "3998"))  ' for game phase
+    MidGameLimit = Val(ReadINISetting("MIDGAME_LIMIT", "15258")) ' for game phase
+    EndgameLimit = Val(ReadINISetting("ENDGAME_LIMIT", "3915"))  ' for game phase
   
     ' Draw contempt in centipawns > scale to SF (needs ScorePawn.EG set)
     DrawContempt = Val(ReadINISetting(CONTEMPT_KEY, "1"))
@@ -313,7 +312,7 @@ End Function
 '---------------------------------------------------------------------------------------------------
 '---  Eval() - Evaluation of position
 '---           Returns value from view of side to move (positive if black to move and black is better)
-'---           Value scaled to stockfish pawn endgame value (258 = 1 pawn)
+'---           Value scaled to stockfish pawn endgame value (240 = 1 pawn)
 '---
 '---  Steps:
 '---         1. Loop over all pieces to fill pawn structure array, pawn threats,
@@ -348,55 +347,13 @@ Public Function Eval() As Long
   Dim WPawnCntOnWhiteSq            As Long, BPawnCntOnWhiteSq As Long
   Dim WKingFile As Long, BKingFile As Long, WFrontMostPassedPawnRank As Long, BFrontMostPassedPawnRank As Long, ScaleFactor As Long
   Dim WDistanceChecksCounted       As Long, BDistanceChecksCounted As Long, WOtherChecksCounted As Long, BOtherChecksCounted As Long
-  EvalCnt = EvalCnt + 1
 
   If bEvalTrace Then WriteTrace "------- Start Eval ------"
-
-  WBestPawnVal = UNKNOWN_SCORE: WBestPawn = 0
-  BBestPawnVal = UNKNOWN_SCORE: BBestPawn = 0
-  WPassedPawnAttack = 0: BPassedPawnAttack = 0
-  ThreatCnt = 0: WThreat = ZeroScore: BThreat = ZeroScore
-
-  '--- Fill Pawn Arrays
-  For a = 0 To 9
-    WPawns(a) = 0: BPawns(a) = 0: PawnsWMin(a) = 9: PawnsWMax(a) = 0: PawnsBMin(a) = 9: PawnsBMax(a) = 0
-  Next
-  WPawns(0) = -1: BPawns(0) = -1
-  WPawns(9) = -1: BPawns(9) = -1
-  PassedPawnsCnt = 0
-
-  Erase WAttack(): Erase BAttack() 'Init attack arrays  (fast)
-  Erase PieceSqListCnt()
-
-  MinWKingPawnDistance = 9: MinBKingPawnDistance = 9
+  EvalCnt = EvalCnt + 1
+  Eval = 0
+  
   WPawnCnt = PieceCnt(WPAWN): BPawnCnt = PieceCnt(BPAWN)
   WKingFile = File(WKingLoc): BKingFile = File(BKingLoc)
-  
-  Eval = 0
-
-  '--- 1. loop over pieces: count pieces for material totals and game phase calculation. add piece square table score.
-  '----                     calc pawn min/max rank positions per file; pawn attacks(for mobility used later)
-  For a = 1 To NumPieces
-    Square = Pieces(a): If Square = 0 Or Board(Square) >= NO_PIECE Then GoTo lblNextPieceCnt
-    r = Board(Square):  PieceSqListCnt(r) = PieceSqListCnt(r) + 1: PieceSqList(r, PieceSqListCnt(r)) = Square ' fill piece list
-    Select Case r
-      Case WPAWN
-        WAttack(Square + SQ_UP_LEFT) = WAttack(Square + SQ_UP_LEFT) Or PLAttackBit: WAttack(Square + SQ_UP_RIGHT) = WAttack(Square + SQ_UP_RIGHT) Or PRAttackBit  ' Set pawn attack here for use in pieces eval
-        FileNum = File(Square): RankNum = Rank(Square): WPawns(FileNum) = WPawns(FileNum) + 1
-        If RankNum < PawnsWMin(FileNum) Then PawnsWMin(FileNum) = RankNum
-        If RankNum > PawnsWMax(FileNum) Then PawnsWMax(FileNum) = RankNum
-        If MaxDistance(WKingLoc, Square) < MinWKingPawnDistance Then MinWKingPawnDistance = MaxDistance(WKingLoc, Square)
-        If ColorSq(Square) = COL_WHITE Then WPawnCntOnWhiteSq = WPawnCntOnWhiteSq + 1  ' for Bishop eval
-      Case BPAWN
-        BAttack(Square + SQ_DOWN_LEFT) = BAttack(Square + SQ_DOWN_LEFT) Or PLAttackBit: BAttack(Square + SQ_DOWN_RIGHT) = BAttack(Square + SQ_DOWN_RIGHT) Or PRAttackBit
-        FileNum = File(Square): RankNum = Rank(Square): BPawns(FileNum) = BPawns(FileNum) + 1
-        If RankNum < PawnsBMin(FileNum) Then PawnsBMin(FileNum) = RankNum
-        If RankNum > PawnsBMax(FileNum) Then PawnsBMax(FileNum) = RankNum
-        If MaxDistance(BKingLoc, Square) < MinBKingPawnDistance Then MinBKingPawnDistance = MaxDistance(BKingLoc, Square)
-        If ColorSq(Square) = COL_WHITE Then BPawnCntOnWhiteSq = BPawnCntOnWhiteSq + 1 ' for Bishop eval
-    End Select
-lblNextPieceCnt:
-  Next
 
   WNonPawnMaterial = PieceCnt(WQUEEN) * ScoreQueen.MG + PieceCnt(WROOK) * ScoreRook.MG + PieceCnt(WBISHOP) * ScoreBishop.MG + PieceCnt(WKNIGHT) * ScoreKnight.MG
   WMaterial = WNonPawnMaterial + WPawnCnt * ScorePawn.MG
@@ -428,13 +385,57 @@ lblNextPieceCnt:
   Case 1 ' one pawn
     
     If (WMaterial = ScoreRook.MG And BMaterial = ScorePawn.MG) Or (BMaterial = ScoreRook.MG And WMaterial = ScorePawn.MG) Then
-       Eval = Eval_KRKP(): GoTo lblEndEval ' KRKP
+      Eval = Eval_KRKP(): GoTo lblEndEval ' KRKP
     ElseIf (WMaterial = ScoreQueen.MG And BMaterial = ScorePawn.MG) Or (BMaterial = ScoreQueen.MG And WMaterial = ScorePawn.MG) Then
-       Eval = Eval_KQKP(): GoTo lblEndEval ' KQKP
+      Eval = Eval_KQKP(): GoTo lblEndEval ' KQKP
     End If
   End Select
 
+  '----- Init Eval ---------------------
 
+  WBestPawnVal = UNKNOWN_SCORE: WBestPawn = 0
+  BBestPawnVal = UNKNOWN_SCORE: BBestPawn = 0
+  WPassedPawnAttack = 0: BPassedPawnAttack = 0
+  ThreatCnt = 0: WThreat = ZeroScore: BThreat = ZeroScore
+
+  '--- Fill Pawn Arrays
+  For a = 0 To 9
+    WPawns(a) = 0: BPawns(a) = 0: PawnsWMin(a) = 9: PawnsWMax(a) = 0: PawnsBMin(a) = 9: PawnsBMax(a) = 0
+  Next
+  WPawns(0) = -1: BPawns(0) = -1
+  WPawns(9) = -1: BPawns(9) = -1
+  PassedPawnsCnt = 0
+
+  Erase WAttack(): Erase BAttack() 'Init attack arrays  (fast)
+  Erase PieceSqListCnt()
+
+  MinWKingPawnDistance = 9: MinBKingPawnDistance = 9
+
+  '--- 1. loop over pieces: count pieces for material totals and game phase calculation. add piece square table score.
+  '----                     calc pawn min/max rank positions per file; pawn attacks(for mobility used later)
+  For a = 1 To NumPieces
+    Square = Pieces(a): If Square = 0 Or Board(Square) >= NO_PIECE Then GoTo lblNextPieceCnt
+    r = Board(Square):  PieceSqListCnt(r) = PieceSqListCnt(r) + 1: PieceSqList(r, PieceSqListCnt(r)) = Square ' fill piece list
+    Select Case r
+      Case WPAWN
+        WAttack(Square + SQ_UP_LEFT) = WAttack(Square + SQ_UP_LEFT) Or PLAttackBit: WAttack(Square + SQ_UP_RIGHT) = WAttack(Square + SQ_UP_RIGHT) Or PRAttackBit  ' Set pawn attack here for use in pieces eval
+        FileNum = File(Square): RankNum = Rank(Square): WPawns(FileNum) = WPawns(FileNum) + 1
+        If RankNum < PawnsWMin(FileNum) Then PawnsWMin(FileNum) = RankNum
+        If RankNum > PawnsWMax(FileNum) Then PawnsWMax(FileNum) = RankNum
+        If MaxDistance(WKingLoc, Square) < MinWKingPawnDistance Then MinWKingPawnDistance = MaxDistance(WKingLoc, Square)
+        If ColorSq(Square) = COL_WHITE Then WPawnCntOnWhiteSq = WPawnCntOnWhiteSq + 1  ' for Bishop eval
+      Case BPAWN
+        BAttack(Square + SQ_DOWN_LEFT) = BAttack(Square + SQ_DOWN_LEFT) Or PLAttackBit: BAttack(Square + SQ_DOWN_RIGHT) = BAttack(Square + SQ_DOWN_RIGHT) Or PRAttackBit
+        FileNum = File(Square): RankNum = Rank(Square): BPawns(FileNum) = BPawns(FileNum) + 1
+        If RankNum < PawnsBMin(FileNum) Then PawnsBMin(FileNum) = RankNum
+        If RankNum > PawnsBMax(FileNum) Then PawnsBMax(FileNum) = RankNum
+        If MaxDistance(BKingLoc, Square) < MinBKingPawnDistance Then MinBKingPawnDistance = MaxDistance(BKingLoc, Square)
+        If ColorSq(Square) = COL_WHITE Then BPawnCntOnWhiteSq = BPawnCntOnWhiteSq + 1 ' for Bishop eval
+    End Select
+lblNextPieceCnt:
+  Next
+
+ 
   '--- King safety needed?
   bDoWKSafety = CBool(BNonPawnMaterial >= ScoreQueen.MG)
   bDoBKSafety = CBool(WNonPawnMaterial >= ScoreQueen.MG)
@@ -483,7 +484,6 @@ lblNextPieceCnt:
     Neighbours = (WPawns(FileNum + 1) > 0 Or WPawns(FileNum - 1) > 0)
     Phalanx = Abs(Board(Square + SQ_LEFT) = WPAWN) + Abs(Board(Square + SQ_RIGHT) = WPAWN)
     Supported = (DefByPawn > AttByPawn)
-    Connected = (Supported Or Phalanx)
     
     If Not Neighbours Or Lever Or RelRank >= 5 Then
       Backward = False
@@ -526,30 +526,17 @@ lblNextPieceCnt:
       End If
     End If
 
-    If Isolated Then MinusScore SC, IsolatedPenalty(Abs(Opposed), FileNum)
-    If Backward Then MinusScore SC, BackwardPenalty(Abs(Opposed))
-    If Not Supported Then
-      If Board(Square + SQ_UP_LEFT) = WPAWN And Board(Square + SQ_UP_RIGHT) = WPAWN Then
-        SC.MG = SC.MG - 25: SC.EG = SC.EG - 15 ' Unsupported pawn penalty by twice supporting
-      Else
-        SC.MG = SC.MG - 20: SC.EG = SC.EG - 10 ' Unsupported pawn penalty
-      End If
-    End If
-    If Connected Then AddScore SC, ConnectedBonus(Abs(Opposed), Abs(Phalanx = 0), Abs(DefByPawn > 1), RelRank)
-    If Doubled Then
-      If Not CBool(WAttack(Square + SQ_UP) And PAttackBit) Then
-        r = GetMax(1, MaxDistance(Square, PawnsWMax(FileNum)))
-        SC.MG = SC.MG - DoubledPenalty(FileNum).MG \ r: SC.EG = SC.EG - DoubledPenalty(FileNum).EG \ r
-      End If
+    '--- pawn score
+    If Lever Then AddScore SC, LeverBonus(RelRank)
+    
+    If Supported Or Phalanx Then ' Connected
+      AddScore SC, ConnectedBonus(Abs(Opposed), Abs(Phalanx <> 0), DefByPawn, RelRank)
+    Else
+      If Not Neighbours Then MinusScore SC, IsolatedPenalty(Abs(Opposed))
+      If Backward Then MinusScore SC, BackwardPenalty(Abs(Opposed))
+      If Doubled Then MinusScore SC, DoubledPenalty
     End If
     
-    If Lever Then
-      If RelRank = 4 Then
-        SC.MG = SC.MG + 17: SC.EG = SC.EG + 16
-      ElseIf RelRank = 5 Then
-        SC.MG = SC.MG + 33: SC.EG = SC.EG + 32
-      End If
-    End If
 
     '---------------------
     If bEndgame Then
@@ -563,22 +550,12 @@ lblNextPieceCnt:
           WBestPawnVal = SC.EG: WBestPawn = Square
         End If
       End If
-    Else
-      If RelRank <= 5 Then
-        If Board(Square + 19) = BPAWN Or Board(Square + 21) = BPAWN Then SC.MG = SC.MG + 25
-        ' Blocked E/D pawn?
-        If Square = 34 Or Square = 35 Then
-          If Board(Square + SQ_UP) < NO_PIECE Then SC.MG = SC.MG - 15
-        End If
-      End If
     End If
        
     ' Passed : eval later when full attack is available
     If Passed And Not Doubled Then
        PassedPawnsCnt = PassedPawnsCnt + 1: PassedPawns(PassedPawnsCnt) = Square
        If RankNum > 4 Then If Abs(FileNum - BKingFile) <= 2 Then WPassedPawnAttack = WPassedPawnAttack + 1
-    ElseIf Isolated And Not Opposed Then
-      MinusScore SC, IsolatedNotPassed
     End If
     AddScore WPawnStruct, SC
     If bEvalTrace Then WriteTrace "WPawn: " & LocCoord(Square) & ">" & SC.MG & ", " & SC.EG
@@ -610,7 +587,6 @@ lblNextPieceCnt:
     Neighbours = (BPawns(FileNum + 1) > 0 Or BPawns(FileNum - 1) > 0)
     Phalanx = Abs(Board(Square + SQ_LEFT) = BPAWN) + Abs(Board(Square + SQ_RIGHT) = BPAWN)
     Supported = (DefByPawn > AttByPawn)
-    Connected = (Supported Or Phalanx)
 
     If Not Neighbours Or Lever Or RelRank >= 5 Then
       Backward = False
@@ -653,31 +629,17 @@ lblNextPieceCnt:
       End If
     End If
  
-    If Isolated Then MinusScore SC, IsolatedPenalty(Abs(Opposed), FileNum)
-    If Backward Then MinusScore SC, BackwardPenalty(Abs(Opposed))
-    If Not Supported Then
-      If Board(Square + SQ_DOWN_LEFT) = BPAWN And Board(Square + SQ_DOWN_RIGHT) = BPAWN Then
-        SC.MG = SC.MG - 25: SC.EG = SC.EG - 15 ' Unsupported pawn penalty by twice supporting
-      Else
-        SC.MG = SC.MG - 20: SC.EG = SC.EG - 10 ' Unsupported pawn penalty
-      End If
-    End If
-    If Connected Then AddScore SC, ConnectedBonus(Abs(Opposed), Abs(Phalanx = 0), Abs(DefByPawn > 1), RelRank)
-    If Doubled Then
-      If Not CBool(BAttack(Square + SQ_DOWN) And PAttackBit) Then
-        r = GetMax(1, MaxDistance(Square, PawnsBMin(FileNum)))
-        SC.MG = SC.MG - DoubledPenalty(FileNum).MG \ r: SC.EG = SC.EG - DoubledPenalty(FileNum).EG \ r
-      End If
-    End If
+    '--- pawn score
+    If Lever Then AddScore SC, LeverBonus(RelRank)
     
-    If Lever Then
-      If RelRank = 4 Then
-        SC.MG = SC.MG + 17: SC.EG = SC.EG + 16
-      ElseIf RelRank = 5 Then
-        SC.MG = SC.MG + 33: SC.EG = SC.EG + 32
-      End If
+    If Supported Or Phalanx Then ' Connected
+      AddScore SC, ConnectedBonus(Abs(Opposed), Abs(Phalanx <> 0), DefByPawn, RelRank)
+    Else
+      If Not Neighbours Then MinusScore SC, IsolatedPenalty(Abs(Opposed))
+      If Backward Then MinusScore SC, BackwardPenalty(Abs(Opposed))
+      If Doubled Then MinusScore SC, DoubledPenalty
     End If
-    
+      
     '-------------------------
     If bEndgame Then
       If FileNum = 1 Or FileNum = 8 Then AddScore SC, PsqtBP(Square)
@@ -690,21 +652,12 @@ lblNextPieceCnt:
           BBestPawnVal = SC.EG: BBestPawn = Square
         End If
       End If
-    Else
-      If RankNum >= 4 Then
-        If Board(Square - 19) = WPAWN Or Board(Square - 21) = WPAWN Then SC.MG = SC.MG + 25
-        If Square = 84 Or Square = 85 Then
-          If Board(Square + SQ_DOWN) < NO_PIECE Then SC.MG = SC.MG - 15
-        End If
-      End If
     End If
     
     ' Passed : eval later when full attack is available
     If Passed And Not Doubled Then
        PassedPawnsCnt = PassedPawnsCnt + 1: PassedPawns(PassedPawnsCnt) = Square
        If RelRank > 4 Then If Abs(FileNum - WKingFile) <= 2 Then BPassedPawnAttack = BPassedPawnAttack + 1
-    ElseIf Isolated And Not Opposed Then
-      MinusScore SC, IsolatedNotPassed
     End If
     AddScore BPawnStruct, SC
     If bEvalTrace Then WriteTrace "BPawn: " & LocCoord(Square) & ">" & SC.MG & ", " & SC.EG
@@ -775,7 +728,7 @@ lblNextPieceCnt:
       
     If r > 0 And r < 3 Then AddScore SC, ReachableOutpostKnight(r - 1)
     If CBool(BAttack(Square) And PAttackBit) Then AddPawnThreat BThreat, COL_WHITE, PieceType(Board(Square)), Square
-    AddScore WKSafety, KnightProtection(MaxDistance(Square, WKingLoc)) ' defends king?
+    AddScoreWithFactor WKSafety, KingProtector(PT_KNIGHT), MaxDistance(Square, WKingLoc) ' defends king?
     AddScore WPos, SC
     If bEvalTrace Then WriteTrace "WKnight: " & LocCoord(Square) & ">" & SC.MG & ", " & SC.EG & " / " & WPos.MG & ", " & WPos.EG
   Next a
@@ -847,7 +800,7 @@ lblNextPieceCnt:
       
     If r > 0 And r < 3 Then AddScore SC, ReachableOutpostKnight(r - 1)
     If CBool(WAttack(Square) And PAttackBit) Then AddPawnThreat WThreat, COL_BLACK, PieceType(Board(Square)), Square
-    AddScore BKSafety, KnightProtection(MaxDistance(Square, BKingLoc)) ' defends king?
+    AddScoreWithFactor BKSafety, KingProtector(PT_KNIGHT), MaxDistance(Square, BKingLoc)  ' defends king?
     AddScore BPos, SC
     If bEvalTrace Then WriteTrace "BKnight: " & LocCoord(Square) & ">" & SC.MG & ", " & SC.EG & " / " & BPos.MG & ", " & BPos.EG
   Next a
@@ -923,7 +876,7 @@ lblNextPieceCnt:
 
     If r > 0 And r < 3 Then AddScore SC, ReachableOutpostBishop(r - 1)
     If CBool(BAttack(Square) And PAttackBit) Then AddPawnThreat BThreat, COL_WHITE, PieceType(Board(Square)), Square
-    AddScore WKSafety, BishopProtection(MaxDistance(Square, WKingLoc)) ' defends king?
+    AddScoreWithFactor WKSafety, KingProtector(PT_BISHOP), MaxDistance(Square, WKingLoc) ' defends king?
     AddScore WPos, SC
   Next a
   
@@ -1000,7 +953,7 @@ lblNextPieceCnt:
         
     If r > 0 And r < 3 Then AddScore SC, ReachableOutpostBishop(r - 1)
     If CBool(WAttack(Square) And PAttackBit) Then AddPawnThreat WThreat, COL_BLACK, PieceType(Board(Square)), Square
-    AddScore BKSafety, BishopProtection(MaxDistance(Square, BKingLoc)) ' defends king?
+    AddScoreWithFactor BKSafety, KingProtector(PT_BISHOP), MaxDistance(Square, BKingLoc) ' defends king?
     AddScore BPos, SC
   Next a
 
@@ -1045,9 +998,9 @@ lblNextPieceCnt:
             If RankNum >= 5 Then SC.MG = SC.MG + 8: SC.EG = SC.EG + 25  ' aligned pawns
             Exit Do
           Case BKNIGHT, BBISHOP:
-              If Not CBool(BAttack(Target) And PAttackBit) Then MobCnt = MobCnt + 1
-              If AttackBit = RAttackBit Then AddThreat COL_BLACK, PieceType(Board(Target)), PT_ROOK, Square, Target  '--- no reattack possible
-              Exit Do
+            If Not CBool(BAttack(Target) And PAttackBit) Then MobCnt = MobCnt + 1
+            If AttackBit = RAttackBit Then AddThreat COL_BLACK, PieceType(Board(Target)), PT_ROOK, Square, Target  '--- no reattack possible
+            Exit Do
           Case BROOK:  If AttackBit = RAttackBit Then AddThreat COL_BLACK, PT_ROOK, PT_ROOK, Square, Target
             MobCnt = MobCnt + 1
             Exit Do ' equal exchange, ok for mobility
@@ -1097,7 +1050,7 @@ lblNextPieceCnt:
     End If
     
     If CBool(BAttack(Square) And PAttackBit) Then AddPawnThreat BThreat, COL_WHITE, PieceType(Board(Square)), Square
-    AddScore WKSafety, RookProtection(MaxDistance(Square, WKingLoc)) ' defends king?
+    AddScoreWithFactor WKSafety, KingProtector(PT_ROOK), MaxDistance(Square, WKingLoc) ' defends king?
     AddScore WPos, SC
     If bEvalTrace Then WriteTrace "WRook: " & LocCoord(Square) & ">" & SC.MG & ", " & SC.EG & " / " & WPos.MG & ", " & WPos.EG
    Next a
@@ -1194,7 +1147,7 @@ lblNextPieceCnt:
       End If
     End If
     If CBool(WAttack(Square) And PAttackBit) Then AddPawnThreat WThreat, COL_BLACK, PieceType(Board(Square)), Square
-    AddScore BKSafety, RookProtection(MaxDistance(Square, BKingLoc)) ' defends king?
+    AddScoreWithFactor BKSafety, KingProtector(PT_ROOK), MaxDistance(Square, BKingLoc) ' defends king?
     AddScore BPos, SC
     If bEvalTrace Then WriteTrace "BRook: " & LocCoord(Square) & ">" & SC.MG & ", " & SC.EG & " / " & BPos.MG & ", " & BPos.EG
   Next a
@@ -1277,7 +1230,7 @@ lblNextPieceCnt:
     Next
     AddScore WMobility, MobilityQ(MobCnt)
     If CBool(BAttack(Square) And PAttackBit) Then AddPawnThreat BThreat, COL_WHITE, PieceType(Board(Square)), Square
-    AddScore WKSafety, QueenProtection(MaxDistance(Square, WKingLoc)) ' defends king?
+    AddScoreWithFactor WKSafety, KingProtector(PT_QUEEN), MaxDistance(Square, WKingLoc) ' defends king?
     AddScore WPos, SC
     If bEvalTrace Then WriteTrace "WQueen: " & LocCoord(Square) & ">" & SC.MG & ", " & SC.EG & " / " & WPos.MG & ", " & WPos.EG
   Next a
@@ -1360,7 +1313,7 @@ lblNextPieceCnt:
     Next
     AddScore BMobility, MobilityQ(MobCnt)
     If CBool(WAttack(Square) And PAttackBit) Then AddPawnThreat WThreat, COL_BLACK, PieceType(Board(Square)), Square
-    AddScore BKSafety, QueenProtection(MaxDistance(Square, BKingLoc)) ' defends king?
+    AddScoreWithFactor BKSafety, KingProtector(PT_QUEEN), MaxDistance(Square, BKingLoc) ' defends king?
     AddScore BPos, SC
     If bEvalTrace Then WriteTrace "BQueen: " & LocCoord(Square) & ">" & SC.MG & ", " & SC.EG & " / " & BPos.MG & ", " & BPos.EG
   Next a
@@ -1481,9 +1434,8 @@ lblNextPieceCnt:
              r = BAttack(Target)
              If r <> 0 Then
                If rr = 1 Then
-                 If WAttack(Target) = 0 Then
+                 If WAttack(Target) = 0 Then ' King attacks are added later in attack array, so distance rr=1 and WAttack=0 is equal to king attack only
                    Undefended = Undefended + 1
-                 
                    ' Supported queen contact check
                    If CBool(r And QAttackBit) Then
                      If r <> QAttackBit Then If Board(Target) >= NO_PIECE Or (Board(Target) Mod 2 = WCOL) Then KingDanger = KingDanger + QueenContactCheck
@@ -1544,7 +1496,6 @@ lblNextPieceCnt:
                   End If
                  End If
                End If
-  
              End If ' r <> 0
               
              If Board(Target) < NO_PIECE Then ' Piece found
@@ -1631,7 +1582,6 @@ lblNextPieceCnt:
          ' total KingDanger
          KingDanger = KingDanger + GetMin(807, WKingAttackersCount * WKingAttackersWeight) + 101 * WKingAdjacentZoneAttCnt _
                      + 235 * Undefended + 134 * (LargerKingRingAttacksCount + Abs(WPinnedCnt > 0)) - 717 * Abs(PieceCnt(BQUEEN) = 0) - 9 * Bonus \ 8 + 4 * (BNonPawnPieces + PieceCnt(BPAWN) + 1)
-         
          ' Penalty for king on open or semi-open file
          If NonPawnMaterial > 9000 And WPawns(FileNum) = 0 And WKingLoc <> WKING_START Then
            If BPawns(FileNum) = 0 Then KingDanger = KingDanger + 18 Else KingDanger = KingDanger + 9
@@ -1783,7 +1733,6 @@ lblNextPieceCnt:
                     End If
                   End If
                End If
-             
              End If ' r <> 0
               
               If Board(Target) < NO_PIECE Then ' Piece found
@@ -2272,7 +2221,7 @@ lblNextPieceCnt:
   AllTotal.MG = AllTotal.MG + (TotalScore.MG * ThreatsScaleFactor) \ 100&: AllTotal.EG = AllTotal.EG + (TotalScore.EG * ThreatsScaleFactor) \ 100&
    
   '--- Added all to eval score (SF based scaling:  Eval*100/SFPawnEndGameValue= 100 centipawns =1 pawn)
-  '--- Example: Eval=258 => 1.00 pawn
+  '--- Example: Eval=240 => 1.00 pawn
   
   Eval = AllTotal.MG * GamePhase + AllTotal.EG * CLng(PHASE_MIDGAME - GamePhase) * ScaleFactor \ 64 '  * SF6 / 64=SCALE_FACTOR_NORMAL
   Eval = Eval \ PHASE_MIDGAME
@@ -2313,6 +2262,7 @@ lblEndEval:
 
   Eval = Eval + TEMPO_BONUS ' Tempo for side to move
   If Eval = DrawContempt Then Eval = Eval + 1
+  
 End Function
 '---------------------------------
 '-------- END OF EVAL ------------
@@ -2609,20 +2559,21 @@ End Sub
 
 Public Function InitConnectedPawns()
   ' SF6
-  Dim Seed(8) As Long, Opposed As Long, Phalanx As Long, Apex As Long, r As Long, v As Long, x As Long
+  Dim Seed(8) As Long, Opposed As Long, Phalanx As Long, Support As Long, r As Long, v As Long, x As Long
   
-  ReadLngArr Seed(), 0, 0, 6, 15, 10, 57, 75, 135, 258
+  ReadLngArr Seed(), 0, 0, 13, 24, 18, 76, 100, 175, 330
 
   For Opposed = 0 To 1
     For Phalanx = 0 To 1
-      For Apex = 0 To 1
+      For Support = 0 To 2
         For r = 2 To 7
           If Phalanx > 0 Then x = (Seed(r + 1) - Seed(r)) / 2 Else x = 0
-          v = Seed(r) + x
+          v = 17 * Support
+          v = v + Seed(r)
+          If Phalanx > 0 Then v = v + (Seed(r + 1) - Seed(r)) \ 2
           If Opposed > 0 Then v = v / 2 ' >>  operator for opposed in VB: /2
-          If Apex > 0 Then v = v + v / 2
-          ConnectedBonus(Opposed, Phalanx, Apex, r).MG = 3 * v / 2
-          ConnectedBonus(Opposed, Phalanx, Apex, r).EG = v
+          ConnectedBonus(Opposed, Phalanx, Support, r).MG = v
+          ConnectedBonus(Opposed, Phalanx, Support, r).EG = v * (r - 2) \ 4
         Next
       Next
     Next
@@ -2653,8 +2604,13 @@ Public Sub InitImbalance()  ' SF6
   
 End Sub
 
-Public Function Imbalance() As Long ' SF6
-  Dim v As Long
+Public Function Imbalance() As Long ' SF
+  Dim v As Long, Key As Long
+  'TestCnt(10) = TestCnt(10) + 1
+  Key = CalcMaterialKey()
+  Imbalance = ProbeMaterialHash(Key)
+  If Imbalance <> UNKNOWN_SCORE Then Exit Function
+    
   ImbPieceCount(COL_WHITE, 0) = Abs(PieceCnt(WBISHOP) > 1)  ' index 0 used for bishop pair
   ImbPieceCount(COL_BLACK, 0) = Abs(PieceCnt(BBISHOP) > 1)  ' index 0 used for bishop pair
   
@@ -2674,17 +2630,23 @@ Public Function Imbalance() As Long ' SF6
   ImbPieceCount(COL_BLACK, PT_QUEEN) = PieceCnt(BQUEEN)
 
   v = (ColImbalance(COL_WHITE) - ColImbalance(COL_BLACK)) \ 16
+ ' If Imbalance <> UNKNOWN_SCORE And Imbalance <> v Then
+ '   MsgBox "Diff"
+ ' End If
   Imbalance = v
   
+  SaveMaterialHash Key, Imbalance
 End Function
 
-Public Function ColImbalance(Col As enumColor) As Long
+Public Function ColImbalance(ByVal Col As enumColor) As Long
   Dim Bonus As Long, pt1 As Long, pt2 As Long, Us As Long, Them As Long, v As Long
   
   If Col = COL_WHITE Then
     Us = COL_WHITE: Them = COL_BLACK: Bonus = PawnSet(PieceCnt(WPAWN))
+    If PieceCnt(WQUEEN) = 1 Then If PieceCnt(BQUEEN) = 0 Then Bonus = Bonus + QueenMinorsImbalance(PieceCnt(BKNIGHT) + PieceCnt(BBISHOP))
   Else
     Us = COL_BLACK: Them = COL_WHITE: Bonus = PawnSet(PieceCnt(BPAWN))
+    If PieceCnt(BQUEEN) = 1 Then If PieceCnt(WQUEEN) = 0 Then Bonus = Bonus + QueenMinorsImbalance(PieceCnt(WKNIGHT) + PieceCnt(WBISHOP))
   End If
   
   For pt1 = 0 To PT_QUEEN
@@ -2704,6 +2666,10 @@ Public Sub AddScore(ScoreTotal As TScore, ScoreAdd As TScore)
   ScoreTotal.MG = ScoreTotal.MG + ScoreAdd.MG: ScoreTotal.EG = ScoreTotal.EG + ScoreAdd.EG
 End Sub
 
+Public Sub AddScoreWithFactor(ScoreTotal As TScore, ScoreAdd As TScore, Factor As Long)
+  ScoreTotal.MG = ScoreTotal.MG + ScoreAdd.MG * Factor: ScoreTotal.EG = ScoreTotal.EG + ScoreAdd.EG * Factor
+End Sub
+
 Public Sub AddScore100(ScoreTotal As TScore, ScoreAdd As TScore)
   ' Score 100 centipawns based: scale to SF pawn value
   ScoreTotal.MG = ScoreTotal.MG + (ScoreAdd.MG * ScorePawn.EG) \ 100&: ScoreTotal.EG = ScoreTotal.EG + (ScoreAdd.EG * ScorePawn.EG) \ 100&
@@ -2717,11 +2683,11 @@ Public Sub SetScoreVal(ScoreSet As TScore, ByVal MGScore As Long, ByVal EGSCore 
   ScoreSet.MG = MGScore: ScoreSet.EG = EGSCore
 End Sub
 
-Public Function EvalSFTo100(Eval As Long) As Long
+Public Function EvalSFTo100(ByVal Eval As Long) As Long
   If Abs(Eval) < MATE_IN_MAX_PLY Then EvalSFTo100 = (Eval * 100&) / CLng(ScorePawn.EG) Else EvalSFTo100 = Eval
 End Function
 
-Public Function Eval100ToSF(Eval As Long) As Long
+Public Function Eval100ToSF(ByVal Eval As Long) As Long
   Eval100ToSF = (Eval * CLng(ScorePawn.EG)) / 100&
 End Function
 
@@ -2735,7 +2701,7 @@ Public Function ScaleScore(Score As TScore) As Long
   ScaleScore = ScaleScore \ PHASE_MIDGAME
 End Function
 
-Public Function ScaleScore100(Score As TScore, ScaleVal As Long) As TScore
+Public Function ScaleScore100(Score As TScore, ByVal ScaleVal As Long) As TScore
   ScaleScore100.MG = (Score.MG * ScaleVal) \ 100&: ScaleScore100.EG = (Score.EG * ScaleVal) \ 100&
 End Function
 
@@ -2744,7 +2710,7 @@ Public Function ShowScore(Score As TScore) As String
   ShowScore = "(" & CStr(Score.MG) & "," & CStr(Score.EG) & ")=" & ScaleScore(Score)
 End Function
 
-Public Function PieceSQ(Side As enumColor, SearchPieceType As enumPieceType) As Long
+Public Function PieceSQ(ByVal Side As enumColor, ByVal SearchPieceType As enumPieceType) As Long
   Dim a As Long, p As Long
   
   For a = 1 To NumPieces
@@ -2963,7 +2929,7 @@ Public Sub InitOutpostSq()
   Next sq
 End Sub
 
-Public Function NonPawnMatForSide(UseColOfSideToMove As Boolean) As Long
+Public Function NonPawnMatForSide(ByVal UseColOfSideToMove As Boolean) As Long
   If UseColOfSideToMove Then
     If bWhiteToMove Then
       NonPawnMatForSide = PieceCnt(WQUEEN) * ScoreQueen.MG + PieceCnt(WROOK) * ScoreRook.MG + PieceCnt(WBISHOP) * ScoreBishop.MG + PieceCnt(WKNIGHT) * ScoreKnight.MG
@@ -2978,4 +2944,9 @@ Public Function NonPawnMatForSide(UseColOfSideToMove As Boolean) As Long
     End If
   End If
 
+End Function
+
+Public Function MaterialTotal() As Long
+  ' from view of white
+  MaterialTotal = (PieceCnt(WQUEEN) - PieceCnt(BQUEEN)) * ScoreQueen.MG + (PieceCnt(WROOK) - PieceCnt(BROOK)) * ScoreRook.MG + (PieceCnt(WBISHOP) - PieceCnt(BBISHOP)) * ScoreBishop.MG + (PieceCnt(WKNIGHT) - PieceCnt(BKNIGHT)) * ScoreKnight.MG + (PieceCnt(WPAWN) - PieceCnt(BPAWN)) * ScorePawn.MG
 End Function

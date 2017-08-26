@@ -78,6 +78,7 @@ Public Const VALUE_KNOWN_WIN     As Long = 10000
 '--------------------------------------------------
 Public Const MAX_BOARD           As Long = 119
 Public Const MAX_MOVES           As Long = 500
+Public Const MAX_GAME_MOVES      As Long = 999
 Public Const MAX_PV              As Long = 255
 
 Public Const LIGHTNING_DEPTH     As Long = 3
@@ -113,7 +114,7 @@ Public Const BOOK_MAX_PLY        As Long = BOOK_MAX_LEN \ 4
 ' Structure types
 '--------------------------------------------------
 
-Public Type TMove
+Public Type TMOVE
   From             As Integer
   Target           As Integer
   Piece            As Integer
@@ -137,7 +138,8 @@ End Type
 
 Public Enum enumColor
   COL_WHITE = 1
-  COL_BLACK = 2
+  COL_BLACK = 0
+  COL_NOPIECE = -1
 End Enum
 
 Public Enum enumPieceType
@@ -155,11 +157,11 @@ End Enum
 Public Type TMovePicker
   CurrMoveNum As Long
   EndMoves As Long
-  BestMove As TMove
+  BestMove As TMOVE
   bBestMoveChecked As Boolean
   bBestMoveDone As Boolean  ' Moves are not generated before BestMove was tried
-  PrevMove As TMove
-  ThreatMove As TMove
+  PrevMove As TMOVE
+  ThreatMove As TMOVE
   LegalMovesOutOfCheck As Long
   bMovesGenerated As Boolean
   bCapturesOnly As Boolean ' for QSearch

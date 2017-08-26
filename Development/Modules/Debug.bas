@@ -6,7 +6,7 @@ Option Explicit
 '==================================================
 
 
-Public Function DEGUBPrintMoveList(MoveList() As TMove) As String
+Public Function DEGUBPrintMoveList(MoveList() As TMOVE) As String
   Dim i        As Long
   Dim strMoves As String
 
@@ -43,7 +43,7 @@ Public Function DEBUGPerfTest(ByVal iDepth As Long) As String
   Dim strResult As String, StartTime As Single, EndTime As Single
 
   InitGame
-  Ply = 0
+  Ply = 1
   bWhiteToMove = True
   Nodes = 0
   StartTime = Timer
@@ -133,14 +133,10 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
     
  ' EPD(1) = "8/5pk1/1p4Pp/q6P/Q7/1P6/8/6K1 b - - 0 1 " ' ShelterStorm test
 'EPD(1) = "5k2/6b1/8/4N3/8/8/3P1K2/8 w - - 3 1  " ' Scale factor 1 pawn test
-<<<<<<< HEAD
-  
- 'EPD(1) = "8/8/8/3b1k2/8/2K5/8/6qq w - - 0 79 " ' mate
- ' E# PD(1) = "1r1k4/1r3R2/2pQ1q2/p2n2BP/2P5/1NN5/5PP1/1K1R4 b - - 6 41 "
-=======
-  '"6k1/5ppp/1p6/q7/Q7/1P6/5PPP/6K1 b - - 0 1 "
->>>>>>> origin/master
-  
+' EPD(1) = "r1b2r1k/p5pp/2nq4/Ppp1pp2/2Bn1N1Q/2B1R3/2P2PPP/R5K1 w - b6 0 2 " ' EnPassant test
+' EPD(1) = "r1b2r1k/pp4pp/2nq4/P1p1pp2/2Bn1N1Q/2B1R3/2P2PPP/R5K1 b - - 1 1" ' EnPassant test2 move b7b5
+
+
   EPD(1) = "r1bqk2r/p2p1pp1/1p2pn1p/n1pP2B1/1bP5/2N2N2/PPQ1PPPP/R3KB1R w KQkq - 0 9" '<<<<< AKT
   EPD(2) = "1rb2rk1/p3nppp/1p1qp3/3n2N1/2pP4/2P3P1/PP3PBP/R1BQR11K w - -"  'TEST 2
   EPD(3) = "r1b2rk1/p2nq1p1/1pp1p2p/5p2/2PPp3/2Q1P3/PP1N1PPP/2R1KB1R w K - 0 13" '--- Ruhig
@@ -154,15 +150,15 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
   'iDepth = 8
   ' ReadGame "Drawbug2.txt"
   'bForceMode = False
-
- 'For x = 1 To 1
-  For x = 1 To 7 ' if EPD(1) only to test
+ 'For x = 6 To 6
+   For x = 1 To 7 ' if EPD(1) only to test
     
     For i = 0 To 0 ' number of time measure runs  > 1x
      'For i = 0 To 2 ' number of time measure runs > 3x
       
       InitGame ' Reset FixedDepth
       ReadEPD EPD(x) ' Reset FixedDepth
+      
 
       If x = 3 Or x = 4 Or x = 5 Or x = 7 Then
         FixedDepth = iDepth + 1
@@ -177,6 +173,8 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
         bCompIsWhite = False ' True  'False:
         bWhiteToMove = False ' True  '---False
       End If
+    
+     ' ParseCommand "b7b5"
     
       bPostMode = True
       '    bPostMode = False

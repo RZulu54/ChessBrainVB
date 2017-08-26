@@ -1,10 +1,6 @@
 Attribute VB_Name = "ChessBrainVBbas"
 '==================================================
-<<<<<<< HEAD
-'= ChessBrainVB V3.31:
-=======
-'= ChessBrainVB V3.30:
->>>>>>> origin/master
+'= ChessBrainVB V3.50:
 '=   by Roger Zuehlsdorf (Copyright 2017)
 '=   based on LarsenVB by Luca Dormio (http://xoomer.virgilio.it/ludormio/download.htm) and Faile by Adrien M. Regimbald
 '=        and Stockfish by Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
@@ -28,19 +24,22 @@ Public bForceMode             As Boolean
 Public bPostMode              As Boolean
 Public bAnalyzeMode           As Boolean
 Public bExitReceived          As Boolean
+Public bAllowPonder           As Boolean
 
 Public ThisApp                As Object
 Public psAppName              As String
 
-Public Moves(100, MAX_MOVES)   As TMove ' Generated moves [ply,Move]
-Public QuietsSearched(100, 65) As TMove  ' Quiet moves for pruning conditions
+Public Moves(100, MAX_MOVES)   As TMOVE ' Generated moves [ply,Move]
+Public QuietsSearched(100, 65) As TMOVE  ' Quiet moves for pruning conditions
 Public MovePickerDat(100)      As TMovePicker
 
 Public GameMovesCnt           As Long
-Public arGameMoves(999)        As TMove
-Public GamePosHash(999) As THashKey
+Public arGameMoves(MAX_GAME_MOVES) As TMOVE
+Public GamePosHash(MAX_GAME_MOVES) As THashKey
 
 Public GUICheckIntervalNodes  As Long
+
+Public MemoryMB As Long ' memory command
 
 '---------------------------------------
 ' Main:  Start of program ChessBrainVB -
@@ -65,31 +64,49 @@ Sub Main()
     psAppName = App.EXEName
   #End If
 
-  OpenCommHandles
+
+  
   DebugMode = CBool(ReadINISetting("DEBUGMODE", "0") <> "0")
   bWinboardTrace = CBool(ReadINISetting("COMMANDTRACE", "0") <> "0")
+  bThreadTrace = CBool(ReadINISetting("THREADTRACE", "0") <> "0")
+  bTimeTrace = CBool(ReadINISetting("TIMETRACE", "0") <> "0")
   
   InitTranslate
+  ' set main threadnum=-1
+  SetThreads 1
   
+  'SetThreads 2 ' XXXBUGsearch SMP
+   
   If Command$ <> "" Then
     sCmdList = Split(LCase(Command$))
     For i = 0 To UBound(sCmdList)
       If bWinboardTrace Then WriteTrace "Command: " & sCmdList(i) & " " & Now()
-      Select Case sCmdList(i)
-        Case "xboard", "/xboard", "-xboard"
-          bXBoardMode = True
-        Case "log", "/log", "-log"
-          bLogMode = True
-          bLogPV = CBool(Val(ReadINISetting(LOG_PV_KEY, "0")))
-        Case "/?", "-?", "?"
-          MsgBox "arguments:  -xboard ,  -log"
-        Case ""
-        Case Else
-          MsgBox "Wrong argument " & vbLf & Command$, vbExclamation
-      End Select
+      If Left$(Trim$(sCmdList(i)), 6) = "thread" Then
+         #If VBA_MODE = 0 Then
+          ' Parameter for helper threads : "threat1" .. "threat8"
+          ThreadNum = Val("0" & Trim$(Mid$((Trim$(sCmdList(i))), 7)))
+          ThreadNum = GetMax(1, ThreadNum): NoOfThreads = ThreadNum + 1
+          If bThreadTrace Then WriteTrace "Command: ThreadNum = " & ThreadNum & " / " & Now()
+          App.Title = "ChessBrainVB_T" & Trim$(CStr(ThreadNum))
+         #End If
+      Else
+        Select Case Trim$(sCmdList(i))
+          Case "xboard", "/xboard", "-xboard"
+            bXBoardMode = True
+          Case "log", "/log", "-log"
+            bLogMode = True
+            bLogPV = CBool(Val(ReadINISetting(LOG_PV_KEY, "0")))
+          Case "/?", "-?", "?"
+            MsgBox "arguments:  -xboard ,  -log"
+          Case ""
+          Case Else
+            MsgBox "Wrong argument " & vbLf & Command$, vbExclamation
+        End Select
+      End If
     Next
   End If
 
+  If ThreadNum <= 0 Then OpenCommHandles
   
   #If VBA_MODE <> 0 Then
     InitEngine
@@ -101,7 +118,9 @@ Sub Main()
     ' Simulate Xboard using input of debug form
     bXBoardMode = True
     InitEngine
-    frmDebugMain.Show  ' --- Show debug form
+    If ThreadNum <= 0 Then
+      frmDebugMain.Show  ' --- Show debug form
+    End If
     MainLoop  '--- Wait for winboard commands from debug form
     Exit Sub
   #End If
@@ -136,6 +155,9 @@ Public Sub InitEngine()
   Erase PVLength()
   Erase PV()
   Erase History()
+  Erase CounterMove()
+  Erase CounterMovesHist()
+  
   Erase Pieces()
   Erase Squares()
 
@@ -169,6 +191,7 @@ Public Sub InitEngine()
   InitSqBetween
   InitSameXRay
   InitAttackBitCnt
+  bAllowPonder = False
 
   ' setup empty move
   With EmptyMove
@@ -245,17 +268,19 @@ Public Sub InitEngine()
   KingAttackWeights(PT_KNIGHT) = 78: KingAttackWeights(PT_BISHOP) = 56: KingAttackWeights(PT_ROOK) = 45: KingAttackWeights(PT_QUEEN) = 11
     
   ' Pawn eval
-  ReadScoreArr DoubledPenalty(), 0, 0, 13, 43, 20, 48, 23, 48, 23, 48, 23, 48, 23, 48, 20, 48, 13, 43 ' by file mg/eg
-  ' Isolated pawn penalty by opposed flag and file
-  ReadScoreArr2 IsolatedPenalty(), 0, 0, 0, 32, 40, 49, 47, 55, 47, 55, 47, 55, 47, 55, 47, 49, 47, 32, 40
-  ReadScoreArr2 IsolatedPenalty(), 1, 0, 0, 25, 30, 36, 35, 40, 35, 40, 35, 40, 35, 40, 35, 36, 25, 25, 30
-  SetScoreVal IsolatedNotPassed, 10, 10
-  
-  ReadScoreArr BackwardPenalty(), 60, 33, 40, 23 ' not opposed /  opposed
+  ' Isolated pawn penalty by opposed flag
+  ReadScoreArr IsolatedPenalty(), 27, 30, 13, 18
+  ReadScoreArr BackwardPenalty(), 40, 26, 24, 12 ' not opposed /  opposed
+  SetScoreVal DoubledPenalty, 18, 38
+  ReadScoreArr LeverBonus(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 16, 33, 32, 0, 0, 0, 0
   
   ReadScoreArr PassedPawnRankBonus(), 5, 7, 5, 14, 31, 38, 73, 73, 166, 166, 252, 252
   ReadScoreArr PassedPawnFileBonus(), 0, 0, 9, 10, 2, 10, 1, -8, -20, -12, -27, -12, 1, -8, 2, 10, 9, 10
 
+  ReadScoreArr KingProtector(), 0, 0, 0, 0, -3, -5, -4, -3, -3, 0, -1, 1 ' for N,B,R,Q
+  
+  ReadIntArr QueenMinorsImbalance(), 31, -8, -15, -25, -5
+  
   ' King safety eval
   ' Weakness of our pawn shelter in front of the king by [distance from edge][rank]
   ReadIntArr2 ShelterWeakness(), 1, 0, 100, 10, 46, 82, 87, 86, 98 ' 1 = ArrIndex, 0: fill Array(0)
@@ -311,11 +336,9 @@ Public Sub InitEngine()
   SetScoreVal OtherCheck, 10, 10
   SetScoreVal PawnlessFlank, 20, 80
   
-  ' King protection ( zero index should never be hit)
-  ReadScoreArr KnightProtection, 10, 0, 7, 9, 7, 1, 1, 5, -10, -4, -1, -4, -7, -3, -16, -10
-  ReadScoreArr BishopProtection, 15, 7, 11, 8, -7, -1, -1, -2, -1, -7, -11, -3, -9, -1, -16, -1
-  ReadScoreArr RookProtection, 9, 7, 10, 0, -2, 2, -5, 4, -6, 2, -14, -3, -2, -9, -12, -7
-  ReadScoreArr QueenProtection, 4, 2, 3, -5, 2, -5, -4, 0, -9, -6, -4, 7, -13, -7, -10, -7
+  ' Thread Skip values for depth/move
+  ReadIntArr SkipSize, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4
+  ReadIntArr SkipPhase, 0, 1, 0, 1, 2, 3, 0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5, 6, 7
   
   'Material Imbalance
   InitImbalance
@@ -326,7 +349,6 @@ Public Sub InitEngine()
   
   ' Init Hash
   InitZobrist
-  InitHash
   
   ' Endgame tablebase access (via online web service)
   TableBasesRootEnabled = CBool(Trim(ReadINISetting("TB_ROOT_ENABLED", "0")) = "1")
@@ -348,7 +370,8 @@ End Sub
 Public Sub MainLoop()
 
   Dim sInput As String
-
+  ThreadCommand = ""
+  
   Do
     StartEngine ' returns with no action if computer not to move
     If PollCommand Then
@@ -360,6 +383,7 @@ Public Sub MainLoop()
       Sleep 100
     End If
     DoEvents
+    If ThreadNum > 0 Then CheckThreadTermination True
   Loop
 
 End Sub
@@ -373,18 +397,30 @@ Public Sub ParseCommand(ByVal sCommand As String)
 
   Dim bLegalInput As Boolean
   Dim i           As Long, c As Long
-  Dim PlayerMove  As TMove, sCoordMove As String
+  Dim PlayerMove  As TMOVE, sCoordMove As String
   Dim iNumMoves   As Long
   Dim sCurrentCmd As String
   Dim sCmdList()  As String
   Dim sInput()    As String
   Dim HashKey     As THashKey
 
+  If Trim$(sCommand) = "" Then Exit Sub
+  
   sCommand = Replace(sCommand, vbCr, vbLf) 'Fix per DDInterfaceEngine:
+  If Right$(sCommand, 1) <> vbLf Then sCommand = sCommand & vbLf
+
   sCmdList = Split(sCommand, vbLf)
   For c = 0 To UBound(sCmdList) - 1       'ignore vbLf
     sCurrentCmd = sCmdList(c)
+    If sCurrentCmd = "" Then GoTo NextCmd
     If bWinboardTrace Then WriteTrace "Command: " & sCurrentCmd & " " & Now()
+    If sCurrentCmd = "." Then ' Show analyze info
+      bExitReceived = False
+      If bAnalyzeMode Then
+        SendAnalyzeInfo
+      End If
+      GoTo NextCmd
+    End If
 
     ' check first 4 characters: is this a move?
     
@@ -397,7 +433,7 @@ Public Sub ParseCommand(ByVal sCommand As String)
     
     '--- normal move like with 4 char: e2e4 ---
     If Not IsNumeric(sInput(0)) And IsNumeric(sInput(1)) And Not IsNumeric(sInput(2)) And IsNumeric(sInput(3)) Then
-      Ply = 0
+      Ply = 1
       
       GenerateMoves Ply, False, iNumMoves
       PlayerMove.From = FileRev(sInput(0)) + RankRev(sInput(1))
@@ -445,8 +481,36 @@ Public Sub ParseCommand(ByVal sCommand As String)
     '--- not supported commands
     If sCurrentCmd = "xboard" Then GoTo NextCmd
     If sCurrentCmd = "random" Then GoTo NextCmd
-    If sCurrentCmd = "hard" Then GoTo NextCmd
-    If sCurrentCmd = "easy" Then GoTo NextCmd
+    
+    If Left$(sCurrentCmd, 4) = "name" Then
+      MatchInfo.Opponent = Mid$(sCurrentCmd, 6)
+      GoTo NextCmd
+    End If
+    If Left$(sCurrentCmd, 6) = "rating" Then
+      MatchInfo.EngRating = Val(Mid$(sCurrentCmd, 8, 4))
+      MatchInfo.OppRating = Val(Mid$(sCurrentCmd, 13, 4))
+      GoTo NextCmd
+    End If
+    If sCurrentCmd = "computer" Then
+      MatchInfo.OppComputer = True
+      GoTo NextCmd
+    End If
+    If sCurrentCmd = "allseeks" Then
+      SendCommand "tellics seek " & ReadINISetting("Seek1", "5 0 f")
+      SendCommand "tellics seek " & ReadINISetting("Seek2", "15 5 f")
+      GoTo NextCmd
+    End If
+    
+    If sCurrentCmd = "hard" Or sCurrentCmd = "ponder" Then
+      bAllowPonder = True
+      If bWinboardTrace Then LogWrite "ParseCommand: " & sCurrentCmd & " =>PonderOn"
+      GoTo NextCmd
+    End If
+    If sCurrentCmd = "easy" Then
+      If bWinboardTrace Then LogWrite "ParseCommand: " & sCurrentCmd & " =>PonderOff"
+      bAllowPonder = False
+      GoTo NextCmd
+    End If
     
     If sCurrentCmd = "?" Then ' Stop Analyze
       bTimeExit = True
@@ -459,71 +523,24 @@ Public Sub ParseCommand(ByVal sCommand As String)
     If Left$(sCurrentCmd, 8) = "protover" Then
       iXBoardProtoVer = Val(Mid$(sCurrentCmd, 10))
       If iXBoardProtoVer = 2 Then
-        SendCommand "feature variants=""normal"" ping=1 setboard=1 analyze=1 done=1"
+        SendCommand "feature variants=""normal"" ping=1 setboard=1 analyze=1 smp=1 memory=1 myname=""ChessBrainVB"" done=1 "
       End If
       GoTo NextCmd
     End If
-    If Left$(sCurrentCmd, 8) = "setboard" Then
-      ReadEPD Mid$(sCurrentCmd, 10)
-      If DebugMode Then
-        SendCommand PrintPos
-      End If
-    End If
+    
     If Left$(sCurrentCmd, 5) = "ping " Then
       SendCommand "pong " & Mid$(sCurrentCmd, 6)
       GoTo NextCmd
     End If
     
-    If sCurrentCmd = "new" Then
-      InitGame
-      bExitReceived = False
-      'LogWrite String(20, "=")
-      'LogWrite "New Game", True
+    If sCurrentCmd = "post" Then ' post PV
+      bPostMode = True
       GoTo NextCmd
     End If
-    If sCurrentCmd = "white" Then
-      bExitReceived = False
-      bWhiteToMove = True
-      bCompIsWhite = False
+    If sCurrentCmd = "nopost" Then
+      bPostMode = False
       GoTo NextCmd
     End If
-    If sCurrentCmd = "black" Then
-      bExitReceived = False
-      bWhiteToMove = False
-      bCompIsWhite = True
-      GoTo NextCmd
-    End If
-    If sCurrentCmd = "force" Then
-      bExitReceived = True
-      bForceMode = True
-      bTimeExit = True
-      GoTo NextCmd
-    End If
-    If sCurrentCmd = "go" Then
-      bCompIsWhite = bWhiteToMove ' Fix for winboard - "black" not sent before first move after book
-      ' bCompIsWhite = Not bCompIsWhite
-      bExitReceived = False
-      bForceMode = False
-      GoTo NextCmd
-    End If
-    If sCurrentCmd = "undo" Then
-      GameMovesTakeBack 1
-      GoTo NextCmd
-    End If
-    If sCurrentCmd = "remove" Then
-      GameMovesTakeBack 2
-      GoTo NextCmd
-    End If
-    If sCurrentCmd = "draw" Then
-      SendCommand "tellics decline"
-     ' If iXBoardProtoVer > 1 Then
-     '   SendCommand "tellopponent Sorry, this program does not accept draws yet."
-     ' Else
-     '   SendCommand "tellics say Sorry, this program does not accept draws yet."
-     ' End If
-      GoTo NextCmd
-    End If
-    
     ' winboard time commands ( i.e. send from ARENA GUI )
     If Left$(sCurrentCmd, 4) = "time" Then ' time left for computer in 1/100 sec
       TimeLeft = Val(Mid$(sCurrentCmd, 5))
@@ -586,14 +603,84 @@ Public Sub ParseCommand(ByVal sCommand As String)
         
       GoTo NextCmd
     End If
-    If sCurrentCmd = "post" Then ' post PV
-      bPostMode = True
+    
+    If Left$(sCurrentCmd, 6) = "cores " Then
+      If bThreadTrace Then WriteTrace "Command:" & LCase(Command$)
+      Dim thr As Long
+      If Not pbIsOfficeMode Then
+        thr = Val("0" & Val(Mid$(sCurrentCmd, 7)))
+        SetThreads thr
+      End If
+    End If
+    
+    If Left$(sCurrentCmd, 7) = "memory " Then
+      MemoryMB = Val("0" & Val(Mid$(sCurrentCmd, 8)))
+    End If
+    
+    
+    '
+    '--- critical commands if pondering
+    '
+    
+    If Left$(sCurrentCmd, 8) = "setboard" Then
+      ReadEPD Mid$(sCurrentCmd, 10)
+      If DebugMode Then
+        SendCommand PrintPos
+      End If
+    End If
+    
+    If sCurrentCmd = "new" Then
+      InitGame
+      bExitReceived = False
+      If ThreadNum = 0 Then InitThreads
+      'LogWrite String(20, "=")
+      'LogWrite "New Game", True
       GoTo NextCmd
     End If
-    If sCurrentCmd = "nopost" Then
-      bPostMode = False
+    If sCurrentCmd = "white" Then
+      bExitReceived = False
+      bWhiteToMove = True
+      bCompIsWhite = False
       GoTo NextCmd
     End If
+    If sCurrentCmd = "black" Then
+      bExitReceived = False
+      bWhiteToMove = False
+      bCompIsWhite = True
+      GoTo NextCmd
+    End If
+    If sCurrentCmd = "force" Then
+      bExitReceived = True
+      bForceMode = True
+      bTimeExit = True
+      GoTo NextCmd
+    End If
+    If sCurrentCmd = "go" Then
+      bCompIsWhite = bWhiteToMove ' Fix for winboard - "black" not sent before first move after book
+      ' bCompIsWhite = Not bCompIsWhite
+      bExitReceived = False
+      bForceMode = False
+      GoTo NextCmd
+    End If
+    If sCurrentCmd = "undo" Then
+      GameMovesTakeBack 1
+      GoTo NextCmd
+    End If
+    If sCurrentCmd = "remove" Then
+      GameMovesTakeBack 2
+      GoTo NextCmd
+    End If
+    If sCurrentCmd = "draw" Then
+      SendCommand "tellics decline"
+     ' If iXBoardProtoVer > 1 Then
+     '   SendCommand "tellopponent Sorry, this program does not accept draws yet."
+     ' Else
+     '   SendCommand "tellics say Sorry, this program does not accept draws yet."
+     ' End If
+      GoTo NextCmd
+    End If
+    
+
     
     If sCurrentCmd = "analyze" Then
       ' start analyze of position / command "?" or "exit" to stop analyze
@@ -615,47 +702,25 @@ Public Sub ParseCommand(ByVal sCommand As String)
       GoTo NextCmd
     End If
     
-    If sCurrentCmd = "." Then ' Show analyze info
-      bExitReceived = False
-      If bAnalyzeMode Then
-        SendAnalyzeInfo
-      End If
-      GoTo NextCmd
-    End If
     
     If sCurrentCmd = "exit" Then
       'bAnalyzeMode = False
       bForceMode = False
       bTimeExit = True
-      bExitReceived = True
       GoTo NextCmd
     End If
     
     If Left$(sCurrentCmd, 6) = "result" Then
       SendCommand Mid$(sCurrentCmd, 8)
+      bForceMode = False
+      bTimeExit = True
+      bExitReceived = True
       'LogWrite sCurrentCmd
       'LogWrite MatchInfo.Opponent & " (" & MatchInfo.OppRating & ") " & MatchInfo.OppComputer
       GoTo NextCmd
     End If
 
-    If Left$(sCurrentCmd, 4) = "name" Then
-      MatchInfo.Opponent = Mid$(sCurrentCmd, 6)
-      GoTo NextCmd
-    End If
-    If Left$(sCurrentCmd, 6) = "rating" Then
-      MatchInfo.EngRating = Val(Mid$(sCurrentCmd, 8, 4))
-      MatchInfo.OppRating = Val(Mid$(sCurrentCmd, 13, 4))
-      GoTo NextCmd
-    End If
-    If sCurrentCmd = "computer" Then
-      MatchInfo.OppComputer = True
-      GoTo NextCmd
-    End If
-    If sCurrentCmd = "allseeks" Then
-      SendCommand "tellics seek " & ReadINISetting("Seek1", "5 0 f")
-      SendCommand "tellics seek " & ReadINISetting("Seek2", "15 5 f")
-      GoTo NextCmd
-    End If
+
     
     If sCurrentCmd = "quit" Then ExitProgram
 
@@ -682,7 +747,6 @@ Public Sub ParseCommand(ByVal sCommand As String)
     If Left$(sCurrentCmd, 5) = "bench" Then
       If IsNumeric(Right$(sCurrentCmd, 1)) Then DEBUGBench Val(Mid$(sCurrentCmd, 6, 3))
     End If
-    'End If
 
 NextCmd:
    
@@ -739,6 +803,9 @@ Public Sub InitGame()
   ClearEasyMove
 
   bForceMode = False
+  Erase History
+  Erase CounterMove()
+  Erase CounterMovesHist()
   
   MatchInfo.EngRating = 0
   MatchInfo.Opponent = ""
@@ -747,22 +814,29 @@ Public Sub InitGame()
 
 End Sub
 
-Public Sub GameMovesAdd(mMove As TMove)
+Public Sub GameMovesAdd(mMove As TMOVE)
 
   GameMovesCnt = GameMovesCnt + 1
   arGameMoves(GameMovesCnt) = mMove
 
   If mMove.EnPassant = 1 Then
     Board(mMove.From + 10) = WEP_PIECE
-    EpPosArr(0) = mMove.From + 10
+    EpPosArr(1) = mMove.From + 10
   ElseIf mMove.EnPassant = 2 Then
     Board(mMove.From - 10) = BEP_PIECE
-    EpPosArr(0) = mMove.From - 10
+    EpPosArr(1) = mMove.From - 10
   Else
-    EpPosArr(0) = 0
+    EpPosArr(1) = 0
   End If
   ClearEasyMove
   GamePosHash(GameMovesCnt) = HashBoard() ' for 3x repetition draw
+End Sub
+
+Public Sub InitEpArr()
+  Dim i As Long
+  For i = SQ_A1 To SQ_H8
+    If Board(i) = WEP_PIECE Or Board(i) = BEP_PIECE Then EpPosArr(1) = i
+  Next
 End Sub
 
 Public Sub GameMovesTakeBack(ByVal iPlies As Long)
@@ -894,4 +968,8 @@ End Sub
 'Public Sub Word_Auto_Open() ' Word ; normal auto open creates problems with AVASt virus scanner: false positive altert
 '  Main
 'End Sub
+
+
+
+
 

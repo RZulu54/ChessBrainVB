@@ -5,6 +5,8 @@
 
 BookEdit.exe :  Opening book editor for *.opi,*.opn file. Sources see engine LarsenVB at "xoomer.virgilio.it/ludormio/download.htm"
 
+CB_THREAD0.TXT: generate if multiple cores are used. Used for stopping helper threads if this file is no longer locked by main thread.
+
 ChessBrainVB.exe: Win32 winboard chess engine => please use this optimized native x86  code file for winboard compatible GUIs like ARENA 
 
 ChessBrainVB.vbp: Visual Basic 6 project file for winboard engine. with compile optmization setting (no array bound checks,...)

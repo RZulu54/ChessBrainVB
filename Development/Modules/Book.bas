@@ -20,14 +20,14 @@ Private NumBookWhite1 As Long
 '---------------------------------------------------------------------------
 'ChooseBookMove()
 '---------------------------------------------------------------------------
-Public Function ChooseBookMove() As TMove
+Public Function ChooseBookMove() As TMOVE
 
   Dim i                As Long, j As Long, iRandom As Long, iReplies As Long
   Dim sPossibleMove    As String, sCoordMove As String, sPreviousMove As String, From As Long, Target As Long
   Dim iNumMoves        As Long
-  Dim BookReplies()    As TMove
+  Dim BookReplies()    As TMOVE
   Dim BookCandidates() As String
-  Ply = 0
+  Ply = 1
 
   GenerateMoves Ply, False, iNumMoves
   If BookPly = 0 Then

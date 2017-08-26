@@ -15,7 +15,7 @@ Public Function ReadEPD(ByVal sEpdString As String) As Boolean
 
   Dim NumSquares  As Long, i As Long
   Dim sChar       As String
-  Dim arCmdList() As String
+  Dim arCmdList() As String, p As Long
 
   Erase arFiftyMove(): Erase GamePosHash(): Erase arGameMoves()
   Fifty = 0: GameMovesCnt = 0
@@ -121,18 +121,19 @@ Public Function ReadEPD(ByVal sEpdString As String) As Boolean
   'Part4 : EnPassant
   sChar = arCmdList(3)
   If sChar <> "-" Then
+    p = FileRev(Left$(sChar, 1)) + RankRev(Right$(sChar, 1))
     If bWhiteToMove Then
-      If RankRev(Right$(sChar, 1)) = 6 Then
-        Board(FileRev(Left$(sChar, 1)) + RankRev(Right$(sChar, 1))) = BEP_PIECE
+      If Right$(sChar, 1) = "6" Then
+        Board(p) = BEP_PIECE: EpPosArr(1) = p
       End If
     Else
-      If RankRev(Right$(sChar, 1)) = 3 Then
-        Board(FileRev(Left$(sChar, 1)) + RankRev(Right$(sChar, 1))) = WEP_PIECE
+      If Right$(sChar, 1) = "3" Then
+        Board(p) = WEP_PIECE: EpPosArr(1) = p
       End If
     End If
   End If
 
-  'Part5 : Half move count
+  'Part5 : Fifty move half move count
   If UBound(arCmdList) >= 4 Then
     sChar = arCmdList(4)
     If sChar <> "" Then
@@ -140,12 +141,15 @@ Public Function ReadEPD(ByVal sEpdString As String) As Boolean
     End If
   End If
   
-  'Part5 : Half move count
+  'Part5 : full move count: 1 before first move, 2 after first black move
   GameMovesCnt = 0
   If UBound(arCmdList) >= 5 Then
     sChar = arCmdList(5)
     If sChar <> "" Then
-     If Val("0" & sChar) > 0 Then GameMovesCnt = Val(sChar)
+     If Val("0" & sChar) > 0 Then
+       GameMovesCnt = GetMax(0, Val(sChar) * 2 - 1)
+       If Not bWhiteToMove Then GameMovesCnt = GameMovesCnt + 1
+     End If
     End If
   End If
   
@@ -206,7 +210,9 @@ Public Function WriteEPD() As String
   If sCastle = "" Then sCastle = "-"
 
   sEPD = sEPD & " " & sCastle & " " & sEPPiece
-
+  sEPD = sEPD & " " & CStr(Fifty)
+  sEPD = sEPD & " " & CStr(GameMovesCnt \ 2 + 1)
+  
   WriteEPD = sEPD
 
 End Function

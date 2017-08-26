@@ -50,6 +50,8 @@ Declare Function WritePrivateProfileString _
                                             ByVal lpString As Any, _
                                             ByVal lpFileName As String) As Long
 
+Public Declare Sub ZeroMemory2 Lib "kernel32.dll" Alias "RtlZeroMemory" (Destination As Any, ByVal Length As Long)
+
             
 Public hStdIn  As Long   ' Handle Standard Input
 Public hStdOut As Long   ' Handle Standard Output
@@ -88,7 +90,6 @@ Public Sub OpenCommHandles()
   ' Open IO channels to Winboard
   hStdIn = GetStdHandle(STD_INPUT_HANDLE)
   hStdOut = GetStdHandle(STD_OUTPUT_HANDLE)
-  LogFile = FreeFile
 End Sub
 
 Public Sub CloseCommChannels()
@@ -104,6 +105,7 @@ End Sub
 '---------------------------------------------------------------------------
 Function PollCommand() As Boolean
 
+If ThreadNum <= 0 Then
   #If DEBUG_MODE <> 0 Then
     ' from Debug form
     PollCommand = FakeInputState
@@ -120,14 +122,37 @@ Function PollCommand() As Boolean
     
     PollCommand = CBool(rc And lBytesRead > 0)
   #End If
-
+Else
+  '--- Multi-thread mode: helper threads get commands from main thread
+  MainThreadStatus = ReadMainThreadStatus()
+  'If bThreadTrace Then WriteTrace "PollCommand: ThreadStatusCheck:" & MainThreadStatus & " " & LastThreadStatus & " / " & Now()
+  Select Case MainThreadStatus
+  Case 1
+    If LastThreadStatus <> MainThreadStatus Then
+      ThreadCommand = "go" & vbLf: PollCommand = True
+      WriteTrace "PollCommand: MainThreadStatus = 1" & " / " & Now()
+    End If
+  Case 0
+   If LastThreadStatus <> MainThreadStatus Then
+     ThreadCommand = "exit" & vbLf: PollCommand = True: bTimeExit = True
+     WriteTrace "PollCommand: MainThreadStatus = 0" & " / " & Now()
+   End If
+  End Select
+  LastThreadStatus = MainThreadStatus
+End If
 End Function
 
 '---------------------------------------------------------------------------
 'ReadCommand()
 '---------------------------------------------------------------------------
 Function ReadCommand() As String
-
+  If ThreadNum > 0 Then
+     If bThreadTrace Then WriteTrace "ReadCommand: ThreadCommand = " & ThreadCommand & " / " & Now()
+     ReadCommand = ThreadCommand
+     ThreadCommand = ""
+     Exit Function
+  End If
+  
   #If DEBUG_MODE <> 0 Then
     ReadCommand = FakeInput ' from Debug form
     FakeInputState = False
@@ -285,13 +310,13 @@ Public Sub ReadGame(sFile As String)
   Close #h
 End Sub
 
-Public Sub SendThinkInfo(Elapsed As Single, CurrentScore As Long)
-  Static FinalMoveForHint As TMove
+Public Sub SendThinkInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Long)
+  Static FinalMoveForHint As TMOVE
   Dim sPost               As String, j As Long, sPostPV As String
  
   If pbIsOfficeMode Then
     '--- MS OFFICE
-    sPost = " " & Translate("Depth") & ":" & IterativeDepth & "/" & MaxPly & " " & Translate("Score") & ":" & FormatScore(EvalSFTo100(CurrentScore)) & " " & Translate("Nodes") & ":" & Format("0.000", Nodes) & " " & Translate("Sec") & ":" & Format(Elapsed, "0.00")
+    sPost = " " & Translate("Depth") & ":" & ActDepth & "/" & MaxPly & " " & Translate("Score") & ":" & FormatScore(EvalSFTo100(CurrentScore)) & " " & Translate("Nodes") & ":" & Format("0.000", Nodes) & " " & Translate("Sec") & ":" & Format(Elapsed, "0.00")
 
     If plLastPostNodes <> Nodes Then
       SendCommand sPost
@@ -312,26 +337,25 @@ Public Sub SendThinkInfo(Elapsed As Single, CurrentScore As Long)
 
       SendCommand sPostPV
       
-      ShowMoveInfo MoveText(FinalMove), IterativeDepth, MaxPly, EvalSFTo100(CurrentScore), Elapsed
+      ShowMoveInfo MoveText(FinalMove), ActDepth, MaxPly, EvalSFTo100(CurrentScore), Elapsed
     End If
 
   Else
  
     '--- VB6
-    sPost = IterativeDepth & " " & EvalSFTo100(CurrentScore) & " " & (Int(Elapsed) * 100) & " " & Nodes
+    sPost = ActDepth & " " & EvalSFTo100(CurrentScore) & " " & (Int(Elapsed) * 100) & " " & Nodes
     sPostPV = ""
 
     For j = 1 To PVLength(1)
       If PV(1, j).From <> 0 Then sPostPV = sPostPV & " " & MoveText(PV(1, j))
     Next
-    
-    If Len(Trim(sPostPV)) < 8 Then
-      If Trim(LastFullPV) = "" Or Left(Trim(sPostPV), 5) = Left(Trim(LastFullPV), 5) Then
+    If Len(Trim(sPostPV)) > 8 Then
         LastFullPV = sPostPV
-      End If
     Else
       If Left(Trim(sPostPV), 5) = Left(Trim(LastFullPV), 5) Then
-        sPostPV = LastFullPV
+        If Len(Trim(sPostPV)) < Len(Trim(LastFullPV)) Then
+          sPostPV = LastFullPV
+        End If
       End If
     End If
     
@@ -343,12 +367,12 @@ Public Sub SendThinkInfo(Elapsed As Single, CurrentScore As Long)
  
 End Sub
 
-Public Sub SendRootInfo(Elapsed As Single, CurrentScore As Long)
+Public Sub SendRootInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Long)
   Dim sPost As String, j As Long, sPV As String
  
   If pbIsOfficeMode Then
     '--- MS OFFICE
-    sPost = " " & Translate("Depth") & ":" & IterativeDepth & "/" & MaxPly & " " & Translate("Score") & ":" & FormatScore(EvalSFTo100(CurrentScore)) & " " & Translate("Nodes") & ":" & Format("0.000", Nodes) & " " & Translate("Sec") & ":" & Format(Elapsed, "0.00")
+    sPost = " " & Translate("Depth") & ":" & ActDepth & "/" & MaxPly & " " & Translate("Score") & ":" & FormatScore(EvalSFTo100(CurrentScore)) & " " & Translate("Nodes") & ":" & Format("0.000", Nodes) & " " & Translate("Sec") & ":" & Format(Elapsed, "0.00")
     
     If plLastPostNodes <> Nodes Or Nodes = 0 Then
       SendCommand sPost
@@ -360,20 +384,18 @@ Public Sub SendRootInfo(Elapsed As Single, CurrentScore As Long)
       Next
       SendCommand sPost
       
-      ShowMoveInfo MoveText(FinalMove), IterativeDepth, MaxPly, EvalSFTo100(CurrentScore), Elapsed
+      ShowMoveInfo MoveText(FinalMove), ActDepth, MaxPly, EvalSFTo100(CurrentScore), Elapsed
     End If
   Else
     ' VB6
-    sPost = IterativeDepth & " " & EvalSFTo100(CurrentScore) & " " & (Int(Elapsed) * 100) & " " & Nodes
+    sPost = ActDepth & " " & EvalSFTo100(CurrentScore) & " " & (Int(Elapsed) * 100) & " " & Nodes
     sPV = ""
     For j = 1 To PVLength(1) - 1
        If PV(1, j).From <> 0 Then sPV = sPV & " " & MoveText(PV(1, j))
     Next
     
-    If PVLength(1) >= 2 Then
-      If Trim(LastFullPV) = "" Or Left(sPV, 5) = Left(LastFullPV, 5) Then
+    If Len(Trim(sPV)) > 8 Then
         LastFullPV = sPV
-      End If
     Else
       If Trim(Left(sPV, 5)) = Trim(Left(LastFullPV, 5)) Then
         sPV = LastFullPV
@@ -431,7 +453,12 @@ Public Sub WriteTrace(s As String)
   'Debug.Print s
   If s <> "" Then
     h = FreeFile()
-    Open psEnginePath & "\Trace_" & Format(Date, "YYMMDD") & ".txt" For Append Lock Write As #h
+    If ThreadNum <= 0 Then
+      Open psEnginePath & "\Trace_" & Format(Date, "YYMMDD") & ".txt" For Append Lock Write As #h
+    Else
+      Open psEnginePath & "\Trace_" & Format(Date, "YYMMDD") & "_T" & Trim(CStr(GetMax(0, ThreadNum))) & ".txt" For Append Lock Write As #h
+    End If
+          
     Print #h, s
     Close #h
   End If
@@ -439,6 +466,7 @@ Public Sub WriteTrace(s As String)
   If pbIsOfficeMode Then SendCommand s
  
 End Sub
+
 
 '---------------------------------------------------------------------------
 'ReadINISetting: Read values form INI file
@@ -485,6 +513,7 @@ Public Sub LogWrite(sLogString As String, _
                     Optional ByVal bTime As Boolean)
 
   Dim sStr As String
+  LogFile = FreeFile
   sStr = sLogString
 
   If bTime Then sStr = Now & " - " & sStr
@@ -732,5 +761,9 @@ Public Function ExtractFirstTbMove(ByVal sMoveList As String) As String
     ExtractFirstTbMove = ""
   End If
 End Function
+
+
+
+
 
 
