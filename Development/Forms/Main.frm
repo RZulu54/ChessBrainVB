@@ -53,7 +53,7 @@ Begin VB.Form frmMain
    End
    Begin VB.Label lblDescr 
       BackStyle       =   0  'Transparent
-      Caption         =   "ChessBrainVB 3.31"
+      Caption         =   "ChessBrainVB 3.60"
       BeginProperty Font 
          Name            =   "MS Sans Serif"
          Size            =   13.5
@@ -196,29 +196,23 @@ Attribute VB_Exposed = False
 '= Main form ( not shown under winboard)
 '==================================================
 Option Explicit
-
 Private sWBPath As String   'path winboard.exe
+
 Private Function BrowseForFolders() As String
-
   BrowseForFolders = InputBox("Enter path of Winboard.exe (or edit INI file):")
-
   ' WinAPI removed to avoid problems with missing reference
   '###WIN32 sTitle = StrConv("Select location of winboard.exe (or use ARENA GUI) :", vbFromUnicode)
-
   '###WIN32 BInfo.hwndOwner = Me.hWnd
   '###WIN32 BInfo.lpszTitle = StrPtr(sTitle)
   '###WIN32 BInfo.ulFlags = BIF_RETURNONLYFSDIRS
-
   '###WIN32 lpIdList = SHBrowseForFolder(BInfo)
   '###WIN32 If lpIdList Then
   '###WIN32     sFolderName = String$(260, 0)
   '###WIN32     SHGetPathFromIDList lpIdList, sFolderName
-    
   '###WIN32     sFolderName = Left$(sFolderName, InStr(sFolderName, Chr(0)) - 1)
   '###WIN32     CoTaskMemFree lpIdList
   '###WIN32 End If
   '###WIN32 BrowseForFolders = sFolderName
-
 End Function
 
 '---------------------------------------------------------------------------
@@ -226,12 +220,10 @@ End Function
 '
 '---------------------------------------------------------------------------
 Private Function GetCmdLine() As String
-
   GetCmdLine = " -cp -fcp ""ChessBrainVB -xboard"" -fd """ & psEnginePath & """  -scp ""ChessBrainVB -xboard"" -sd """ & psEnginePath & """"
-
 End Function
-Private Sub SetWBPath()
 
+Private Sub SetWBPath()
   sWBPath = ReadINISetting("WINBOARD", "")
   If sWBPath = "" Then
     sWBPath = BrowseForFolders
@@ -242,19 +234,15 @@ Private Sub SetWBPath()
     End If
     On Local Error GoTo 0
   End If
-
 End Sub
 
 Private Sub Form_Load()
-
   Dim i As Long
-
   imgIco.Picture = Me.Icon
   Set Me.Icon = Nothing
 
   With App
     Me.Caption = Me.Caption & "   ver. " & .Major & "." & Format(.Minor, "00") & "." & Format(.Revision, "0000")
-    
     'lblDescr(1) = .LegalCopyright
   End With
 
@@ -267,11 +255,9 @@ Private Sub Form_Load()
   'lblCmd(0) = LoadResString(resMainPlay)
   'lblCmd(1) = LoadResString(resMainBookEd)
   'lblCmd(2) = LoadResString(resMainQuit)
-
 End Sub
 
 Private Sub Form_MouseMove(Button As Integer, Shift As Integer, x As Single, y As Single)
-
   Dim i As Long
 
   For i = 0 To lblCmd.UBound
@@ -281,10 +267,7 @@ Private Sub Form_MouseMove(Button As Integer, Shift As Integer, x As Single, y A
 
 End Sub
 
-
-
 Private Sub lblCmd_Click(Index As Integer)
-
   Dim sBookName As String
 
   Select Case Index
@@ -292,7 +275,6 @@ Private Sub lblCmd_Click(Index As Integer)
       SetWBPath
       On Local Error GoTo CmdError:
       Shell sWBPath & "\winboard.exe" & GetCmdLine, vbNormalFocus
-    
       WriteINISetting "WINBOARD", sWBPath
       End
     Case 1      'BookEdit
@@ -312,10 +294,11 @@ Private Sub lblCmd_Click(Index As Integer)
 
   On Local Error GoTo 0
   Exit Sub
-
 CmdError:
+
   Select Case Err.Number
     Case 53
+
       Select Case Index
         Case 0
           MsgBox "Cannot find Winboard", vbCritical
@@ -323,27 +306,26 @@ CmdError:
           MsgBox "Cannot find  BookEdit", vbCritical
       End Select
   End Select
-  Screen.MousePointer = vbDefault
 
+  Screen.MousePointer = vbDefault
 End Sub
+
 Private Sub lblCmd_MouseMove(Index As Integer, _
                              Button As Integer, _
                              Shift As Integer, _
                              x As Single, _
                              y As Single)
-
   Dim i            As Long
   Static LastIndex As Long
-
   If Index <> LastIndex Then
+
     For i = 0 To lblCmd.UBound
       lblCmd(i).Font.Underline = False
       lblCmd(i).Font.Bold = False
     Next
+
     LastIndex = Index
   End If
   lblCmd(Index).Font.Underline = True
   lblCmd(Index).Font.Bold = True
-
 End Sub
-

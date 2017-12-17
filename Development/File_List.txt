@@ -37,6 +37,8 @@ Copying.txt:  GNU GENERAL PUBLIC LICENSE V3
 
 ExcelChessBrainX.xlsm:    EXCEL ChessBrainVB GUI. ALT+F8 to run auto_open macro (enable macros first)
 
+Fathom.exe:  helper exe for access to endgame tablebases, see source in Github: https://github.com/basil00/Fathom
+
 VB_Technical_Notes.txt: Technical hints about Visual Basic programming
 
 Wb2Uci.exe: select this file to run this winboard enginge with UCI protocol

@@ -13,7 +13,7 @@ Performance hints
  - datatype STRING is extremly slow, never use it in inner loops
  - remove DEBUG.PRINT debug statements. Even if compiled they slow down the exe
  - use integer division operator "\" instead of floating division operator "/" where possible: much faster
- - SELECT CASE is faster than ELSEIF when compiled
+ - SELECT CASE is much faster than ELSEIF when compiled (compiler generates jump tables)
  - VB6 compiler: use optimization settings:  optimze speed, no array checks, no overflow checks
                  Result: speed is about 15 times faster than PseudoCode-exe (equal to Office-VBA)
 

@@ -4,18 +4,14 @@ Attribute VB_Name = "HashBas"
 '= Hash functions
 '==================================================
 Option Explicit
-
-Public Const MAX_THREADS As Long = 8
-
+Public Const MAX_THREADS       As Long = 8
 'The style of the hash table rows
-Public Const TT_NO_BOUND    As Byte = 0
-Public Const TT_UPPER_BOUND As Byte = 1
-Public Const TT_LOWER_BOUND As Byte = 2
-Public Const TT_EXACT       As Byte = 3
-
-Public Const HASH_CLUSTER As Long = 4
-Public Const TT_TB_BASE_DEPTH As Long = 222
-
+Public Const TT_NO_BOUND       As Byte = 0
+Public Const TT_UPPER_BOUND    As Byte = 1
+Public Const TT_LOWER_BOUND    As Byte = 2
+Public Const TT_EXACT          As Byte = 3
+Public Const HASH_CLUSTER      As Long = 4
+Public Const TT_TB_BASE_DEPTH  As Long = 222
 Public Const MATERIAL_HASHSIZE As Long = 8192
 
 Public Type THashKey
@@ -24,27 +20,26 @@ Public Type THashKey
   Hashkey2 As Long
 End Type
 
-Public ZobristHash1    As Long
-Public ZobristHash2    As Long
-Public HashWhiteToMove As Long
+Public ZobristHash1     As Long
+Public ZobristHash2     As Long
+Public HashWhiteToMove  As Long
 Public HashWhiteToMove2 As Long
-Public HashWCanCastle  As Long
+Public HashWCanCastle   As Long
 Public HashWCanCastle2  As Long
-Public HashBCanCastle  As Long
+Public HashBCanCastle   As Long
 Public HashBCanCastle2  As Long
-
-
-Public InHashCnt       As Long
-Public HashUsage       As Long
-Public HashUsageMap       As Long
-Private bHashUsed      As Boolean
-Public HashGeneration As Long
-Public EmptyHash As THashKey
+Public HashExcluded     As Long
+Public InHashCnt        As Long
+Public HashUsage        As Long
+Public HashUsageMap     As Long
+Private bHashUsed       As Boolean
+Public HashGeneration   As Long
+Public EmptyHash        As THashKey
 
 Private Type HashTableEntry
   Position1 As Long ' 2x32 bit position hash key
   Position2 As Long
-  Depth As Integer ' negative values possible for QSearch
+  Depth As Integer ' not Byte, negative values possible for QSearch
   Generation As Byte
   IsChecking As Boolean
   MoveFrom As Byte
@@ -56,42 +51,34 @@ Private Type HashTableEntry
   'ThreadNum As Byte ' used for thread hit cnt => for testing only
 End Type
 
-Private moHashMap As clsHashMap
-
-Public HashSize                            As Long
-
-Dim ZobristTable(SQ_A1 To SQ_H8, 0 To 16)  As Long ' key for each piece typeand board position
-Dim ZobristTable2(SQ_A1 To SQ_H8, 0 To 16) As Long
-Dim MatZobristTable(0 To 10, 0 To 12) As Long
-
+Private moHashMap                              As clsHashMap
+Public HashSize                                As Long
+Dim ZobristTable(SQ_A1 To SQ_H8, 0 To 16)      As Long ' key for each piece typeand board position
+Dim ZobristTable2(SQ_A1 To SQ_H8, 0 To 16)     As Long
+Dim MatZobristTable(0 To 10, 0 To 12)          As Long
 'The main array to hold the hash table
-Private HashTable()                        As HashTableEntry
-Private HashCluster(0 To HASH_CLUSTER - 1)   As HashTableEntry
-
+Private HashTable()                            As HashTableEntry
+Private HashCluster(0 To HASH_CLUSTER - 1)     As HashTableEntry
 ' Pointer to multi-Thread map data
-Public NoOfThreads As Long
-Public ThreadNum   As Long  ' 0 = Main Thread
-Public MainThreadStatus As Long, LastThreadStatus  As Long ' 1 = start, 0 = stop, -1 = Exit
-Public ThreadCommand As String
-
-Public HashMapEnd As Long
+Public NoOfThreads                             As Long
+Public ThreadNum                               As Long  ' 0 = Main Thread
+Public MainThreadStatus                        As Long, LastThreadStatus  As Long ' 1 = start, 0 = stop, -1 = Exit
+Public ThreadCommand                           As String
+Public HashMapEnd                              As Long
 Public HashMapThreadStatusPtr(MAX_THREADS - 1) As Long
-Public HashMapBestPVPtr(MAX_THREADS - 1) As Long ' Best pv for 10 moves
-Public HashMapBoardPtr As Long
-Public HashMapMovedPtr As Long
-Public HashMapWhiteToMovePtr As Long
-Public HashMapGameMovesCntPtr As Long
-Public HashMapGameMovesPtr As Long
-Public HashMapGamePosHashPtr As Long
+Public HashMapBestPVPtr(MAX_THREADS - 1)       As Long ' Best pv for 10 moves
+Public HashMapBoardPtr                         As Long
+Public HashMapMovedPtr                         As Long
+Public HashMapWhiteToMovePtr                   As Long
+Public HashMapGameMovesCntPtr                  As Long
+Public HashMapGameMovesPtr                     As Long
+Public HashMapGamePosHashPtr                   As Long
+Public HashRecLen                              As Long
+Public HashClusterLen                          As Long
+Private BestPV(10)                             As TMOVE
+Public SingleThreadStatus(MAX_THREADS - 1)     As Long ' 1 = start, 0 = stop, -1 = Stopped
 
-Public HashRecLen As Long
-Public HashClusterLen As Long
-
-Private BestPV(10) As TMOVE
-
-Public SingleThreadStatus(MAX_THREADS - 1) As Long ' 1 = start, 0 = stop, -1 = Stopped
 'Public HashFoundFromOtherThread As Long
-
 Private Type TMaterialHashEntry
   HashKey As Long
   Score As Long
@@ -99,23 +86,18 @@ End Type
 
 Public MaterialHash(MATERIAL_HASHSIZE) As TMaterialHashEntry
 
-
 Public Sub InitHash()
   'Initialize the hash-table
-  
   ' Use maximum hash size form INI file and memory command
   bHashTrace = CBool(ReadINISetting("HASHTRACE", "0") <> "0")
   HashSize = GetMin(400, Val(ReadINISetting("HASHSIZE", "64"))) ' in MB Limit 400 else overflow
   HashSize = GetMax(HashSize, MemoryMB) ' memory command value
   If bHashTrace Then WriteTrace "Init hash size start " & HashSize & "MB " & Now()
   HashSize = HashSize * 38000   ' seems to fit...? hash len = 31
-  
   HashUsage = 0
   HashUsageMap = 0
   bHashUsed = False
-  
   HashRecLen = LenB(HashCluster(0)): HashClusterLen = HashRecLen * HASH_CLUSTER
-  
   If NoOfThreads < 2 Then
     ReDim HashTable(HashSize + HASH_CLUSTER)
     If bHashTrace Then WriteTrace "InitHash: Redim HashTable Size= " & HashSize & " entries " & Now()
@@ -128,34 +110,36 @@ Public Sub InitHash()
     HashMapEnd = HashRecLen * (HashSize + HASH_CLUSTER)
     'MsgBox "HashMAp: " & NoOfThreads & "/ " & ThreadNum
     Dim i As Long
+
     For i = 0 To MAX_THREADS - 1
       HashMapThreadStatusPtr(i) = HashMapEnd: HashMapEnd = HashMapEnd + LenB(MainThreadStatus)
     Next
+
     For i = 0 To MAX_THREADS - 1
       HashMapBestPVPtr(i) = HashMapEnd: HashMapEnd = HashMapEnd + LenB(PV(0, 0)) * 10
     Next
+
     HashMapBoardPtr = HashMapEnd: HashMapEnd = HashMapEnd + LenB(Board(0)) * MAX_BOARD
     HashMapMovedPtr = HashMapEnd: HashMapEnd = HashMapEnd + LenB(Moved(0)) * MAX_BOARD
     HashMapWhiteToMovePtr = HashMapEnd: HashMapEnd = HashMapEnd + LenB(bWhiteToMove)
     HashMapGameMovesCntPtr = HashMapEnd: HashMapEnd = HashMapEnd + LenB(GameMovesCnt)
     HashMapGameMovesPtr = HashMapEnd: HashMapEnd = HashMapEnd + LenB(arGameMoves(0)) * MAX_GAME_MOVES
     HashMapGamePosHashPtr = HashMapEnd: HashMapEnd = HashMapEnd + LenB(GamePosHash(0)) * MAX_GAME_MOVES
-    
     If ThreadNum >= 0 Then
       OpenHashMap HashMapEnd
     End If
   End If
-  
   If bHashTrace Then WriteTrace "Init hash size done " & HashSize & " entries " & Now()
 End Sub
 
-Public Function HashBoard() As THashKey
+Public Function HashBoard(ExcludedMove As TMOVE) As THashKey
   Dim i As Long, sq As Long
-  
   ZobristHash1 = 0: ZobristHash2 = 0
+
   For i = 1 To NumPieces
     sq = Pieces(i): If sq <> 0 Then ZobristHash1 = ZobristHash1 Xor ZobristTable(sq, Board(sq)): ZobristHash2 = ZobristHash2 Xor ZobristTable2(sq, Board(sq))
   Next
+
   If EpPosArr(Ply) > 0 Then HashSetPiece EpPosArr(Ply), Board(EpPosArr(Ply))
   If bWhiteToMove Then
     ZobristHash1 = ZobristHash1 Xor HashWhiteToMove: ZobristHash2 = ZobristHash2 Xor HashWhiteToMove2
@@ -168,7 +152,9 @@ Public Function HashBoard() As THashKey
     If Moved(SQ_H8) = 0 Then ZobristHash1 = ZobristHash1 Xor HashBCanCastle
     If Moved(SQ_A8) = 0 Then ZobristHash2 = ZobristHash2 Xor HashBCanCastle2
   End If
- 
+  If ExcludedMove.From > 0 Then ' use from/target sq to be different to normal position
+    ZobristHash1 = ZobristHash1 Xor ZobristTable(ExcludedMove.From, ExcludedMove.Piece): ZobristHash2 = ZobristHash2 Xor ZobristTable2(ExcludedMove.Target, ExcludedMove.Piece)
+  End If
   HashBoard.HashKey1 = ZobristHash1: HashBoard.Hashkey2 = ZobristHash2
 End Function
 
@@ -192,22 +178,19 @@ Public Function InsertIntoHashTable(HashKey As THashKey, _
                                     ByVal EvalType As Long, _
                                     ByVal Eval As Long, _
                                     ByVal StaticEval As Long)
-                                    
   Dim IndexKey As Long, TmpMove As TMOVE, i As Long, ReplaceIndex As Long, MaxReplaceValue As Long, ReplaceValue As Long, bPosFound As Boolean
-    
   Debug.Assert HashMove.From = 0 Or HashMove.Piece <> NO_PIECE
   If bTimeExit Then Exit Function ' score not exact
-  
   TmpMove = HashMove ' Don't overwrite
   bHashUsed = True: bPosFound = False
   MaxReplaceValue = 9999
-  
   '--- Compute hash key
   ZobristHash1 = HashKey.HashKey1: ZobristHash2 = HashKey.Hashkey2
   IndexKey = HashKeyCompute() * HASH_CLUSTER
   ReplaceIndex = IndexKey
-  
+
   For i = 0 To HASH_CLUSTER - 1
+
     With HashTable(IndexKey + i)
       If .Position1 <> 0 Then
         ' Don't overwrite more valuable entry
@@ -230,10 +213,11 @@ Public Function InsertIntoHashTable(HashKey As THashKey, _
         If MaxReplaceValue > -9000 Then MaxReplaceValue = -9000: ReplaceIndex = IndexKey + i
       End If
     End With
+
   Next
-  
+
   If HashTable(ReplaceIndex).Position1 = 0 And HashUsage < 2147483646 Then HashUsage = HashUsage + 1
-  
+
   With HashTable(ReplaceIndex)
     '--- Save hash data, preserve hash move if no new move
     If Not bPosFound Or EvalType = TT_EXACT Or Depth > .Depth - 4 Or .Generation <> HashGeneration Then
@@ -246,7 +230,7 @@ Public Function InsertIntoHashTable(HashKey As THashKey, _
       Debug.Assert .MoveFrom = 0 Or Board(.MoveFrom) <> NO_PIECE
     End If
   End With
-   
+
 End Function
 
 Public Function IsInHashTable(HashKey As THashKey, _
@@ -256,19 +240,19 @@ Public Function IsInHashTable(HashKey As THashKey, _
                               ByRef Eval As Long, _
                               ByRef StaticEval As Long) As Boolean
   Dim IndexKey As Long, i As Long
-  
   IsInHashTable = False: HashMove = EmptyMove: EvalType = TT_NO_BOUND: Eval = UNKNOWN_SCORE: StaticEval = UNKNOWN_SCORE: HashDepth = -MAX_GAME_MOVES
   ZobristHash1 = HashKey.HashKey1: ZobristHash2 = HashKey.Hashkey2
   IndexKey = HashKeyCompute() * HASH_CLUSTER
+
   For i = 0 To HASH_CLUSTER - 1
     If HashTable(IndexKey + i).Position1 <> 0 And ZobristHash1 <> 0 Then
+
       With HashTable(IndexKey + i)
         If ZobristHash1 = .Position1 And ZobristHash2 = .Position2 Then
           If .Depth > HashDepth Then
             ' entry found
             IsInHashTable = True
             If InHashCnt < 2000000 Then InHashCnt = InHashCnt + 1
-            
             '--- Read hash data
             If .MoveFrom > 0 Then
               HashMove.From = .MoveFrom: HashMove.Target = .MoveTarget
@@ -277,41 +261,42 @@ Public Function IsInHashTable(HashKey As THashKey, _
               HashMove.Piece = Board(.MoveFrom): HashMove.CapturedNumber = Squares(.MoveTarget)
               Debug.Assert HashMove.Piece <> NO_PIECE
               HashMove.IsLegal = True
+
               'If Not MovePossible(HashMove) Then Stop
               Select Case HashMove.Piece
-              Case WPAWN
-                If .MoveTarget - .MoveFrom = 20 Then
-                  HashMove.EnPassant = 1
-                ElseIf Board(.MoveTarget) = BEP_PIECE Then
-                  HashMove.EnPassant = 3
-                  HashMove.Captured = BEP_PIECE
-                End If
-              Case BPAWN
-                If .MoveFrom - .MoveTarget = 20 Then
-                  HashMove.EnPassant = 2
-                ElseIf Board(.MoveTarget) = WEP_PIECE Then
-                  HashMove.EnPassant = 3
-                  HashMove.Captured = WEP_PIECE
-                End If
-              Case WKING
-                If .MoveFrom = SQ_E1 Then
-                  If .MoveTarget = SQ_G1 Then
-                    HashMove.Castle = WHITEOO
-                  ElseIf .MoveTarget = SQ_C1 Then
-                    HashMove.Castle = WHITEOOO
+                Case WPAWN
+                  If .MoveTarget - .MoveFrom = 20 Then
+                    HashMove.EnPassant = 1
+                  ElseIf Board(.MoveTarget) = BEP_PIECE Then
+                    HashMove.EnPassant = 3
+                    HashMove.Captured = BEP_PIECE
                   End If
-                End If
-              Case BKING
-                If .MoveFrom = SQ_E8 Then
-                  If .MoveTarget = SQ_G8 Then
-                    HashMove.Castle = BLACKOO
-                  ElseIf .MoveTarget = SQ_C8 Then
-                    HashMove.Castle = BLACKOOO
+                Case BPAWN
+                  If .MoveFrom - .MoveTarget = 20 Then
+                    HashMove.EnPassant = 2
+                  ElseIf Board(.MoveTarget) = WEP_PIECE Then
+                    HashMove.EnPassant = 3
+                    HashMove.Captured = WEP_PIECE
                   End If
-                End If
+                Case WKING
+                  If .MoveFrom = SQ_E1 Then
+                    If .MoveTarget = SQ_G1 Then
+                      HashMove.Castle = WHITEOO
+                    ElseIf .MoveTarget = SQ_C1 Then
+                      HashMove.Castle = WHITEOOO
+                    End If
+                  End If
+                Case BKING
+                  If .MoveFrom = SQ_E8 Then
+                    If .MoveTarget = SQ_G8 Then
+                      HashMove.Castle = BLACKOO
+                    ElseIf .MoveTarget = SQ_C8 Then
+                      HashMove.Castle = BLACKOOO
+                    End If
+                  End If
               End Select
+
             End If
-            
             EvalType = .EvalType: Eval = HashToScore(.Eval): StaticEval = .StaticEval
             HashDepth = .Depth
             .Generation = HashGeneration ' Update generation
@@ -319,9 +304,10 @@ Public Function IsInHashTable(HashKey As THashKey, _
           End If
         End If
       End With
+
     End If
   Next
-  
+
 End Function
 
 Public Function LimitDouble(ByVal d As Double) As Long
@@ -332,13 +318,12 @@ End Function
 
 Public Sub InitZobrist()
   Static bDone As Boolean
-  Dim p As Long, s As Long
-  
+  Dim p        As Long, s As Long
   If bDone Then Exit Sub
   bDone = True
   ZobristHash1 = 0: ZobristHash2 = 0
-
   Randomize 1001 ' init random generator with fix value
+
   For s = SQ_A1 To SQ_H8
     For p = 0 To 16
       ZobristTable(s, p) = CalcUniqueKey(): ZobristTable2(s, p) = CalcUniqueKey()
@@ -351,30 +336,27 @@ Public Sub InitZobrist()
 
   For s = 0 To 10 ' Material hash: Piece cnt
     For p = 0 To 12 ' Piece
-     MatZobristTable(s, p) = CalcUniqueKey()
+      MatZobristTable(s, p) = CalcUniqueKey()
     Next
   Next
+
 End Sub
 
 Public Function CalcMaterialKey() As Long
-  CalcMaterialKey = MatZobristTable(PieceCnt(WQUEEN), WQUEEN) Xor MatZobristTable(PieceCnt(BQUEEN), BQUEEN) Xor _
-                    MatZobristTable(PieceCnt(WROOK), WROOK) Xor MatZobristTable(PieceCnt(BROOK), BROOK) Xor _
-                    MatZobristTable(PieceCnt(WBISHOP), WBISHOP) Xor MatZobristTable(PieceCnt(BBISHOP), BBISHOP) Xor _
-                    MatZobristTable(PieceCnt(WKNIGHT), WKNIGHT) Xor MatZobristTable(PieceCnt(BKNIGHT), BKNIGHT) Xor _
-                    MatZobristTable(PieceCnt(WPAWN), WPAWN) Xor MatZobristTable(PieceCnt(BPAWN), BPAWN)
+  CalcMaterialKey = MatZobristTable(PieceCnt(WQUEEN), WQUEEN) Xor MatZobristTable(PieceCnt(BQUEEN), BQUEEN) Xor MatZobristTable(PieceCnt(WROOK), WROOK) Xor MatZobristTable(PieceCnt(BROOK), BROOK) Xor MatZobristTable(PieceCnt(WBISHOP), WBISHOP) Xor MatZobristTable(PieceCnt(BBISHOP), BBISHOP) Xor MatZobristTable(PieceCnt(WKNIGHT), WKNIGHT) Xor MatZobristTable(PieceCnt(BKNIGHT), BKNIGHT) Xor MatZobristTable(PieceCnt(WPAWN), WPAWN) Xor MatZobristTable(PieceCnt(BPAWN), BPAWN)
 End Function
-
 
 Private Function CalcUniqueKey() As Long
   Static KeyList((SQ_H8 + 1) * 17 * 2 + 8) As Long
-  Static ListCnt As Long
-  Dim l As Long, i As Long
-  
+  Static ListCnt                           As Long
+  Dim l                                    As Long, i As Long
 NextTry:
   l = 65536 * (Int(Rnd * 65536) - 32768) Or Int(Rnd * 65536)
+
   For i = 1 To ListCnt
     If KeyList(i) = l Then GoTo NextTry
   Next
+
   ListCnt = ListCnt + 1: KeyList(ListCnt) = l
   CalcUniqueKey = l
 End Function
@@ -409,9 +391,9 @@ Public Function HashKeyComputeMap() As Long
 End Function
 
 Public Sub SetHashToMove()
- If bWhiteToMove Then
-  ZobristHash1 = ZobristHash1 Xor HashWhiteToMove: ZobristHash2 = ZobristHash2 Xor HashWhiteToMove2
- End If
+  If bWhiteToMove Then
+    ZobristHash1 = ZobristHash1 Xor HashWhiteToMove: ZobristHash2 = ZobristHash2 Xor HashWhiteToMove2
+  End If
 End Sub
 
 Public Sub HashSetCastle()
@@ -442,24 +424,20 @@ Public Function HashToScore(ByVal Score As Long) As Long
 End Function
 
 Public Function HashUsagePerc() As String
-
   If HashSize = 0 Then
     HashUsagePerc = ""
   Else
-    HashUsagePerc = Format(HashUsage * 100& / HashSize, "0.0")
+    HashUsagePerc = Format$(HashUsage * 100& / HashSize, "0.0")
   End If
-
 End Function
 
 Public Function OpenHashMap(TotalSize As Long) As Long
   Set moHashMap = New clsHashMap
-  
- If ThreadNum = 0 Then
-   moHashMap.CreateMap "ChessbrainVBHash", TotalSize
- ElseIf ThreadNum > 0 Then
-   moHashMap.OpenMap "ChessbrainVBHash", TotalSize
- End If
-
+  If ThreadNum = 0 Then
+    moHashMap.CreateMap "ChessbrainVBHash", TotalSize
+  ElseIf ThreadNum > 0 Then
+    moHashMap.OpenMap "ChessbrainVBHash", TotalSize
+  End If
 End Function
 
 Public Function CloseHashMap() As Long
@@ -467,29 +445,26 @@ Public Function CloseHashMap() As Long
 End Function
  
 Public Function InsertIntoHashMap(HashKey As THashKey, _
-                                    ByVal Depth As Long, _
-                                    HashMove As TMOVE, _
-                                    ByVal EvalType As Long, _
-                                    ByVal Eval As Long, _
-                                    ByVal StaticEval As Long)
-                                    
+                                  ByVal Depth As Long, _
+                                  HashMove As TMOVE, _
+                                  ByVal EvalType As Long, _
+                                  ByVal Eval As Long, _
+                                  ByVal StaticEval As Long)
   Dim IndexKey As Long, TmpMove As TMOVE, i As Long, ReplaceIndex As Long, MaxReplaceValue As Long, ReplaceValue As Long, bPosFound As Boolean
-    
   Debug.Assert HashMove.From = 0 Or HashMove.Piece <> NO_PIECE
   Debug.Assert NoOfThreads > 1
-  
   If bTimeExit Then Exit Function ' score not exact
   TmpMove = HashMove ' Don't overwrite
   bHashUsed = True: bPosFound = False
   MaxReplaceValue = 9999
-  
   '--- Compute hash key
   ZobristHash1 = HashKey.HashKey1: ZobristHash2 = HashKey.Hashkey2
   IndexKey = HashKeyComputeMap() * HASH_CLUSTER
   ReplaceIndex = 0
   moHashMap.ReadMapHashCluster IndexKey, VarPtr(HashCluster(0)), HashClusterLen
-  
+
   For i = 0 To HASH_CLUSTER - 1
+
     With HashCluster(i)
       If .Position1 <> 0 Then
         ' Don't overwrite more valuable entry
@@ -512,10 +487,11 @@ Public Function InsertIntoHashMap(HashKey As THashKey, _
         If MaxReplaceValue > -9000 Then MaxReplaceValue = -9000: ReplaceIndex = IndexKey + i
       End If
     End With
+
   Next
-  
+
   If HashCluster(ReplaceIndex - IndexKey).Position1 = 0 And HashUsage < 2147483646 Then HashUsageMap = HashUsageMap + 1
-  
+
   With HashCluster(ReplaceIndex - IndexKey)
     '--- Save hash data, preserve hash move if no new move
     If Not bPosFound Or EvalType = TT_EXACT Or Depth > .Depth - 4 Or .Generation <> HashGeneration Then
@@ -526,38 +502,36 @@ Public Function InsertIntoHashMap(HashKey As THashKey, _
       .Generation = HashGeneration
       .IsChecking = TmpMove.IsChecking
       '.ThreadNum = GetMax(0, ThreadNum)
-      
       '--- Write Hash Map: replace index in Cluster only
       moHashMap.WriteMapHashEntry ReplaceIndex, VarPtr(HashCluster(ReplaceIndex - IndexKey))
       Debug.Assert .MoveFrom = 0 Or Board(.MoveFrom) <> NO_PIECE
     End If
   End With
-  
+
 End Function
 
 Public Function IsInHashMap(HashKey As THashKey, _
-                              ByRef HashDepth As Long, _
-                              HashMove As TMOVE, _
-                              ByRef EvalType As Long, _
-                              ByRef Eval As Long, _
-                              ByRef StaticEval As Long) As Boolean
+                            ByRef HashDepth As Long, _
+                            HashMove As TMOVE, _
+                            ByRef EvalType As Long, _
+                            ByRef Eval As Long, _
+                            ByRef StaticEval As Long) As Boolean
   Dim IndexKey As Long, i As Long
   Debug.Assert NoOfThreads > 1
-  
   IsInHashMap = False: HashMove = EmptyMove: EvalType = TT_NO_BOUND: Eval = UNKNOWN_SCORE: StaticEval = UNKNOWN_SCORE: HashDepth = -MAX_GAME_MOVES
   ZobristHash1 = HashKey.HashKey1: ZobristHash2 = HashKey.Hashkey2
   IndexKey = HashKeyComputeMap() * HASH_CLUSTER
   moHashMap.ReadMapHashCluster IndexKey, VarPtr(HashCluster(0)), HashClusterLen
-  
+
   For i = 0 To HASH_CLUSTER - 1
-   With HashCluster(i)
-    If .Position1 <> 0 And ZobristHash1 <> 0 Then
+
+    With HashCluster(i)
+      If .Position1 <> 0 And ZobristHash1 <> 0 Then
         If ZobristHash1 = .Position1 And ZobristHash2 = .Position2 Then
           If .Depth > HashDepth Then
             ' entry found
             IsInHashMap = True
             If InHashCnt < 2000000 Then InHashCnt = InHashCnt + 1
-            
             '--- Read hash data
             If .MoveFrom > 0 Then
               HashMove.From = .MoveFrom: HashMove.Target = .MoveTarget
@@ -566,41 +540,42 @@ Public Function IsInHashMap(HashKey As THashKey, _
               HashMove.Piece = Board(.MoveFrom): HashMove.CapturedNumber = Squares(.MoveTarget)
               Debug.Assert HashMove.Piece <> NO_PIECE
               HashMove.IsLegal = True
+
               'If Not MovePossible(HashMove) Then Stop
               Select Case HashMove.Piece
-              Case WPAWN
-                If .MoveTarget - .MoveFrom = 20 Then
-                  HashMove.EnPassant = 1
-                ElseIf Board(.MoveTarget) = BEP_PIECE Then
-                  HashMove.EnPassant = 3
-                  HashMove.Captured = BEP_PIECE
-                End If
-              Case BPAWN
-                If .MoveFrom - .MoveTarget = 20 Then
-                  HashMove.EnPassant = 2
-                ElseIf Board(.MoveTarget) = WEP_PIECE Then
-                  HashMove.EnPassant = 3
-                  HashMove.Captured = WEP_PIECE
-                End If
-              Case WKING
-                If .MoveFrom = SQ_E1 Then
-                  If .MoveTarget = SQ_G1 Then
-                    HashMove.Castle = WHITEOO
-                  ElseIf .MoveTarget = SQ_C1 Then
-                    HashMove.Castle = WHITEOOO
+                Case WPAWN
+                  If .MoveTarget - .MoveFrom = 20 Then
+                    HashMove.EnPassant = 1
+                  ElseIf Board(.MoveTarget) = BEP_PIECE Then
+                    HashMove.EnPassant = 3
+                    HashMove.Captured = BEP_PIECE
                   End If
-                End If
-              Case BKING
-                If .MoveFrom = SQ_E8 Then
-                  If .MoveTarget = SQ_G8 Then
-                    HashMove.Castle = BLACKOO
-                  ElseIf .MoveTarget = SQ_C8 Then
-                    HashMove.Castle = BLACKOOO
+                Case BPAWN
+                  If .MoveFrom - .MoveTarget = 20 Then
+                    HashMove.EnPassant = 2
+                  ElseIf Board(.MoveTarget) = WEP_PIECE Then
+                    HashMove.EnPassant = 3
+                    HashMove.Captured = WEP_PIECE
                   End If
-                End If
+                Case WKING
+                  If .MoveFrom = SQ_E1 Then
+                    If .MoveTarget = SQ_G1 Then
+                      HashMove.Castle = WHITEOO
+                    ElseIf .MoveTarget = SQ_C1 Then
+                      HashMove.Castle = WHITEOOO
+                    End If
+                  End If
+                Case BKING
+                  If .MoveFrom = SQ_E8 Then
+                    If .MoveTarget = SQ_G8 Then
+                      HashMove.Castle = BLACKOO
+                    ElseIf .MoveTarget = SQ_C8 Then
+                      HashMove.Castle = BLACKOOO
+                    End If
+                  End If
               End Select
+
             End If
-            
             EvalType = .EvalType: Eval = HashToScore(.Eval): StaticEval = .StaticEval
             HashDepth = .Depth
             .Generation = HashGeneration ' Update generation
@@ -610,23 +585,26 @@ Public Function IsInHashMap(HashKey As THashKey, _
         End If
       End If
     End With
+
   Next
+
 End Function
 
 Public Function InitThreads()
   Static bInitDone As Boolean
-  Dim i As Long
-  
+  Dim i            As Long
   #If VBA_MODE = 0 Then
     If Not bInitDone And NoOfThreads > 1 Then
       If CreateAppLockFile() Then ' Already started?
         If bThreadTrace Then WriteTrace "InitThreads: NoOfThreads=" & NoOfThreads
         MainThreadStatus = 0: WriteMainThreadStatus 0 ' idle
+
         For i = 2 To NoOfThreads
-         ' If False Then ' XXXBUGsearch SMP
-              Shell App.Path & "\ChessBrainVB.exe thread" & Trim$(CStr(i - 1)), vbMinimizedNoFocus
-         ' End If ' XXXBUGsearch SMP
+          ' If False Then ' XXXBUGsearch SMP
+          Shell App.Path & "\ChessBrainVB.exe thread" & Trim$(CStr(i - 1)), vbMinimizedNoFocus
+          ' End If ' XXXBUGsearch SMP
         Next
+
         Sleep 500
       End If
     End If
@@ -634,18 +612,13 @@ Public Function InitThreads()
   bInitDone = True
 End Function
 
-
 Public Function CreateAppLockFile() As Boolean
-' for main thread: create a locked file that gets unlocked when main thread end/crashed
-' this file is checked by the helper threads: if file is unlocked also exit helper threads
+  ' for main thread: create a locked file that gets unlocked when main thread end/crashed
+  ' this file is checked by the helper threads: if file is unlocked also exit helper threads
   Static lLOCK_FILEHANDLE As Long
-  
   #If VBA_MODE = 0 Then
-   
     Debug.Assert NoOfThreads > 1
-    
     lLOCK_FILEHANDLE = FreeFile()
-  
     On Error GoTo lblLockErr
     Open App.Path & "\CB_THREAD0.TXT" For Append Access Write Lock Write As #lLOCK_FILEHANDLE
     Print #lLOCK_FILEHANDLE, "Temporary lock file. Main thread started:" & Now()
@@ -658,10 +631,9 @@ lblLockErr:
 End Function
 
 Public Function CheckAppLockFile() As Boolean
-' this file is checked is used by the helper threads: returns true if file is unlocked > also exit helper threads
+  ' this file is checked is used by the helper threads: returns true if file is unlocked > also exit helper threads
   Dim lLOCK_FILEHANDLE2 As Long
   On Error GoTo lblErr
-  
   CheckAppLockFile = False
   #If VBA_MODE = 0 Then
     lLOCK_FILEHANDLE2 = FreeFile()
@@ -678,13 +650,13 @@ Public Sub CheckThreadTermination(ByVal bCheckAlways As Boolean)
   Debug.Assert NoOfThreads > 1
   If ThreadNum >= 1 Then
     If bCheckAlways Or (Nodes > LastThreadCheckNodesCnt + (GUICheckIntervalNodes * 50)) Then
-     LastThreadCheckNodesCnt = Nodes
-     If Not CheckAppLockFile() Then
-       '>>> END of program here because main thread was terminated
-       CloseHashMap
-      WriteTrace "!!! Main Thread terminated: Stop helper thread! " & Now()
-       End '<<<<
-     End If
+      LastThreadCheckNodesCnt = Nodes
+      If Not CheckAppLockFile() Then
+        '>>> END of program here because main thread was terminated
+        CloseHashMap
+        WriteTrace "!!! Main Thread terminated: Stop helper thread! " & Now()
+        End '<<<<
+      End If
     End If
   End If
 End Sub
@@ -696,7 +668,7 @@ Public Function WriteMainThreadStatus(ByVal ilNewThreadStatus As Long) As Long
 End Function
 
 Public Function ReadMainThreadStatus() As Long
-  Static LastRead As Long
+  Static LastRead      As Long
   Dim MainThreadStatus As Long
   Debug.Assert NoOfThreads > 1
   moHashMap.ReadMapPos HashMapThreadStatusPtr(0), VarPtr(MainThreadStatus), CLng(LenB(MainThreadStatus))
@@ -706,7 +678,8 @@ Public Function ReadMainThreadStatus() As Long
   LastRead = ReadMainThreadStatus
 End Function
 
-Public Function WriteHelperThreadStatus(ByVal ilThreadNum As Long, ByVal ilNewThreadStatus As Long) As Long
+Public Function WriteHelperThreadStatus(ByVal ilThreadNum As Long, _
+                                        ByVal ilNewThreadStatus As Long) As Long
   ' Write run status for current thread
   Debug.Assert NoOfThreads > 1 And ilThreadNum > 0
   SingleThreadStatus(ilThreadNum) = ilNewThreadStatus
@@ -731,9 +704,7 @@ Public Function WriteMapGameData() As Long
   moHashMap.WriteMapPos HashMapGameMovesCntPtr, VarPtr(GameMovesCnt), CLng(LenB(GameMovesCnt))
   moHashMap.WriteMapPos HashMapGameMovesPtr, VarPtr(arGameMoves(0)), CLng(LenB(arGameMoves(0)) * MAX_GAME_MOVES)
   moHashMap.WriteMapPos HashMapGamePosHashPtr, VarPtr(GamePosHash(0)), CLng(LenB(GamePosHash(0)) * MAX_GAME_MOVES)
-  
 End Function
-
 
 Public Function ReadMapGameData() As Long
   ' Read game moves to map for other threads
@@ -751,20 +722,24 @@ End Function
 Public Function ClearMapBestPVforThread() As Long
   Dim th As Long
   Erase BestPV()
+
   For th = 0 To MAX_THREADS - 1
     moHashMap.WriteMapPos HashMapBestPVPtr(th), VarPtr(BestPV(0)), CLng(LenB(BestPV(0)) * 10)
   Next
+
 End Function
 
-Public Function WriteMapBestPVforThread(ByVal CompletedDepth As Long, ByVal BestScore As Long, BestMove As TMOVE) As Long
+Public Function WriteMapBestPVforThread(ByVal CompletedDepth As Long, _
+                                        ByVal BestScore As Long, _
+                                        BestMove As TMOVE) As Long
   ' Write PV from helper thread for main thread
   Dim i As Long
   Debug.Assert NoOfThreads > 1
   Debug.Assert HashMapBestPVPtr(ThreadNum) + CLng(LenB(PV(0, 0)) * 10) < HashMapBoardPtr
-  
   ' Use PV0 to store some values... not nice...
   Erase BestPV
   If CompletedDepth > 0 Then
+
     For i = 0 To GetMin(9, PVLength(1)): BestPV(i) = PV(1, i): Next
     If BestPV(1).From = 0 Then
       ' use BestMove instead
@@ -776,7 +751,12 @@ Public Function WriteMapBestPVforThread(ByVal CompletedDepth As Long, ByVal Best
   moHashMap.WriteMapPos HashMapBestPVPtr(ThreadNum), VarPtr(BestPV(0)), CLng(LenB(BestPV(0)) * 10)
 End Function
 
-Public Function ReadMapBestPVforThread(ByVal SelThread As Long, ByRef CompletedDepth As Long, ByRef BestScore As Long, ByRef BestPVLength As Long, ByRef HelperNodes As Long, BestPV() As TMOVE) As Boolean
+Public Function ReadMapBestPVforThread(ByVal SelThread As Long, _
+                                       ByRef CompletedDepth As Long, _
+                                       ByRef BestScore As Long, _
+                                       ByRef BestPVLength As Long, _
+                                       ByRef HelperNodes As Long, _
+                                       BestPV() As TMOVE) As Boolean
   ' Write PV from helper thread for main thread
   Debug.Assert NoOfThreads > 1
   Debug.Assert HashMapBestPVPtr(SelThread) + CLng(LenB(BestPV(0)) * 10) < HashMapBoardPtr
@@ -793,8 +773,8 @@ Public Function ReadMapBestPVforThread(ByVal SelThread As Long, ByRef CompletedD
 End Function
 
 Public Function SetThreads(ByVal iMaxThreads As Long)
- ' set thread numbers: 1-4
-  NoOfThreads = GetMax(1, "0" & Val(Trim(ReadINISetting("THREADS", "1"))))
+  ' set thread numbers: 1-4
+  NoOfThreads = GetMax(1, "0" & Val(Trim$(ReadINISetting("THREADS", "1"))))
   NoOfThreads = GetMax(NoOfThreads, iMaxThreads)
   NoOfThreads = GetMin(NoOfThreads, MAX_THREADS)
   If NoOfThreads <= 1 Then
@@ -813,20 +793,24 @@ End Function
 Public Function SaveMaterialHash(ByVal Key As Long, ByVal Score As Long)
   Dim Index As Long
   Index = MaterialHashCompute(Key)
+
   With MaterialHash(Index)
     .HashKey = Key
     .Score = Score
   End With
+
 End Function
 
 Public Function ProbeMaterialHash(ByVal Key As Long) As Long
   Dim Index As Long
   Index = MaterialHashCompute(Key)
+
   With MaterialHash(Index)
-    If .HashKey = Key Then ProbeMaterialHash = .Score Else ProbeMaterialHash = UNKNOWN_SCORE
+    If .HashKey = Key Then
+      ProbeMaterialHash = .Score
+    Else
+      ProbeMaterialHash = UNKNOWN_SCORE
+    End If
   End With
+
 End Function
-
-
-
-

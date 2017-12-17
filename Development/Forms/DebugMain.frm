@@ -12,7 +12,6 @@ Begin VB.Form frmDebugMain
    StartUpPosition =   2  'CenterScreen
    Begin VB.CommandButton cmdFakeInput 
       Caption         =   "Send"
-      Default         =   -1  'True
       Height          =   330
       Left            =   9000
       TabIndex        =   1
@@ -68,27 +67,36 @@ Attribute VB_Exposed = False
 '= frmDebugMain:
 '= debug form
 '==================================================
-
 Option Explicit
 
-Private Sub cmdFakeInput_Click()
 
+Private Sub cboFakeInput_KeyPress(KeyAscii As Integer)
+  If KeyAscii = 13 Then cmdFakeInput_Click
+End Sub
+
+Private Sub cmdFakeInput_Click()
   FakeInput = cboFakeInput.Text & vbLf
   FakeInputState = True
   cboFakeInput.SelStart = 0
   cboFakeInput.SelLength = Len(cboFakeInput.Text)
   cboFakeInput.SetFocus
-
 End Sub
-Private Sub Form_Load()
 
+Private Sub cmdWb_Click()
+  bPostMode = True
+  ParseCommand "setboard r1b2rk1/pp1n2pp/2p1p3/2Pp4/1q1Pp3/4P1PN/PP2QPBP/2R2RK1 w - - 0 15" & vbLf
+  ParseCommand "sd 10" & vbLf
+  ParseCommand "go" & vbLf
+  
+End Sub
+
+Private Sub Form_Load()
   'txtIO = "* STDIN HANDLE: " & hStdIn & vbTab & "STDOUT HANDLE: " & hStdOut & " *" & vbCrLf
   txtIO = ""
   cboFakeInput = "bench 8"
   cboFakeInput.AddItem "analyze"
   cboFakeInput.AddItem "eval"  ' input in Immediate window and Tracexxx.txt
   cboFakeInput.AddItem "bench 6"
-
   cboFakeInput.AddItem "writeepd"
   cboFakeInput.AddItem "display"
   cboFakeInput.AddItem "list"
@@ -104,23 +112,19 @@ Private Sub Form_Load()
   cboFakeInput.AddItem "xboard" & vbLf & "new" & vbLf & "random" & vbLf & "sd 4" & vbLf & "post"
   cboFakeInput.AddItem "time 30000" & vbLf & "otim 30000" & vbLf & "e2e4"
   cboFakeInput.AddItem "force" & vbLf & "quit"
-
   cboFakeInput.AddItem "setboard rnbqkbnr/ppp2ppp/4p3/3pP3/3P4/8/PPP2PPP/RNBQKBNR b KQkq -"
   cboFakeInput.AddItem "setboard 8/p1b1k1p1/Pp4p1/1Pp2pPp/2P2P1P/3B1K2/8/8 w - -"
   cboFakeInput.AddItem "setboard 8/2R5/1r3kp1/2p4p/2P2P2/p3K1P1/P6P/8 w - -"
   cboFakeInput.AddItem "setboard 7k/p7/6K1/5Q2/8/8/8/8 w - -"
-
   cboFakeInput.AddItem "debug1"
+  DebugMode = True
 End Sub
 
 Private Sub Form_QueryUnload(Cancel As Integer, UnloadMode As Integer)
-
   ExitProgram
-
 End Sub
 
 Private Sub Form_Resize()
-
   On Local Error Resume Next
 
   With txtIO
@@ -130,6 +134,4 @@ Private Sub Form_Resize()
   cboFakeInput.Width = txtIO.Width - cmdFakeInput.Width - 100
   cmdFakeInput.Left = cboFakeInput.Left + cboFakeInput.Width + 100
   On Local Error GoTo 0
-
 End Sub
-

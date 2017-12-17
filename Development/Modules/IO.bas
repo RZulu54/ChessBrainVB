@@ -4,13 +4,9 @@ Attribute VB_Name = "IObas"
 '= Winboard communication / output of think results
 '==================================================
 Option Explicit
-
-
 '--- Win32 API functions
 Declare Function GetStdHandle Lib "kernel32" (ByVal nStdHandle As Long) As Long
-
 Declare Function CloseHandle Lib "kernel32" (ByVal hObject As Long) As Long
-
 Declare Function PeekNamedPipe _
         Lib "kernel32" (ByVal hNamedPipe As Long, _
                         lpBuffer As Any, _
@@ -18,23 +14,19 @@ Declare Function PeekNamedPipe _
                         lpBytesRead As Long, _
                         lpTotalBytesAvail As Long, _
                         lpBytesLeftThisMessage As Long) As Long
-                        
 Declare Function ReadFile _
         Lib "kernel32" (ByVal hFile As Long, _
                         lpBuffer As Any, _
                         ByVal nNumberOfBytesToRead As Long, _
                         lpNumberOfBytesRead As Long, _
                         lpOverlapped As Any) As Long
-                        
 Declare Function WriteFile _
         Lib "kernel32" (ByVal hFile As Long, _
                         ByVal lpBuffer As String, _
                         ByVal nNumberOfBytesToWrite As Long, _
                         lpNumberOfBytesWritten As Long, _
                         lpOverlapped As Any) As Long
-                        
 Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
-
 Declare Function GetPrivateProfileString _
         Lib "kernel32" _
         Alias "GetPrivateProfileStringA" (ByVal lpApplicationName As String, _
@@ -49,43 +41,44 @@ Declare Function WritePrivateProfileString _
                                             ByVal lpKeyName As Any, _
                                             ByVal lpString As Any, _
                                             ByVal lpFileName As String) As Long
-
-Public Declare Sub ZeroMemory2 Lib "kernel32.dll" Alias "RtlZeroMemory" (Destination As Any, ByVal Length As Long)
-
-            
+Public Declare Sub ZeroMemory2 _
+               Lib "kernel32.dll" _
+               Alias "RtlZeroMemory" (Destination As Any, _
+                                      ByVal Length As Long)
 Public hStdIn  As Long   ' Handle Standard Input
 Public hStdOut As Long   ' Handle Standard Output
 Public Const STD_INPUT_HANDLE = -10&
 Public Const STD_OUTPUT_HANDLE = -11&
-
-Public psEnginePath    As String   ' path of engine directory (init different VB6 / Office)
-Public psDocumentPath  As String   ' path of office document
-Public pbIsOfficeMode  As Boolean
-Public plLastPostNodes As Long ' to avoid duplicate outputs
-
-Public TableBasesRootEnabled As Boolean
-Public TableBasesSearchEnabled As Boolean
-Public LastTbProbeTime As Date
-Public Const TB_MAX_PIECES = 5
-Private oProxy As Object ' for tablebases
-Private bTbBaseTrace As Boolean
-
+Public psEnginePath            As String   ' path of engine directory (init different VB6 / Office)
+Public psDocumentPath          As String   ' path of office document
+Public pbIsOfficeMode          As Boolean
+Public plLastPostNodes         As Long ' to avoid duplicate outputs
+Public EGTBasesEnabled         As Boolean
+Public EGTBasesMaxPieces       As Long  ' 3,4,5,6 piece set
+Public EGTBasesMaxPly          As Long ' max ply using EGTB in search
+Public EGTBasesPath            As String  ' SYZYGY EGTB files path
+Private oProxy                 As Object ' for online tablebases
+Public bEGTbBaseTrace          As Boolean
+Public EGTBasesHitsCnt         As Long ' count for GUI output
+Public EGTBRootProbeDone       As Boolean
+Public EGTBRootResultScore     As Long
+Public EGTBBestMoveStr         As String, EGTBBestMoveListStr As String
+Public EGTBMoveListCnt(MAX_PV) As Long, EGTBMoveList(MAX_PV, 199) As String
+Public UCISyzygyPath           As String
+Public UCISyzygyMaxPieceSet    As Long
+Public UCISyzygyMaxPly         As Long
 '---------------------------------
 ' Log file
 '---------------------------------
-Public bLogPV          As Boolean  ' log PV in post mode
-Public bLogMode        As Boolean
-Public LogFile         As Long
-
-Public LastFullPV As String
-
-Private LanguageENArr(200) As String
-Private LanguageArr(200) As String
-Public LangCnt As Long
-
+Public bLogPV                  As Boolean  ' log PV in post mode
+Public bLogMode                As Boolean
+Public LogFile                 As Long
+Public LastFullPV              As String
+Private LanguageENArr(200)     As String
+Private LanguageArr(200)       As String
+Public LangCnt                 As Long
 
 '---------------------------------------------------------------------------
-
 Public Sub OpenCommHandles()
   ' Open IO channels to Winboard
   hStdIn = GetStdHandle(STD_INPUT_HANDLE)
@@ -96,6 +89,16 @@ Public Sub CloseCommChannels()
   ' Close IO channels to Winboard
   CloseHandle hStdIn
   CloseHandle hStdOut
+  If EGTBasesEnabled And Not DebugMode Then
+    ' wait to avoid windows error when programs exits in AREAN after tablesbase access  in Win7 ( ok for Win10)
+    Dim i As Long
+
+    For i = 1 To 15
+      Sleep 500
+      DoEvents
+    Next
+
+  End If
 End Sub
 
 '---------------------------------------------------------------------------
@@ -104,42 +107,41 @@ End Sub
 ' returns TRUE if data found
 '---------------------------------------------------------------------------
 Function PollCommand() As Boolean
+  If ThreadNum <= 0 Then
+    #If DEBUG_MODE <> 0 Then
+      ' from Debug form
+      PollCommand = FakeInputState
+    #Else
+      ' winboard input
+      Dim sBuff       As String
+      Dim lBytesRead  As Long
+      Dim lTotalBytes As Long
+      Dim lAvailBytes As Long
+      Dim rc          As Long
+      sBuff = String(2048, Chr$(0))
+      rc = PeekNamedPipe(hStdIn, ByVal sBuff, 2048, lBytesRead, lTotalBytes, lAvailBytes)
+      PollCommand = CBool(rc And lBytesRead > 0)
+    #End If
+  Else
+    '--- Multi-thread mode: helper threads get commands from main thread
+    MainThreadStatus = ReadMainThreadStatus()
 
-If ThreadNum <= 0 Then
-  #If DEBUG_MODE <> 0 Then
-    ' from Debug form
-    PollCommand = FakeInputState
-  #Else
-    ' winboard input
-    Dim sBuff       As String
-    Dim lBytesRead  As Long
-    Dim lTotalBytes As Long
-    Dim lAvailBytes As Long
-    Dim rc          As Long
-    
-    sBuff = String(2048, Chr$(0))
-    rc = PeekNamedPipe(hStdIn, ByVal sBuff, 2048, lBytesRead, lTotalBytes, lAvailBytes)
-    
-    PollCommand = CBool(rc And lBytesRead > 0)
-  #End If
-Else
-  '--- Multi-thread mode: helper threads get commands from main thread
-  MainThreadStatus = ReadMainThreadStatus()
-  'If bThreadTrace Then WriteTrace "PollCommand: ThreadStatusCheck:" & MainThreadStatus & " " & LastThreadStatus & " / " & Now()
-  Select Case MainThreadStatus
-  Case 1
-    If LastThreadStatus <> MainThreadStatus Then
-      ThreadCommand = "go" & vbLf: PollCommand = True
-      WriteTrace "PollCommand: MainThreadStatus = 1" & " / " & Now()
-    End If
-  Case 0
-   If LastThreadStatus <> MainThreadStatus Then
-     ThreadCommand = "exit" & vbLf: PollCommand = True: bTimeExit = True
-     WriteTrace "PollCommand: MainThreadStatus = 0" & " / " & Now()
-   End If
-  End Select
-  LastThreadStatus = MainThreadStatus
-End If
+    'If bThreadTrace Then WriteTrace "PollCommand: ThreadStatusCheck:" & MainThreadStatus & " " & LastThreadStatus & " / " & Now()
+    Select Case MainThreadStatus
+      Case 1
+        If LastThreadStatus <> MainThreadStatus Then
+          ThreadCommand = "go" & vbLf: PollCommand = True
+          WriteTrace "PollCommand: MainThreadStatus = 1" & " / " & Now()
+        End If
+      Case 0
+        If LastThreadStatus <> MainThreadStatus Then
+          ThreadCommand = "exit" & vbLf: PollCommand = True: bTimeExit = True
+          WriteTrace "PollCommand: MainThreadStatus = 0" & " / " & Now()
+        End If
+    End Select
+
+    LastThreadStatus = MainThreadStatus
+  End If
 End Function
 
 '---------------------------------------------------------------------------
@@ -147,12 +149,11 @@ End Function
 '---------------------------------------------------------------------------
 Function ReadCommand() As String
   If ThreadNum > 0 Then
-     If bThreadTrace Then WriteTrace "ReadCommand: ThreadCommand = " & ThreadCommand & " / " & Now()
-     ReadCommand = ThreadCommand
-     ThreadCommand = ""
-     Exit Function
+    If bThreadTrace Then WriteTrace "ReadCommand: ThreadCommand = " & ThreadCommand & " / " & Now()
+    ReadCommand = ThreadCommand
+    ThreadCommand = ""
+    Exit Function
   End If
-  
   #If DEBUG_MODE <> 0 Then
     ReadCommand = FakeInput ' from Debug form
     FakeInputState = False
@@ -161,12 +162,10 @@ Function ReadCommand() As String
     Dim sBuff      As String
     Dim lBytesRead As Long
     Dim rc         As Long
-    
-    sBuff = String(2048, Chr$(0))
+    sBuff = String$(2048, Chr$(0))
     rc = ReadFile(hStdIn, ByVal sBuff, 2048, lBytesRead, ByVal 0&)
     ReadCommand = Left$(sBuff, lBytesRead)
   #End If
-
 End Function
 
 '---------------------------------------------------------------------------
@@ -174,8 +173,8 @@ End Function
 '
 '---------------------------------------------------------------------------
 Function SendCommand(ByVal sCommand As String) As String
-
   #If VBA_MODE = 1 Then
+
     ' OFFICE VBA
     With frmChessX
       If .txtIO.Visible Then
@@ -187,9 +186,10 @@ Function SendCommand(ByVal sCommand As String) As String
         DoEvents
       End If
     End With
-  #End If
 
+  #End If
   #If DEBUG_MODE <> 0 Then
+
     ' VB DEBUG FORM
     With frmDebugMain
       If Len(.txtIO) > 32000 Then .txtIO = ""
@@ -198,23 +198,18 @@ Function SendCommand(ByVal sCommand As String) As String
       .txtIO.SelLength = 0
       .Refresh
     End With
-  #End If
 
+  #End If
   #If DEBUG_MODE = 0 And VBA_MODE = 0 Then
     ' WINBOARD STDOUT channel
     Dim lBytesWritten As Long
     Dim lBytes        As Long
     Dim rc            As Long
-    
     sCommand = vbLf & sCommand & vbLf
-    
     lBytes = Len(sCommand)
-    
     rc = WriteFile(hStdOut, ByVal sCommand, lBytes, lBytesWritten, ByVal 0&)
   #End If
-
   SendCommand = sCommand
-
 End Function
 
 Public Sub WriteGame(sFile As String)
@@ -229,20 +224,17 @@ Public Sub WriteGame(sFile As String)
   '[Black "Spassky, Boris V."]
   '[Result "1/2-1/2"]
   ' 1. e4 d5 2. d4 dxe4 3. Nf3
-
   Dim i As Long, h As Long, s As String, MoveCnt As Long, Cnt As Long
   Cnt = GameMovesCnt
-
   If Cnt = 0 Then Exit Sub
   s = "": MoveCnt = 0
 
   For i = 1 To Cnt Step 2
     MoveCnt = MoveCnt + 1
     s = s & CStr(MoveCnt) & ". " & CompToCoord(arGameMoves(i))
-
     If i + 1 <= Cnt Then s = s & " " & CompToCoord(arGameMoves(i + 1)) & " "
   Next i
- 
+
   If s <> "" Then
     h = FreeFile()
     Open sFile For Append Lock Write As #h
@@ -250,28 +242,23 @@ Public Sub WriteGame(sFile As String)
     Print #h, "[White " & Chr$(34) & "?" & Chr$(34) & "]"
     Print #h, "[Black " & Chr$(34) & "?" & Chr$(34) & "]"
     Print #h, "[Result " & Chr$(34) & "?" & Chr$(34) & "]"
-  
     Print #h, s
     Close #h
   End If
-
 End Sub
 
 Public Sub ReadGame(sFile As String)
   ' Read PGN File
   Dim h            As Long, s As String, m As Long, sInp As String, m1 As String, m2 As String
   Dim asMoveList() As String
- 
   InitGame
   bForceMode = True
- 
   h = 10 'FreeFile()
   Open sFile For Input As #h
 
   Do Until EOF(h)
     Line Input #h, sInp
     sInp = Trim(sInp) & "  "
-
     If Left(sInp, 1) <> "[" Then '--- Ignore Header Tags
       asMoveList = Split(sInp, ".") ' split at move number dot
 
@@ -281,30 +268,25 @@ Public Sub ReadGame(sFile As String)
         s = Replace(s, "x", "")
         s = Replace(s, "+", "")
         s = Left(s, 10)
-        
         If Left(s, 1) = " " Then ' behind move number
           s = Trim(s)
           'Debug.Print s
           m1 = Trim(Left(s, 4))
-
           If Len(m1) = 4 Then
             'Debug.Print m1, asMoveList(m)
             ParseCommand m1 & vbLf
           End If
-
           If Len(s) > 8 Then
-            m2 = Trim(Mid(s, 6, 4))
+            m2 = Trim$(Mid(s, 6, 4))
             If Len(m2) >= 4 Then
-            'Debug.Print m2, asMoveList(m)
+              'Debug.Print m2, asMoveList(m)
               ParseCommand m2 & vbLf
             End If
           End If
         End If
-
       Next
 
     End If
-
   Loop
 
   Close #h
@@ -312,45 +294,53 @@ End Sub
 
 Public Sub SendThinkInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Long)
   Static FinalMoveForHint As TMOVE
-  Dim sPost               As String, j As Long, sPostPV As String
- 
+  Dim sPost               As String, j As Long, sPostPV As String, EGTBScaledScore As Long
+  'EGTBScaledScore = ScaleScoreByEGTB(CurrentScore)
+  EGTBScaledScore = CurrentScore
   If pbIsOfficeMode Then
     '--- MS OFFICE
-    sPost = " " & Translate("Depth") & ":" & ActDepth & "/" & MaxPly & " " & Translate("Score") & ":" & FormatScore(EvalSFTo100(CurrentScore)) & " " & Translate("Nodes") & ":" & Format("0.000", Nodes) & " " & Translate("Sec") & ":" & Format(Elapsed, "0.00")
-
+    sPost = " " & Translate("Depth") & ":" & ActDepth & "/" & MaxPly & " " & Translate("Score") & ":" & FormatScore(EvalSFTo100(EGTBScaledScore)) & " " & Translate("Nodes") & ":" & Format("0.000", Nodes) & " " & Translate("Sec") & ":" & Format(Elapsed, "0.00")
     If plLastPostNodes <> Nodes Then
       SendCommand sPost
       plLastPostNodes = Nodes
-                    
       sPostPV = "      >" & Translate("Line") & ": "
 
       For j = 1 To PVLength(1) - 1
         sPostPV = sPostPV & " " & MoveText(PV(1, j))
-
         ' Save Hint move
         If j = 1 And Not MovesEqual(FinalMoveForHint, PV(1, 1)) Then HintMove = EmptyMove ' for case that 1. ply as hash move only
         If j = 2 Then
           If PV(1, j).From > 0 Then HintMove = PV(1, j): FinalMoveForHint = PV(1, 1)
         End If
-
       Next
 
       SendCommand sPostPV
-      
-      ShowMoveInfo MoveText(FinalMove), ActDepth, MaxPly, EvalSFTo100(CurrentScore), Elapsed
+      ShowMoveInfo MoveText(FinalMove), ActDepth, MaxPly, EvalSFTo100(EGTBScaledScore), Elapsed
     End If
-
   Else
- 
     '--- VB6
-    sPost = ActDepth & " " & EvalSFTo100(CurrentScore) & " " & (Int(Elapsed) * 100) & " " & Nodes
+    If UCIMode Then
+      ' format: info depth 1 seldepth 1 multipv 1 score cp 417 nodes 51 nps 25500 tbhits 0 time 2 pv e8g8
+      Dim UciScore As String
+      If CurrentScore <= -MATE_IN_MAX_PLY Then
+        UciScore = "mate -" & (1 + (MATE0 - Abs(CurrentScore)) \ 2)
+      ElseIf CurrentScore >= MATE_IN_MAX_PLY Then
+        UciScore = "mate " & (1 + (MATE0 - CurrentScore) \ 2)
+      Else
+        UciScore = "cp " & EvalSFTo100(EGTBScaledScore)
+      End If
+      sPost = "info depth " & ActDepth & " seldepth " & MaxPly & " multipv 1 score " & UciScore & " nodes " & Nodes & " nps " & CalcNPS(Elapsed) & " tbhits " & EGTBasesHitsCnt & " time " & Int(Elapsed * 1000#) & " pv"
+    Else
+      sPost = ActDepth & " " & EvalSFTo100(EGTBScaledScore) & " " & (Int(Elapsed) * 100) & " " & Nodes
+    End If
     sPostPV = ""
 
     For j = 1 To PVLength(1)
       If PV(1, j).From <> 0 Then sPostPV = sPostPV & " " & MoveText(PV(1, j))
     Next
+
     If Len(Trim(sPostPV)) > 8 Then
-        LastFullPV = sPostPV
+      LastFullPV = sPostPV
     Else
       If Left(Trim(sPostPV), 5) = Left(Trim(LastFullPV), 5) Then
         If Len(Trim(sPostPV)) < Len(Trim(LastFullPV)) Then
@@ -358,44 +348,57 @@ Public Sub SendThinkInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Lo
         End If
       End If
     End If
-    
-    sPost = sPost & sPostPV & " (" & MaxPly & "/" & HashUsagePerc & ")"
+    sPost = sPost & sPostPV
+    If Not UCIMode Then sPost = sPost & "(" & MaxPly & "/" & HashUsagePerc & ")"
     If Not GotExitCommand() Then
       SendCommand sPost
     End If
   End If
- 
 End Sub
 
 Public Sub SendRootInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Long)
-  Dim sPost As String, j As Long, sPV As String
- 
+  Dim sPost As String, j As Long, sPV As String, EGTBScaledScore As String
+  'EGTBScaledScore = ScaleScoreByEGTB(CurrentScore)
+  EGTBScaledScore = CurrentScore
   If pbIsOfficeMode Then
     '--- MS OFFICE
-    sPost = " " & Translate("Depth") & ":" & ActDepth & "/" & MaxPly & " " & Translate("Score") & ":" & FormatScore(EvalSFTo100(CurrentScore)) & " " & Translate("Nodes") & ":" & Format("0.000", Nodes) & " " & Translate("Sec") & ":" & Format(Elapsed, "0.00")
-    
+    sPost = " " & Translate("Depth") & ":" & ActDepth & "/" & MaxPly & " " & Translate("Score") & ":" & FormatScore(EvalSFTo100(EGTBScaledScore)) & " " & Translate("Nodes") & ":" & Format("0.000", Nodes) & " " & Translate("Sec") & ":" & Format(Elapsed, "0.00")
     If plLastPostNodes <> Nodes Or Nodes = 0 Then
       SendCommand sPost
       plLastPostNodes = Nodes
-      
       sPost = "      >Line: "
+
       For j = 1 To PVLength(1) - 1
         sPost = sPost & " " & MoveText(PV(1, j))
       Next
+
       SendCommand sPost
-      
-      ShowMoveInfo MoveText(FinalMove), ActDepth, MaxPly, EvalSFTo100(CurrentScore), Elapsed
+      ShowMoveInfo MoveText(FinalMove), ActDepth, MaxPly, EvalSFTo100(EGTBScaledScore), Elapsed
     End If
   Else
     ' VB6
-    sPost = ActDepth & " " & EvalSFTo100(CurrentScore) & " " & (Int(Elapsed) * 100) & " " & Nodes
+    If UCIMode Then
+      Dim UciScore As String
+      If CurrentScore <= -MATE_IN_MAX_PLY Then
+        UciScore = "mate -" & (1 + (MATE0 - Abs(CurrentScore)) \ 2)
+      ElseIf CurrentScore >= MATE_IN_MAX_PLY Then
+        UciScore = "mate " & (1 + (MATE0 - CurrentScore) \ 2)
+      Else
+        UciScore = "cp " & EvalSFTo100(EGTBScaledScore)
+      End If
+      ' format: info depth 1 seldepth 1 multipv 1 score cp 417 nodes 51 nps 25500 tbhits 0 time 2 pv e8g8
+      sPost = "info depth " & ActDepth & " seldepth " & MaxPly & " multipv 1 score " & UciScore & " nodes " & Nodes & " nps " & CalcNPS(Elapsed) & " tbhits " & EGTBasesHitsCnt & " time " & Int(Elapsed * 1000#) & " pv"
+    Else
+      sPost = ActDepth & " " & EvalSFTo100(EGTBScaledScore) & " " & (Int(Elapsed) * 100) & " " & Nodes
+    End If
     sPV = ""
+
     For j = 1 To PVLength(1) - 1
-       If PV(1, j).From <> 0 Then sPV = sPV & " " & MoveText(PV(1, j))
+      If PV(1, j).From <> 0 Then sPV = sPV & " " & MoveText(PV(1, j))
     Next
-    
+
     If Len(Trim(sPV)) > 8 Then
-        LastFullPV = sPV
+      LastFullPV = sPV
     Else
       If Trim(Left(sPV, 5)) = Trim(Left(LastFullPV, 5)) Then
         sPV = LastFullPV
@@ -406,12 +409,11 @@ Public Sub SendRootInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Lon
       SendCommand sPost
     End If
   End If
-
   If bWinboardTrace Then If bLogPV Then LogWrite Space(6) & sPost
 End Sub
 
 Public Function GotExitCommand() As Boolean
- Dim sInput As String
+  Dim sInput As String
   GotExitCommand = False
   If PollCommand Then
     sInput = ReadCommand
@@ -458,34 +460,25 @@ Public Sub WriteTrace(s As String)
     Else
       Open psEnginePath & "\Trace_" & Format(Date, "YYMMDD") & "_T" & Trim(CStr(GetMax(0, ThreadNum))) & ".txt" For Append Lock Write As #h
     End If
-          
     Print #h, s
     Close #h
   End If
- 
   If pbIsOfficeMode Then SendCommand s
- 
 End Sub
-
 
 '---------------------------------------------------------------------------
 'ReadINISetting: Read values form INI file
 '---------------------------------------------------------------------------
 Function ReadINISetting(ByVal sSetting As String, ByVal sDefault As String) As String
-
   Dim sBuffer    As String
   Dim lBufferLen As Long
-
   sBuffer = Space(260)
-
   lBufferLen = GetPrivateProfileString("Engine", sSetting, sDefault, sBuffer, 260, psEnginePath & "\" & INI_FILE)
- 
   If lBufferLen > 0 Then
     ReadINISetting = Left$(sBuffer, lBufferLen)
   Else
     'LogWrite "Error retrieving setting: " & sSetting, True, True
   End If
-
 End Function
 
 '---------------------------------------------------------------------------
@@ -493,36 +486,28 @@ End Function
 '---------------------------------------------------------------------------
 Function WriteINISetting(ByVal sSetting As String, ByVal sValue As String) As Boolean
   Dim lBufferLen As Long
-
   lBufferLen = WritePrivateProfileString("Engine", sSetting, sValue, psEnginePath & "\" & INI_FILE)
- 
   If lBufferLen > 0 Then
     WriteINISetting = True
   Else
     LogWrite "Error writing setting: " & sSetting & "=" & sValue, True
     WriteINISetting = False
   End If
-
 End Function
 
 '---------------------------------------------------------------------------
 'LogWrite: Write log file
 'bTime adds the time
 '---------------------------------------------------------------------------
-Public Sub LogWrite(sLogString As String, _
-                    Optional ByVal bTime As Boolean)
-
+Public Sub LogWrite(sLogString As String, Optional ByVal bTime As Boolean)
   Dim sStr As String
   LogFile = FreeFile
   sStr = sLogString
-
   If bTime Then sStr = Now & " - " & sStr
-
   Open psEnginePath & "\" & LCase(psAppName) & ".log" For Append Lock Write As #LogFile
   Print #LogFile, sStr
   'Debug.Print sStr
   Close #LogFile
-
 End Sub
 
 Public Sub ShowMoveInfo(ByVal sMove As String, _
@@ -531,6 +516,7 @@ Public Sub ShowMoveInfo(ByVal sMove As String, _
                         ByVal lScore As Long, _
                         ByVal lTime As Single)
   #If VBA_MODE Then
+
     With frmChessX
       If InStr(sMove, "x") = 0 Then
         .lblMove = Translate("Move") & ": " & UCase(Left$(sMove, 2)) & "-" & UCase$(Mid$(sMove, 3))
@@ -542,6 +528,7 @@ Public Sub ShowMoveInfo(ByVal sMove As String, _
       .lblTime = Translate("Time") & ": " & Format(lTime, "0.00") & "s"
       DoEvents
     End With
+
   #End If
 End Sub
 
@@ -552,25 +539,21 @@ End Function
 '
 '--- Translate functions ---
 '
-
 Public Sub ReadLangFile(ByVal isLanguage As String)
   '--- sample: isLanguage = "DE"
-  
-  Dim sLine As String
-  Dim i As Long
-  Dim sFile As String
-  Dim f As Long
-  Dim c As String
-  
+  Dim sLine   As String
+  Dim i       As Long
+  Dim sFile   As String
+  Dim f       As Long
+  Dim c       As String
   Dim sTextEN As String
-  Dim sText As String
+  Dim sText   As String
   sFile = psEnginePath & "\ChessBrainVB_Language_" & isLanguage & ".txt"
   LangCnt = 0
-
   If Dir(sFile) <> "" Then
     f = FreeFile()
     Open sFile For Input As #f
-    
+
     Do While Not EOF(f)
       Line Input #f, sLine
       sLine = Trim$(sLine) 'Input
@@ -586,9 +569,9 @@ Public Sub ReadLangFile(ByVal isLanguage As String)
         End If
       End If
     Loop
+
     Close #f
   End If ' File Exists
-  
 End Sub
 
 Public Sub InitTranslate()
@@ -604,19 +587,19 @@ End Sub
 Public Function Translate(ByVal isTextEN As String) As String
   Dim i As Long
   If pbIsOfficeMode Then
+
     For i = 1 To LangCnt
       If LanguageENArr(i) = isTextEN Then Translate = LanguageArr(i): Exit Function
     Next
+
   End If
   Translate = isTextEN
 End Function
 
-
 Private Function StringSplit(sInput As String, _
-                            ByRef sTextEN As String, _
-                            ByRef sText As String) As Boolean
+                             ByRef sTextEN As String, _
+                             ByRef sText As String) As Boolean
   'Split String from Format "english#languageX#"
-
   Dim v As Variant
   v = Split(sInput, "#", -1, vbBinaryCompare)
   If Not UBound(v) = 2 Then
@@ -626,58 +609,94 @@ Private Function StringSplit(sInput As String, _
   sTextEN = v(0): sText = v(1): StringSplit = True
 End Function
 
-  
 Public Function InitTableBases() As Boolean
-  ' Documentation: http://www.lokasoft.nl/tbapi.aspx
-  Dim sURL As String
   On Error GoTo lblErr
-  
-  ' Tracing
-  bTbBaseTrace = CBool(ReadINISetting("TBBASE_TRACE", "0") <> "0")
-  
-  sURL = ReadINISetting("TB_URL", "http://www.lokasoft.nl/tbweb/tbapi.wsdl")
-  If bTbBaseTrace Then WriteTrace "Init endgame tablebase for: " & sURL & " / " & Now()
-  
-  Set oProxy = GetObject("soap:wsdl=" & sURL)
-  InitTableBases = True
-  If bTbBaseTrace Then WriteTrace "Init endgame tablebase OK! "
+  EGTBasesEnabled = CBool(Trim(ReadINISetting("EGTB_ENABLED", "0")) = "1")
+  If Not EGTBasesEnabled Then InitTableBases = False: Exit Function
+  If pbIsOfficeMode Then ' for VBA-GUI only
+    ' Online endgame tablebases
+    ' Documentation: http://www.lokasoft.nl/tbapi.aspx
+    Dim sURL As String
+    sURL = ReadINISetting("TB_ONL_URL", "http://www.lokasoft.nl/tbweb/tbapi.wsdl")
+    If bEGTbBaseTrace Then WriteTrace "Init endgame tablebase for: " & sURL & " / " & Now()
+    Set oProxy = GetObject("soap:wsdl=" & sURL)
+    EGTBasesMaxPieces = 5
+    EGTBasesMaxPly = 1
+    InitTableBases = True
+  Else
+    ' winboard / UCI mode: using SYZYGY endgame tablebases
+    EGTBasesPath = Trim(ReadINISetting("TB_SYZYGY_PATH", psEnginePath))
+    If UCIMode And Trim$(UCISyzygyPath) <> "" Then
+      EGTBasesPath = UCISyzygyPath
+    End If
+    EGTBasesMaxPieces = Val("0" & ReadINISetting("TB_SYZYGY_MAX_PIECES", "0"))
+    If UCIMode And UCISyzygyMaxPieceSet > 0 Then
+      EGTBasesMaxPieces = UCISyzygyMaxPieceSet
+    End If
+    ' probe for first x plies only
+    EGTBasesMaxPly = Val("0" & ReadINISetting("TB_SYZYGY_MAX_PLY", "1"))  ' ply 1=root
+    InitTableBases = (EGTBasesMaxPieces > 2 And EGTBasesPath <> "")
+    If UCIMode And UCISyzygyMaxPly > 0 Then
+      EGTBasesMaxPly = UCISyzygyMaxPly
+    End If
+    If Trim$(EGTBasesPath) = "" Then EGTBasesEnabled = False: Exit Function
+    '
+    EGTBasesHitsCnt = 0
+    If InitTableBases Then
+      Dim ResultScore As Long, BestMove As String, MoveListStr As String, MoveCnt As Long
+      InitTableBases = ProbeEGTB("8/8/8/3k4/5P2/5K2/8/8 b - - 0 1", ResultScore, True, BestMove, MoveListStr)
+      If UCIMode Then
+        If InitTableBases Then
+          SendCommand "info string tablebases found"
+        Else
+          SendCommand "info string tablebases not found at:" & EGTBasesPath
+        End If
+      End If
+    End If
+    If bEGTbBaseTrace Then WriteTrace "InitTableBases: Path:" & EGTBasesPath & " PieceSet:" & EGTBasesMaxPieces & " > " & InitTableBases
+  End If
+  If bEGTbBaseTrace Then WriteTrace "Init endgame tablebase OK! "
 lblExit:
   Exit Function
-  
 lblErr:
-  If bTbBaseTrace Then WriteTrace "Init endgame tablebase:ERROR! "
+  If bEGTbBaseTrace Then WriteTrace "Init endgame tablebase:ERROR! "
   InitTableBases = False
-  TableBasesRootEnabled = False
-  TableBasesSearchEnabled = False
+  EGTBasesEnabled = False
   Resume lblExit
 End Function
   
- Public Function IsTimeForTbBaseProbe() As Boolean
-   '  max 20 sec for initial TB call needed, expect refresh after 30 min pause
-   IsTimeForTbBaseProbe = CBool(TimeLeft > 20 Or FixedDepth <> NO_FIXED_DEPTH Or (DateDiff("n", LastTbProbeTime, Now()) < 30 And TimeLeft > 2))
-   If bTbBaseTrace And Not IsTimeForTbBaseProbe Then WriteTrace "No time for endgame tablebase access: " & TimeLeft
- End Function
+Public Function IsTimeForEGTbBaseProbe() As Boolean
+  If Not pbIsOfficeMode Then
+    IsTimeForEGTbBaseProbe = False
+    If FixedDepth <> NO_FIXED_DEPTH Then IsTimeForEGTbBaseProbe = True: Exit Function
+    ' If Ply < GetMax(3, IterativeDepth \ 3) Then
+    If CBool(TimeLeft > 1.5) Then  ' And (EGTBasesHitsCnt < (10 + IterativeDepth * 2 + TimeForIteration * 3)) Then
+      IsTimeForEGTbBaseProbe = True
+    End If
+    ' End If
+  Else
+    '  max 20 sec for initial online TB call needed, expect refresh after 30 min pause
+    IsTimeForEGTbBaseProbe = CBool(TimeLeft > 20 Or FixedDepth <> NO_FIXED_DEPTH)
+  End If
+  If bEGTbBaseTrace And Not IsTimeForEGTbBaseProbe Then WriteTrace "No time for endgame tablebase access: " & TimeLeft
+End Function
  
-  
-Public Function IsTbBasePosition(ByVal ActPly As Long) As Boolean
- Dim i As Long, ActPieceCnt As Long
- ActPieceCnt = PieceCntRoot
- For i = 1 To ActPly - 1
-   If MovesList(i).Captured <> NO_PIECE Then ActPieceCnt = ActPieceCnt - 1
- Next
- IsTbBasePosition = CBool(ActPieceCnt <= TB_MAX_PIECES)
+Public Function IsEGTbBasePosition() As Boolean
+  Dim ActPieceCnt As Long
+  ActPieceCnt = 2 + WNonPawnPieces + PieceCnt(WPAWN) + BNonPawnPieces + PieceCnt(BPAWN)
+  IsEGTbBasePosition = CBool(ActPieceCnt <= EGTBasesMaxPieces)
 End Function
 
 Public Sub TestTableBase()
   Dim sFEN As String, GameResultScore As Long, BestMove As String, BestMovesList As String
-  Dim i As Long
-  
+  Dim i    As Long
+
   For i = 1 To 3
     If i Mod 2 = BCOL Then
-     sFEN = "6k1/6p1/8/8/8/8/4P2P/6K1 b - -"
+      sFEN = "6k1/6p1/8/8/8/8/4P2P/6K1 b - -"
     Else
       sFEN = "7k/4P3/6K1/8/8/8/8/8 w - -"
-     'sFEN = "R7/P4k2/8/8/8/8/r7/6K1 w - -"
+      'sFEN = "R7/P4k2/8/8/8/8/r7/6K1 w - -"
     End If
     If ProbeTablebases(sFEN, GameResultScore, True, BestMove, BestMovesList) Then
       Debug.Print sFEN & " / Score: " & GameResultScore & "  > " & BestMove & " / " & Left(BestMovesList, 80)
@@ -685,65 +704,74 @@ Public Sub TestTableBase()
     Else
       Debug.Print "Error"
     End If
- Next
+  Next
+
 End Sub
 
+Public Function ProbeTablebases(ByVal sFEN As String, _
+                                ByRef GameResultScore As Long, _
+                                ByVal bShowBestMoves As Boolean, _
+                                ByRef BestMove As String, _
+                                ByRef BestMovesList As String) As Boolean
+  If pbIsOfficeMode Then
+    ProbeTablebases = ProbeOnlineEGTB(sFEN, GameResultScore, bShowBestMoves, BestMove, BestMovesList)
+  Else
+    ProbeTablebases = ProbeEGTB(sFEN, GameResultScore, bShowBestMoves, BestMove, BestMovesList)
+  End If
+End Function
   
-Public Function ProbeTablebases(ByVal sFEN As String, ByRef GameResultScore As Long, ByVal bShowBestMoves As Boolean, ByRef BestMove As String, ByRef BestMovesList As String) As Boolean
+Public Function ProbeOnlineEGTB(ByVal sFEN As String, _
+                                ByRef GameResultScore As Long, _
+                                ByVal bShowBestMoves As Boolean, _
+                                ByRef BestMove As String, _
+                                ByRef BestMovesList As String) As Boolean
   ' Online Web Access needed !
- ' Documentation: http://www.lokasoft.nl/tbapi.aspx
- ' Comsvcs.dll needed
- ' function returns false if no result
- Static bInitDone As Boolean
- Static bInitOK As Boolean
- Dim sResult As String
- 
-  GameResultScore = UNKNOWN_SCORE: BestMove = "": BestMovesList = "": ProbeTablebases = False
+  ' Documentation: http://www.lokasoft.nl/tbapi.aspx
+  ' Comsvcs.dll needed
+  ' function returns false if no result
+  Static bInitDone As Boolean
+  Static bInitOk   As Boolean
+  Dim sResult      As String
+  GameResultScore = UNKNOWN_SCORE: BestMove = "": BestMovesList = "": ProbeOnlineEGTB = False
   If Not bInitDone Then
-    bInitOK = InitTableBases()
+    bInitOk = InitTableBases()
     bInitDone = True
   End If
- 
-  If Not bInitOK Then ProbeTablebases = False: Exit Function
- 
+  If Not bInitOk Then ProbeOnlineEGTB = False: Exit Function
   On Error GoTo lblErr
- 
   ' The score is given as distance to mat, or 0 when the position is a draw.
   ' An error response is returned when position is invalid or not in database. '
   ' e.g.  M5 = color to move gives mate in 5 , -M3 = color to move gets mated in 5 moves.
-  sResult = Trim(oProxy.ProbePosition(sFEN))
+  sResult = Trim$(oProxy.ProbePosition(sFEN))
   If sResult = "0" Then
     GameResultScore = 0
-  ElseIf Left(sResult, 1) = "M" Then
+  ElseIf Left$(sResult, 1) = "M" Then
     GameResultScore = MATE0 - 2 * Val("0" & Mid$(sResult, 2))
-  ElseIf Left(sResult, 2) = "-M" Then
+  ElseIf Left$(sResult, 2) = "-M" Then
     GameResultScore = -MATE0 + 2 * Val("0" & Mid$(sResult, 3))
   End If
-  
   ' Shows list of best move with score separated by Char=10 (vbLF)
   ' Moves = oProxy.GetBestMoves("6k1/6p1/8/8/8/8/4P2P/6K1 w - -")  => "Ra8-h8 M21, Ra8-b8 0, Ra8-c8 0, Kg1-f1 0, Kg1-h1 0, Ra8-d8 0, Ra8-g8 -M15, Ra8-e8 -M15, Ra8-f8 -M15,"
   If GameResultScore <> UNKNOWN_SCORE Then
-    ProbeTablebases = True
+    ProbeOnlineEGTB = True
     If bShowBestMoves Then
       BestMovesList = Replace(oProxy.GetBestMoves(sFEN), vbLf, ", ")
       ' Extract first move in internal format e2e4
       BestMove = ExtractFirstTbMove(BestMovesList)
     End If
   End If
-
-  If bTbBaseTrace Then WriteTrace "endgame tablebase move: " & BestMove & " / Score: " & GameResultScore & " " & Now() & vbCrLf & PrintPos()
-
+  If bEGTbBaseTrace Then WriteTrace "endgame tablebase move: " & BestMove & " / Score: " & GameResultScore & " " & Now() & vbCrLf & PrintPos()
 lblExit:
   Exit Function
-  
 lblErr:
   bInitDone = False
-  ProbeTablebases = False
+  ProbeOnlineEGTB = False
   Resume lblExit
 End Function
 
 Public Function ExtractFirstTbMove(ByVal sMoveList As String) As String
   Dim sMove As String, p As Long, c As String
+
   For p = 1 To Len(sMoveList)
     c = Mid$(sMoveList, p, 1)
     If (c >= "a" And c <= "h") Or (c >= "0" And c <= "9") Then
@@ -755,6 +783,7 @@ Public Function ExtractFirstTbMove(ByVal sMoveList As String) As String
       Exit For
     End If
   Next
+
   If Len(sMove) = 4 Or Len(sMove) = 5 Then
     ExtractFirstTbMove = sMove
   Else
@@ -762,8 +791,157 @@ Public Function ExtractFirstTbMove(ByVal sMoveList As String) As String
   End If
 End Function
 
+Public Function ProbeEGTB(ByVal sFEN As String, _
+                          ByRef GameResultScore As Long, _
+                          ByVal bShowBestMoves As Boolean, _
+                          ByRef BestMove As String, _
+                          ByRef BestMovesListStr As String) As Boolean
+  '
+  '--- Use Fathom.exe to access Syzygy Endgame Tabelebases
+  '--- Output string is parsed for result and bestmove
+  '
+  Dim sCommand As String, sRet As String, p As Long, p2 As Long, i As Long, sResult As String, sSearch As String, sOut As String, MoveList() As String, TmpMove As TMOVE, MoveCnt As Long, DTZ As Long
+  GameResultScore = UNKNOWN_SCORE: BestMove = "": BestMovesListStr = "": ProbeEGTB = False:  EGTBMoveListCnt(Ply) = 0: DTZ = 0
+  On Error GoTo lblErr
+  '
+  '--- Call Fathom.exe and return output
+  '
+  sCommand = psEnginePath & "\Fathom.exe --path=" & Chr$(34) & EGTBasesPath & Chr$(34) & " " & Chr$(34) & sFEN & Chr$(34)
+  sOut = GetCommandOutput(sCommand)
+  If Trim$(sOut) = "" Then Exit Function
+  sOut = Replace(sOut, Chr$(34), "") ' Remove "
+  ' search for DTZ (distance to zero for fifty counter): [DTZ 11]
+  sRet = Trim$(sOut)
+  p = InStr(sRet, "[DTZ")
+  If p > 0 Then
+    sRet = Mid$(sRet, p + Len("[DTZ") + 1)
+    p = InStr(sRet, "]"): If p = 0 Then Exit Function
+    sRet = Trim$(Left$(sRet, GetMax(p - 1, 0)))
+    DTZ = Val("0" & Trim$(sRet))
+  End If
+  sRet = Trim$(sOut)
+  'Debug.Print sOut
+  ' search for result: [WDL "Win"]
+  p = InStr(sRet, "[WDL "): If p = 0 Then Exit Function
+  sRet = Mid$(sRet, p + 5)
+  p = InStr(sRet, "]"): If p = 0 Then Exit Function
+  sResult = Left$(sRet, p - 1)
 
+  Select Case sResult
+    Case "Win"
+      sSearch = "[WinningMoves"
+      GameResultScore = ScorePawn.EG * 20# - 3 * (Ply + DTZ): ProbeEGTB = True
+    Case "Draw", "CursedWin", "BlessedLoss" 'CursedWin/BlessedLoss: 50 move draw avoids loss/win
+      sSearch = "[DrawingMoves"
+      GameResultScore = 0: ProbeEGTB = True
+    Case "Loss"
+      sSearch = "[LosingMoves"
+      GameResultScore = -(ScorePawn.EG * 20# - 3 * (Ply + DTZ)): ProbeEGTB = True
+    Case Else
+      sSearch = "????"
+      Exit Function
+  End Select
 
+  EGTBasesHitsCnt = EGTBasesHitsCnt + 1
+  ' search for moves: [WinningMoves "Rexd1, Re6, Rdxd1, Rc3"]
+  p = InStr(sRet, sSearch): If p = 0 Then Exit Function
+  sRet = Mid$(sRet, p + Len(sSearch) + 1)
+  p = InStr(sRet, "]"): If p = 0 Then Exit Function
+  sRet = Trim$(Left$(sRet, GetMax(p - 1, 0)))
+  Dim s As String, CaptureVal As Long, BestCaptureVal As Long, tmp As String
+  If sRet <> "" Then
+    ' Convert best move to internal move (Rexd1  => e1d1), generate moves and find matching move
+    MoveList = Split(sRet, " ")
+    CaptureVal = -99999
 
+    For i = 0 To UBound(MoveList())
+      s = Trim$(MoveList(i))
+      If s <> "" And InStr(s, ".") = 0 Then ' ignore move cnt '1. '
+        If InStr(s, "-") = 0 Then ' ignore result '1-0'
+          EGTBMoveListCnt(Ply) = EGTBMoveListCnt(Ply) + 1
+          EGTBMoveList(Ply, EGTBMoveListCnt(Ply)) = CompToCoord(GetMoveFromSAN(s))
+          If EGTBMoveListCnt(Ply) = 1 Then
+            BestMove = EGTBMoveList(Ply, 1)
+            'Debug.Print MoveText(BestMove)
+          End If
+          tmp = EGTBMoveList(Ply, EGTBMoveListCnt(Ply))
+          TmpMove = TextToMove(tmp)
+          If InStr(s, "x") > 0 Or Len(tmp) = 5 Then ' prefer captures/promotions
+            If Len(tmp) = 5 Then
+              CaptureVal = PieceAbsValue(TmpMove.Promoted) - PieceAbsValue(TmpMove.Piece) ' promotion
+            Else
+              CaptureVal = GetSEE(TmpMove)  ' try best capture
+            End If
+          Else
+            CaptureVal = (PsqVal(1, TmpMove.Piece, TmpMove.Target) - PsqVal(1, TmpMove.Piece, TmpMove.From))
+          End If
+          If CaptureVal > BestCaptureVal Then
+            BestCaptureVal = CaptureVal
+            BestMove = EGTBMoveList(Ply, EGTBMoveListCnt(Ply))
+          End If
+          'Debug.Print MoveCnt & ">:" & s
+        End If
+      End If
+    Next
 
+    ' If sResult = "Loss" Then ' do not return move filter
+    '   EGTBMoveListCnt = 0
+    ' End If
+  End If
+  ' Find first move of best line " 1. d8=Q Kg4 2. Ke6 Kf4
+  If bShowBestMoves Then
+    BestMovesListStr = Mid$(sOut, InStrRev(sOut, "]") + 5)  ' find last ] from  [LosingMoves..]
+  End If
+  sRet = Trim$(Replace(BestMovesListStr, "...", ".")) & " " ' black to move : "1..."
+  MoveCnt = 0
+  MoveList = Split(sRet, " ")
 
+  For i = 0 To UBound(MoveList())
+    s = Trim$(MoveList(i))
+    If s <> "" And InStr(s, ".") = 0 Then ' ignore move cnt '1. '
+      If InStr(s, "-") = 0 Then ' ignore result '1-0'
+        MoveCnt = MoveCnt + 1
+        ' If MoveCnt = 1 Then
+        '   BestMove = CompToCoord(GetMoveFromSAN(s))
+        'Debug.Print MoveText(BestMove)
+        ' End If
+        'Debug.Print MoveCnt & ">:" & s
+      End If
+    End If
+  Next
+
+  'If MoveCnt > 0 Then
+  '  Select Case sResult
+  '  Case "Win"
+  '    If BestCaptureVal > 150 Then MoveCnt = MoveCnt \ 2
+  '    GameResultScore = ScorePawn.EG * 20# - 3 * MoveCnt
+  '  Case "Loss"
+  '    If BestCaptureVal > 150 Then MoveCnt = MoveCnt + 200 ' prefer good captures
+  '    GameResultScore = -(ScorePawn.EG * 20# - 6 * MoveCnt)
+  '  Case Else
+  '    ' keep 0
+  '  End Select
+  'End If
+lblExit:
+  Exit Function
+lblErr:
+  ProbeEGTB = False
+  Resume lblExit
+End Function
+
+Public Function CalcNPS(ByVal ElapsedTime As Single) As Long
+  CalcNPS = CDbl(Nodes) / GetMaxSingle(0.01, ElapsedTime)
+End Function
+
+Public Function ScaleScoreByEGTB(Score As Long) As Long
+  If Ply > 1 Then Stop
+  If EGTBRootResultScore = UNKNOWN_SCORE Or Abs(Score) > MATE_IN_MAX_PLY Or Ply > 1 Then
+    ScaleScoreByEGTB = Score
+  ElseIf EGTBRootResultScore > 0 Then
+    ScaleScoreByEGTB = ScorePawn.EG * 20 + Score
+  ElseIf EGTBRootResultScore < 0 Then
+    ScaleScoreByEGTB = -ScorePawn.EG * 20 + Abs(Score)
+  ElseIf EGTBRootResultScore = 0 Then
+    ScaleScoreByEGTB = Score \ 10
+  End If
+End Function
