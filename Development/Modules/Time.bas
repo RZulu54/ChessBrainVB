@@ -12,37 +12,45 @@ Public LastAddTimeMoveCnt   As Long  ' minor time adjustments
 Public LastExtraTimeMoveCnt As Long ' big extra time if in trouble
 
 Public Function AllocateTime(ByVal CurrScore As Long) As Single
-  Dim GameMovesDone As Long, RemainingMovesToTC As Long, TimeBase As Single, Score As Long
+  Dim GameMovesDone As Long, RemainingMovesToTC As Long, TimeBase As Single, MoveOverhead As Single, Score As Long
   If bTimeTrace Then WriteTrace ">> Start AllocateTime  MTOC:" & MovesToTC & ", MoveCnt=" & CStr(GameMovesCnt) & ", Left:" & Format$(TimeLeft, "0.00")
   InitEval
   Score = Eval()
   If bWhiteToMove And Not bCompIsWhite Then Score = -Score
   GameMovesDone = GameMovesCnt \ 2 ' Full move = 2* Half move
   If MovesToTC = 0 Then RemainingMovesToTC = 0 Else RemainingMovesToTC = MovesToTC - (GameMovesDone Mod MovesToTC)
-  If UCIMode Then RemainingMovesToTC = MovesToTC ' UCI sends remaining moves to TC
+  If UCIMode Then
+    RemainingMovesToTC = MovesToTC ' UCI sends remaining moves to TC
+  End If
   If bTimeTrace Then WriteTrace "before CalcTime: RMTOC:" & RemainingMovesToTC & " MToTC:" & MovesToTC
   ' Subtract overhead for move transfer/execution
   If MovesToTC > 0 And MovesToTC < 10 Then
-    '-- Compensate move overhead ( difference WB2 time value diffenrence ,inis engine used time)
-    ' Arena 0.2 sec, ChessGU 0.4 sec overhead; for thread handling extra 0.1
-    TimeLeftCorr = TimeLeft - (0.5 + Abs(NoOfThreads > 1) * 0.1) * CDbl(GetMax(1, GetMin(40, RemainingMovesToTC)))
+    '-- Compensate move overhead ( difference WB2 time value difference ,inits engine used time)
+    ' Arena 0.2 sec, ChessGUI 0.4 sec overhead; for thread handling extra 0.3
+    MoveOverhead = 0.7: If NoOfThreads > 1 Then MoveOverhead = MoveOverhead + 0.1
+    If TimeIncrement >= 1 Then MoveOverhead = 0.2
+    TimeLeftCorr = TimeLeft - 2# - TimeLeft / 12 - MoveOverhead * CDbl(GetMax(1, GetMin(40, RemainingMovesToTC)))
   Else
-    TimeLeftCorr = TimeLeft - TimeLeft / 20 - 0.5 * CDbl(GetMax(1, GetMin(40, RemainingMovesToTC)))
+    MoveOverhead = 0.5: If NoOfThreads > 1 Then MoveOverhead = MoveOverhead + 0.1
+    If TimeIncrement >= 1 Then MoveOverhead = 0.1
+    TimeLeftCorr = GetMaxSingle(0.2, TimeLeft - 1# - TimeLeft / 20 - MoveOverhead * CDbl(GetMax(1, GetMin(40, RemainingMovesToTC))))
+    TimeLeftCorr = GetMaxSingle(TimeLeftCorr, TimeLeft * 0.85)
   End If
-  If TimeLeftCorr < 0.1 Then TimeLeftCorr = 0.2
+  If TimeLeftCorr < 0.1 Then TimeLeftCorr = 0.3 + Abs(NoOfThreads > 1) * 0.2
+  If bTimeTrace Then WriteTrace ">AllocateTime before CalcTime:" & MovesToTC & ", MoveCnt=" & CStr(GameMovesCnt) & ", Left:" & Format$(TimeLeft, "0.00") & ", TimeLeftCorr:" & Format$(TimeLeftCorr, "0.00")
   AllocateTime = CalcTime(RemainingMovesToTC, TimeIncrement, TimeLeftCorr, CurrScore)
   If MovesToTC > 0 Then
     TimeBase = TimeLeftCorr / CDbl(GetMax(1, RemainingMovesToTC))
     If RemainingMovesToTC < 10 Then
       AllocateTime = TimeBase * 0.9
     Else
-      If AllocateTime > TimeBase * 4# Then
-        If bTimeTrace Then WriteTrace "Allocate TimeBase*4 limit. " & Format$(AllocateTime, "0.00")
-        AllocateTime = TimeBase * 4#
+      If AllocateTime > TimeBase * 4# + TimeIncrement Then
+        If bTimeTrace Then WriteTrace "Allocate TimeBase*4 limit. " & Format$(AllocateTime, "0.00") & ", Base*4:" & TimeBase * 4#
+        AllocateTime = TimeBase * 4# + TimeIncrement * 0.95
       End If
-      If (TimeLeftCorr - AllocateTime) / CDbl(GetMax(1, RemainingMovesToTC)) < TimeBase \ 2# Then
+      If (TimeLeftCorr - AllocateTime) / CDbl(GetMax(1, RemainingMovesToTC)) + TimeIncrement < TimeBase \ 2# Then
         If bTimeTrace Then WriteTrace "Allocate Timebase\2 limit. " & Format$(AllocateTime, "0.00")
-        AllocateTime = TimeLeftCorr / CDbl(GetMax(1, RemainingMovesToTC))
+        AllocateTime = TimeLeftCorr / CDbl(GetMax(1, RemainingMovesToTC)) + TimeIncrement * 0.95
       End If
     End If
   End If
@@ -51,7 +59,7 @@ Public Function AllocateTime(ByVal CurrScore As Long) As Single
     AllocateTime = GetMaxSingle(TimeLeftCorr, 0.1 + TimeLeftCorr / (GetMax(1, RemainingMovesToTC)))
     AllocateTime = GetMinSingle(AllocateTime, TimeLeftCorr)
   End If
-  If (TimeLeftCorr - AllocateTime) / CDbl(GetMax(1, RemainingMovesToTC)) < 0.8 Then
+  If ((TimeLeftCorr - AllocateTime) + TimeIncrement * RemainingMovesToTC) / CDbl(GetMax(1, RemainingMovesToTC)) < 0.8 Then
     AllocateTime = (TimeLeftCorr - 0.2) / CDbl(GetMax(1, RemainingMovesToTC))
     If bTimeTrace Then WriteTrace "Average < 0.5 " & Format$(AllocateTime, "0.00")
   End If
@@ -60,10 +68,16 @@ Public Function AllocateTime(ByVal CurrScore As Long) As Single
     If bTimeTrace Then WriteTrace "RMTOC=1 < TimeLeftCorr*0.8 " & Format$(AllocateTime, "0.00")
   End If
   AllocateTime = GetMinSingle(AllocateTime, TimeLeftCorr - 0.2)
-  If AllocateTime < 0.2 Then AllocateTime = 0.2
   If DebugMode Then
     AllocateTime = 90
   End If
+  If TimeIncrement >= 1 Then
+    If AllocateTime < TimeIncrement * 0.9 Then
+      If bTimeTrace Then WriteTrace "AllocateTime < TimeIncrement * 0.9: " & Format$(AllocateTime, "0.00")
+      AllocateTime = TimeIncrement * 0.9 + TimeLeftCorr / 20
+    End If
+  End If
+  If AllocateTime < 0.2 Then AllocateTime = 0.2
   If bTimeTrace Then
     WriteTrace ">>>> Time allocated: " & Format$(AllocateTime, "0.00") & " MTOC:" & MovesToTC & "/RMTOC" & RemainingMovesToTC & ", MoveCnt=" & CStr(GameMovesCnt) & ", Left:" & Format$(TimeLeft, "0.00") & ", LeftCorr:" & Format$(TimeLeftCorr, "0.00")
     WriteTrace " -------------------"
@@ -122,16 +136,16 @@ Public Function CalcTimeLimit(ByVal RemainingMovesToTC As Long, _
                               ByVal TimeLeftIn As Single, _
                               ByVal CurrScore As Long)
   Dim TimeTarget As Single, CalcMTOC As Long, GameMovesDone As Long
-  TimeLeftIn = GetMaxSingle(TimeLeftIn * 0.8 - 0.5 - (TimeIncr * 0.85), 0#) ' L
+  TimeLeftIn = GetMaxSingle(TimeLeftIn * 0.8 - 0.5 + TimeIncr, 0#)
   GameMovesDone = GameMovesCnt \ 2
   CalcMTOC = RemainingMovesToTC
   If MovesToTC = 0 Then
     If TimeIncr = 0 Then
-      CalcMTOC = 40
-      If GameMovesCnt > 40 Then CalcMTOC = 30
+      CalcMTOC = 60
+      If GameMovesCnt \ 2 > 40 Then CalcMTOC = 40
     Else
-      CalcMTOC = 30
-      If GameMovesCnt > 40 Then CalcMTOC = 25
+      CalcMTOC = 40
+      If GameMovesCnt \ 2 > 40 Then CalcMTOC = 20
     End If
   Else
     If CalcMTOC > 35 Then CalcMTOC = GetMax(1, GetMin(CalcMTOC - 5, RemainingMovesToTC))
@@ -160,8 +174,8 @@ Public Function CalcTimeLimit(ByVal RemainingMovesToTC As Long, _
     ' ElseIf (RemainingMovesToTC >= 10 Or TimeIncr > 0) And GameMovesDone < 23 Then
     '   TimeTarget = TimeTarget * 1.3 ' more time during midgame
     '   If bTimeTrace Then WriteTrace "TimeAdd-MidGame1"
-  ElseIf (RemainingMovesToTC >= 20 And RemainingMovesToTC = MovesToTC) And GameMovesDone >= 40 Then
-    TimeTarget = TimeTarget * GetMinSingle(4#, CDbl(RemainingMovesToTC \ 10)) ' more time when time control reached
+  ElseIf (RemainingMovesToTC >= 20 And RemainingMovesToTC = MovesToTC) And GameMovesDone >= 40 And Not UCIMode Then
+    TimeTarget = TimeTarget * GetMinSingle(4#, CDbl(RemainingMovesToTC \ 10)) ' more time when time control reached / not for UCI
     LastAddTimeMoveCnt = GameMovesDone
     If bTimeTrace Then WriteTrace "TimeAdd-TimeControl reached"
   ElseIf (RemainingMovesToTC >= 30) And GameMovesDone > 40 And GameMovesDone >= LastAddTimeMoveCnt + 5 Then
@@ -194,8 +208,8 @@ Public Function CalcExtraTime(ByVal TimeTarget As Single, _
   Else
     CalcExtraTime = 0
     GameMovesDone = GameMovesCnt \ 2 ' Full move = 2* Half move
-    If (TimeIncr = 0 And TimeLeftCorr > TimeTarget * 5#) Or (TimeIncr > 0 And TimeLeftCorr > TimeTarget * 8#) Then
-      CalcExtraTime = TimeTarget * 1.25
+    If (TimeIncr = 0 And TimeLeftCorr > TimeTarget * 5#) Or (TimeIncr > 0 And TimeLeftCorr > TimeTarget * 10#) Then
+      CalcExtraTime = TimeTarget * 1.1 '1.25
       If bTimeTrace Then WriteTrace "ExtraTime+ " & Format$(CalcExtraTime, "0.00") & ", Target:" & Format$(TimeTarget, "0.00")
     Else
       CalcExtraTime = 0

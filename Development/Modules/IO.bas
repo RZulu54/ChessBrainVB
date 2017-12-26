@@ -118,8 +118,9 @@ Function PollCommand() As Boolean
       Dim lTotalBytes As Long
       Dim lAvailBytes As Long
       Dim rc          As Long
-      sBuff = String(2048, Chr$(0))
-      rc = PeekNamedPipe(hStdIn, ByVal sBuff, 2048, lBytesRead, lTotalBytes, lAvailBytes)
+      
+      sBuff = String(4096, Chr$(0))
+      rc = PeekNamedPipe(hStdIn, ByVal sBuff, 4096, lBytesRead, lTotalBytes, lAvailBytes)
       PollCommand = CBool(rc And lBytesRead > 0)
     #End If
   Else
@@ -131,12 +132,12 @@ Function PollCommand() As Boolean
       Case 1
         If LastThreadStatus <> MainThreadStatus Then
           ThreadCommand = "go" & vbLf: PollCommand = True
-          WriteTrace "PollCommand: MainThreadStatus = 1" & " / " & Now()
+          If bThreadTrace Then WriteTrace "PollCommand: MainThreadStatus = 1" & " / " & Now()
         End If
       Case 0
         If LastThreadStatus <> MainThreadStatus Then
           ThreadCommand = "exit" & vbLf: PollCommand = True: bTimeExit = True
-          WriteTrace "PollCommand: MainThreadStatus = 0" & " / " & Now()
+          If bThreadTrace Then WriteTrace "PollCommand: MainThreadStatus = 0" & " / " & Now()
         End If
     End Select
 
@@ -162,8 +163,8 @@ Function ReadCommand() As String
     Dim sBuff      As String
     Dim lBytesRead As Long
     Dim rc         As Long
-    sBuff = String$(2048, Chr$(0))
-    rc = ReadFile(hStdIn, ByVal sBuff, 2048, lBytesRead, ByVal 0&)
+    sBuff = String$(4096, Chr$(0))
+    rc = ReadFile(hStdIn, ByVal sBuff, 4096, lBytesRead, ByVal 0&)
     ReadCommand = Left$(sBuff, lBytesRead)
   #End If
 End Function
@@ -499,11 +500,11 @@ End Function
 'LogWrite: Write log file
 'bTime adds the time
 '---------------------------------------------------------------------------
-Public Sub LogWrite(sLogString As String, Optional ByVal bTime As Boolean)
+Public Sub LogWrite(sLogString As String, Optional ByVal BTime As Boolean)
   Dim sStr As String
   LogFile = FreeFile
   sStr = sLogString
-  If bTime Then sStr = Now & " - " & sStr
+  If BTime Then sStr = Now & " - " & sStr
   Open psEnginePath & "\" & LCase(psAppName) & ".log" For Append Lock Write As #LogFile
   Print #LogFile, sStr
   'Debug.Print sStr

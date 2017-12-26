@@ -1,6 +1,6 @@
 Attribute VB_Name = "ChessBrainVBbas"
 '==================================================
-'= ChessBrainVB V3.60:
+'= ChessBrainVB V3.61:
 '=   by Roger Zuehlsdorf (Copyright 2017)
 '=   based on LarsenVB by Luca Dormio (http://xoomer.virgilio.it/ludormio/download.htm) and Faile by Adrien M. Regimbald
 '=        and Stockfish by Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
@@ -295,12 +295,13 @@ Public Sub MainLoop()
 
   Do
     StartEngine ' returns with no action if computer not to move
-    If PollCommand Then
-      sInput = ReadCommand
-      If sInput <> "" Then ParseCommand sInput
-    End If
-    If Not DebugMode Then
-      Sleep 100
+    If PollCommand Then  ' Something new ?
+      sInput = ReadCommand ' Get it
+      If sInput <> "" Then ParseCommand sInput ' Examine it
+    Else
+      If Not DebugMode Then
+        Sleep 10 ' do not use more CPU than needed when waiting
+      End If
     End If
     DoEvents
     If ThreadNum > 0 Then CheckThreadTermination True
@@ -355,7 +356,7 @@ Public Sub ParseCommand(ByVal sCommand As String)
     If UCIMode Then
       '--- get UCI command
       sCurrentCmd = Trim$(sCurrentCmd)
-      If sCurrentCmd = "ucinewgame" Then
+      If sCurrentCmd = "ucinewgame" Or sCurrentCmd = "position startpos" Then
         If bWinboardTrace Then WriteTrace "UCI: " & sCurrentCmd & " " & Now()
         InitGame
         GoTo NextCmd
@@ -529,11 +530,11 @@ Public Sub ParseCommand(ByVal sCommand As String)
     End If
     If sCurrentCmd = "hard" Or sCurrentCmd = "ponder" Then
       bAllowPonder = True
-      If bWinboardTrace Then LogWrite "ParseCommand: " & sCurrentCmd & " =>PonderOn"
+      If bWinboardTrace Then WriteTrace "ParseCommand: " & sCurrentCmd & " =>PonderOn"
       GoTo NextCmd
     End If
     If sCurrentCmd = "easy" Then
-      If bWinboardTrace Then LogWrite "ParseCommand: " & sCurrentCmd & " =>PonderOff"
+      If bWinboardTrace Then WriteTrace "ParseCommand: " & sCurrentCmd & " =>PonderOff"
       bAllowPonder = False
       GoTo NextCmd
     End If
@@ -567,6 +568,7 @@ Public Sub ParseCommand(ByVal sCommand As String)
     If Left$(sCurrentCmd, 4) = "time" Then ' time left for computer in 1/100 sec
       TimeLeft = Val(Mid$(sCurrentCmd, 5))
       TimeLeft = TimeLeft / 100#
+      If MovesToTC = 0 Then MovesToTC = 60
       GoTo NextCmd
     End If
     If Left$(sCurrentCmd, 4) = "otim" Then ' time left for opponent
@@ -1011,10 +1013,9 @@ Public Sub UCIMoves(ByVal isMoves As String)
   Dim i        As Long
   Dim asList() As String, p As Long
   asList = Split(Trim$(isMoves))
-
   For i = 0 To UBound(asList)
     If Not CheckLegalRootMove(Trim$(asList(i))) Then
-      MsgBox "illegal move " & Trim$(asList(i))
+      WriteTrace "UCI position setup: illegal move " & Trim$(asList(i))
       Exit For
     End If
   Next
@@ -1081,11 +1082,13 @@ End Function
 
 Public Sub UCISetTimeControl(ByVal isTimeControl As String)
   ' sample: wtime 120000 btime 120000 winc 0 binc 0 movestogo 32
-  Dim asList() As String, p As Long, i As Long, t As Long
+  Dim asList() As String, p As Long, i As Long, t As Long, WTime As Long, BTime As Long
   MovesToTC = 0: TimeIncrement = 0: TimeLeft = 0: OpponentTime = 0: SecondsPerGame = 0
   FixedDepth = NO_FIXED_DEPTH: FixedTime = 0
   asList = Split(Trim$(isTimeControl))
-
+  If bTimeTrace Then WriteTrace ">> UCISetTimeControl:  " & isTimeControl
+  WTime = -1: BTime = -1: MovesToTC = -1
+  
   For i = 0 To UBound(asList) Step 2
     If asList(i) = "infinite" Then
       bAnalyzeMode = True
@@ -1107,41 +1110,52 @@ Public Sub UCISetTimeControl(ByVal isTimeControl As String)
 
     Select Case asList(i)
       Case "wtime"
-        t = Val("0" & Trim(asList(i + 1)))
-        If bCompIsWhite Then
-          TimeLeft = t / 1000#
-          If bTimeTrace Then WriteTrace ">> UCISetTimeControl: TimeLeft=" & TimeLeft
-        Else
-          OpponentTime = t / 1000#
-          If bTimeTrace Then WriteTrace ">> UCISetTimeControl: OpponentTime=" & OpponentTime
-        End If
+        WTime = Val("0" & Trim(asList(i + 1)))
       Case "btime"
+        BTime = Val("0" & Trim(asList(i + 1)))
+      Case "winc", "binc" ' should be equal
         t = Val("0" & Trim(asList(i + 1)))
-        If Not bCompIsWhite Then
-          TimeLeft = t / 1000#
-          If bTimeTrace Then WriteTrace ">> UCISetTimeControl: TimeLeft=" & TimeLeft
-        Else
-          OpponentTime = t / 1000#
-          If bTimeTrace Then WriteTrace ">> UCISetTimeControl: OpponentTime=" & OpponentTime
-        End If
-      Case "winc", "binc"
-        t = Val("0" & Trim(asList(i + 1)))
-        TimeIncrement = t
+        TimeIncrement = t / 1000#
         If bTimeTrace Then WriteTrace ">> UCISetTimeControl: TimeIncrement=" & TimeIncrement
       Case "movestogo"
         t = Val("0" & Trim(asList(i + 1)))
         MovesToTC = t
+        If bTimeTrace Then WriteTrace ">> UCISetTimeControl: MoveToTC=" & MovesToTC
       Case "movetime"
         t = Val("0" & Trim(asList(i + 1)))
         FixedTime = t \ 1000#
         TimeLeft = FixedTime
+        MovesToTC = 0: WTime = 0: BTime = 0
         If bTimeTrace Then WriteTrace ">> UCISetTimeControl: FixedTime=" & FixedTime
       Case "depth"
         t = Val("0" & Trim(asList(i + 1)))
         FixedDepth = t
+        MovesToTC = 0: WTime = 0: BTime = 0
         If bTimeTrace Then WriteTrace ">> UCISetTimeControl: FixedDepth=" & FixedDepth
     End Select
 
   Next
+
+  ' some GUI send one time only
+  If WTime = -1 Then WTime = GetMax(0, BTime \ 2)
+  If BTime = -1 Then BTime = GetMax(0, WTime \ 2)
+  
+  If bTimeTrace Then WriteTrace ">> UCISetTimeControl: WTime=" & WTime & ", BTime=" & BTime & ", bWhiteToMove=" & bWhiteToMove & ", CompIsWHite=" & bCompIsWhite
+  
+  If MovesToTC = -1 Then
+    MovesToTC = 60: If GameMovesCnt \ 2 > 40 Then MovesToTC = 40
+    If TimeIncrement >= 1 Then MovesToTC = MovesToTC - 10
+  End If
+  If bCompIsWhite Then
+    TimeLeft = WTime / 1000#
+    If bTimeTrace Then WriteTrace ">> UCISetTimeControl: Comp=W TimeLeft=" & TimeLeft
+    OpponentTime = BTime / 1000#
+    If bTimeTrace Then WriteTrace ">> UCISetTimeControl: OpponentTime=" & OpponentTime
+  Else
+    TimeLeft = BTime / 1000#
+    If bTimeTrace Then WriteTrace ">> UCISetTimeControl: Comp=B TimeLeft=" & TimeLeft
+    OpponentTime = WTime / 1000#
+    If bTimeTrace Then WriteTrace ">> UCISetTimeControl: OpponentTime=" & OpponentTime
+  End If
 
 End Sub

@@ -4,6 +4,13 @@
 = Release notes for ChessBrainVB chess engine 
 =======================================================================================
 
+Changes from version 3.60 to 3.61 (Roger Zuehlsdorf 25-DEC-2017)
+----------------------------------------------------------------
+- UCI time management problems fixed (tested with ARENA, other GUIs should use Winboard interface)
+- UCI buffer overflow problem fixed with long matches (more than 200 moves)
+- time management optimized for sudden death games
+
+
 Changes from version 3.50 to 3.60 (Roger Zuehlsdorf 17-DEC-2017)
 ----------------------------------------------------------------
 this is a feature release:

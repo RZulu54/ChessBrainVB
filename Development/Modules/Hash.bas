@@ -31,7 +31,6 @@ Public HashBCanCastle2  As Long
 Public HashExcluded     As Long
 Public InHashCnt        As Long
 Public HashUsage        As Long
-Public HashUsageMap     As Long
 Private bHashUsed       As Boolean
 Public HashGeneration   As Long
 Public EmptyHash        As THashKey
@@ -95,7 +94,6 @@ Public Sub InitHash()
   If bHashTrace Then WriteTrace "Init hash size start " & HashSize & "MB " & Now()
   HashSize = HashSize * 38000   ' seems to fit...? hash len = 31
   HashUsage = 0
-  HashUsageMap = 0
   bHashUsed = False
   HashRecLen = LenB(HashCluster(0)): HashClusterLen = HashRecLen * HASH_CLUSTER
   If NoOfThreads < 2 Then
@@ -490,7 +488,7 @@ Public Function InsertIntoHashMap(HashKey As THashKey, _
 
   Next
 
-  If HashCluster(ReplaceIndex - IndexKey).Position1 = 0 And HashUsage < 2147483646 Then HashUsageMap = HashUsageMap + 1
+  If HashCluster(ReplaceIndex - IndexKey).Position1 = 0 And HashUsage < 2147483646 Then HashUsage = HashUsage + 1
 
   With HashCluster(ReplaceIndex - IndexKey)
     '--- Save hash data, preserve hash move if no new move
@@ -616,6 +614,7 @@ Public Function CreateAppLockFile() As Boolean
   ' for main thread: create a locked file that gets unlocked when main thread end/crashed
   ' this file is checked by the helper threads: if file is unlocked also exit helper threads
   Static lLOCK_FILEHANDLE As Long
+  Sleep 200 ' wait for end of previous exe run
   #If VBA_MODE = 0 Then
     Debug.Assert NoOfThreads > 1
     lLOCK_FILEHANDLE = FreeFile()
@@ -624,10 +623,12 @@ Public Function CreateAppLockFile() As Boolean
     Print #lLOCK_FILEHANDLE, "Temporary lock file. Main thread started:" & Now()
     CreateAppLockFile = True
   #End If
+lblExit:
   Exit Function
 lblLockErr:
   CreateAppLockFile = False
-  MsgBox "Already started? Cannot open Application lock file: CB_THREAD0.TXT "
+  WriteTrace "Already started? Cannot open Application lock file: CB_THREAD0.TXT " & Now()
+  Resume lblExit
 End Function
 
 Public Function CheckAppLockFile() As Boolean
@@ -654,7 +655,7 @@ Public Sub CheckThreadTermination(ByVal bCheckAlways As Boolean)
       If Not CheckAppLockFile() Then
         '>>> END of program here because main thread was terminated
         CloseHashMap
-        WriteTrace "!!! Main Thread terminated: Stop helper thread! " & Now()
+        If bThreadTrace Then WriteTrace "!!! Main Thread terminated: Stop helper thread! " & Now()
         End '<<<<
       End If
     End If
@@ -674,7 +675,7 @@ Public Function ReadMainThreadStatus() As Long
   moHashMap.ReadMapPos HashMapThreadStatusPtr(0), VarPtr(MainThreadStatus), CLng(LenB(MainThreadStatus))
   SingleThreadStatus(0) = MainThreadStatus
   ReadMainThreadStatus = MainThreadStatus
-  If LastRead <> ReadMainThreadStatus Then WriteTrace "ReadMainThreadStatus:Threadnum=" & ThreadNum & ", MainStatus:" & ReadMainThreadStatus & " / " & Now()
+  If bThreadTrace Then If LastRead <> ReadMainThreadStatus Then WriteTrace "ReadMainThreadStatus:Threadnum=" & ThreadNum & ", MainStatus:" & ReadMainThreadStatus & " / " & Now()
   LastRead = ReadMainThreadStatus
 End Function
 
