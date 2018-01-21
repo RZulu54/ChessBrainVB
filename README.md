@@ -1,9 +1,9 @@
 # ChessBrainVB
-Chess engine with GUI for Excel / Word / Powerpoint VBA - plus edition for winboard: win32 engine with playing strength of 2900 ELO
+Chess engine with GUI for Excel / Word / Powerpoint VBA - plus edition for UCI/Winboard: win32 engine with playing strength of 3000 ELO
 
 There are two ways to use this chess engine:
 
-1. Use a free chess GUI like ARENA, add ChessBrainVB.exe as winboard engine  and play games.
+1. Use a free chess GUI like ARENA, add ChessBrainVB.exe as UCI or winboard engine  and play games.
    Files needed: ChessBrainVB.ini  for settings, ChessBrainVB_Book.opn, ChessBrainVB_Book.opi for opening book.
   Playing strength 2900 ELO (CCRL 40/40 conditions, see http://www.computerchess.org.uk/ccrl/4040/rating_list_all.html)
   Compiled with Visual Basic 6
@@ -28,7 +28,6 @@ ChessBrainVB is also based on many great ideas from the following people:
 
 Marco Costabla/Tord Romstad/Joona Kiiski (Stockfish sources): Search logic, king safety, piece evaluation.
 Search logic and evaluation are based an Stockfish 7 with adaptions to non-bitboard data structure and search changes that perform better for slower move generation and evaluation.
-Ed Schroeder (REBEL descriptions):  Killer move strucure, Search extensions
 Raimund Heid (Protector sources):  Material draw logic
 Norbert Raimund Leisner: Logo file
 
