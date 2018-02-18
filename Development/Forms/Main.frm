@@ -53,7 +53,7 @@ Begin VB.Form frmMain
    End
    Begin VB.Label lblDescr 
       BackStyle       =   0  'Transparent
-      Caption         =   "ChessBrainVB 3.60"
+      Caption         =   "ChessBrainVB 3.62"
       BeginProperty Font 
          Name            =   "MS Sans Serif"
          Size            =   13.5
@@ -220,7 +220,7 @@ End Function
 '
 '---------------------------------------------------------------------------
 Private Function GetCmdLine() As String
-  GetCmdLine = " -cp -fcp ""ChessBrainVB -xboard"" -fd """ & psEnginePath & """  -scp ""ChessBrainVB -xboard"" -sd """ & psEnginePath & """"
+ ' GetCmdLine = " -cp -fcp ""ChessBrainVB -xboard"" -fd """ & psEnginePath & """  -scp ""ChessBrainVB -xboard"" -sd """ & psEnginePath & """"
 End Function
 
 Private Sub SetWBPath()

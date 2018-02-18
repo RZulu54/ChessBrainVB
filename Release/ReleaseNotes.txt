@@ -4,6 +4,17 @@
 = Release notes for ChessBrainVB chess engine 
 =======================================================================================
 
+Changes from version 3.61 to 3.65 (Roger Zuehlsdorf 18-FEB-2018)
+----------------------------------------------------------------
+- new time management, moveoverhead setting added
+- UCI fixes, hashfull info added, Chessbase GUI supported using InBetween.exe
+- hash file limit 1400MB for compiled exe (IDE and VBA still 384)
+- SMP improvements: 
+    support for 64 cores
+	helper processess starting much faster
+	verify hash read/write option to detect hash collisions
+- ELO gain on self play: 40/4 about 20 ELO from time mamagement, no improvement for 40/40  
+
 Changes from version 3.60 to 3.61 (Roger Zuehlsdorf 25-DEC-2017)
 ----------------------------------------------------------------
 - UCI time management problems fixed (tested with ARENA, other GUIs should use Winboard interface)

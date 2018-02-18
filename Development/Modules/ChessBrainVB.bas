@@ -1,6 +1,6 @@
 Attribute VB_Name = "ChessBrainVBbas"
 '==================================================
-'= ChessBrainVB V3.61:
+'= ChessBrainVB V3.65:
 '=   by Roger Zuehlsdorf (Copyright 2017)
 '=   based on LarsenVB by Luca Dormio (http://xoomer.virgilio.it/ludormio/download.htm) and Faile by Adrien M. Regimbald
 '=        and Stockfish by Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
@@ -40,6 +40,8 @@ Public UCIMode                     As Boolean
 Sub Main()
   Dim sCmdList() As String
   Dim i          As Long
+  'MsgBox "Start CB!!!"
+  
   '--- VBA_MODE constant is set in Excel/Word in VBAChessBrain project properties for conditional compiling
   #If VBA_MODE = 1 Then
     '--- MS-OFFICE VBA ---
@@ -61,7 +63,6 @@ Sub Main()
   InitTranslate
   ' set main threadnum=-1
   SetThreads 1
-  'SetThreads 2 ' XXXBUGsearch SMP
   If Command$ <> "" Then
     sCmdList = Split(LCase(Command$))
 
@@ -94,7 +95,10 @@ Sub Main()
     Next
 
   End If
-  If ThreadNum <= 0 Then OpenCommHandles
+  If ThreadNum <= 0 Then
+    OpenCommHandles ' enable GUI communication
+    SendCommand "ChessBrainVB by Roger Zuehlsdorf"
+  End If
   #If VBA_MODE <> 0 Then
     InitEngine
     frmChessX.Show
@@ -336,13 +340,13 @@ Public Sub ParseCommand(ByVal sCommand As String)
       '--- send UCI options
       UCIMode = True
       #If VBA_MODE = 1 Then
-        SendCommand "id name ChessBrainVB"
+        SendCommand "id name ChessBrainVB" ' App object not defined
       #Else
         SendCommand "id name ChessBrainVB V" & Trim(App.Major) & "." & Trim(App.Minor) & Trim(App.Revision)
       #End If
       SendCommand "id author Roger Zuehlsdorf, Germany"
-      SendCommand "option name Threads type spin default 1 min 1 max 8"
-      SendCommand "option name Hash type spin default 128 min 1 max 400"
+      SendCommand "option name Threads type spin default 1 min 1 max " & CStr(MAX_THREADS)
+      SendCommand "option name Hash type spin default 128 min 1 max 1400"
       SendCommand "option name Clear Hash type button"
       SendCommand "option name SyzygyPieceSet type spin default 5 min 0 max 6"
       SendCommand "option name SyzygyPath type string default <empty>"
@@ -378,9 +382,13 @@ Public Sub ParseCommand(ByVal sCommand As String)
       sSearch = "setoption name Threads value"
       If Left$(sCurrentCmd, Len(sSearch)) = sSearch Then
         ' number of threads/cores
-        x = Val("0" & Val(Mid$(sCurrentCmd, Len(sSearch) + 1)))
-        SetThreads x
-        If bThreadTrace Then WriteTrace "Command:" & LCase(Command$)
+       If Not pbIsOfficeMode Then
+        If CBool(ReadINISetting("THREADS_IGNORE_GUI", "0") = "0") Then
+          x = Val("0" & Val(Mid$(sCurrentCmd, Len(sSearch) + 1)))
+          SetThreads x
+          If bThreadTrace Then WriteTrace "Command:" & LCase(Command$)
+        End If
+       End If
         If bWinboardTrace Then WriteTrace "UCI: Threads: " & sCurrentCmd & " " & Now()
         GoTo NextCmd
       End If
@@ -392,7 +400,7 @@ Public Sub ParseCommand(ByVal sCommand As String)
       End If
       sSearch = "setoption name Clear Hash"
       If Left$(sCurrentCmd, Len(sSearch)) = sSearch Then
-        InitHash
+        If NoOfThreads < 2 Then InitHash
         GoTo NextCmd
       End If
       sSearch = "setoption name SyzygyPieceSet value"
@@ -409,6 +417,7 @@ Public Sub ParseCommand(ByVal sCommand As String)
         UCISyzygyPath = s
         If bEGTbBaseTrace Then WriteTrace "UCI SyzygyPath= " & s
         InitTableBases
+        If EGTBasesEnabled Then SendCommand "info string Tablebases found"
         GoTo NextCmd
       End If
       sSearch = "setoption name SyzygyMaxPly value"
@@ -425,6 +434,11 @@ Public Sub ParseCommand(ByVal sCommand As String)
       End If
       If Left$(sCurrentCmd, Len("isready")) = "isready" Then
         'DoEvents
+        If CBool(ReadINISetting("THREADS_IGNORE_GUI", "0") = "0") Then
+          SendCommand "info string " & CStr(NoOfThreads) & IIf(NoOfThreads = 1, " core", " cores")
+        Else
+          SendCommand "info string " & CStr(NoOfThreads) & IIf(NoOfThreads = 1, " core", " cores (set in INI file)")
+        End If
         If bWinboardTrace Then WriteTrace "UCI: " & sCurrentCmd & " " & Now()
         SendCommand "readyok"
         GoTo NextCmd
@@ -568,7 +582,6 @@ Public Sub ParseCommand(ByVal sCommand As String)
     If Left$(sCurrentCmd, 4) = "time" Then ' time left for computer in 1/100 sec
       TimeLeft = Val(Mid$(sCurrentCmd, 5))
       TimeLeft = TimeLeft / 100#
-      If MovesToTC = 0 Then MovesToTC = 60
       GoTo NextCmd
     End If
     If Left$(sCurrentCmd, 4) = "otim" Then ' time left for opponent
@@ -582,7 +595,8 @@ Public Sub ParseCommand(ByVal sCommand As String)
       ' level 40 0:30 0 : 40 moves in 30 min, final 0 = clock mode
       Erase sInput
       sInput = Split(sCurrentCmd)
-      MovesToTC = Val(sInput(1))
+      LevelMovesToTC = Val(sInput(1))
+      MovesToTC = LevelMovesToTC - (GameMovesCnt + 1) \ 2
       i = InStr(1, sInput(2), ":")
       If i = 0 Then
         SecondsPerGame = Val(sInput(2)) * 60
@@ -622,8 +636,10 @@ Public Sub ParseCommand(ByVal sCommand As String)
     If Left$(sCurrentCmd, 6) = "cores " Then
       If bThreadTrace Then WriteTrace "Command:" & LCase(Command$)
       If Not pbIsOfficeMode Then
-        x = Val("0" & Val(Mid$(sCurrentCmd, 7)))
-        SetThreads x
+        If CBool(ReadINISetting("THREADS_IGNORE_GUI", "0") = "0") Then
+          x = Val("0" & Val(Mid$(sCurrentCmd, 7)))
+          SetThreads x
+        End If
       End If
     End If
     If Left$(sCurrentCmd, 7) = "memory " Then
@@ -755,11 +771,12 @@ Public Sub InitGame()
   CopyIntArr StartupBoard, Board
   Erase Moved()
   GameMovesCnt = 0: Erase arGameMoves()
-  LastAddTimeMoveCnt = 0: LastExtraTimeMoveCnt = 0
   HintMove = EmptyMove
-  PrevGameMoveScore = 0
+  PrevGameMoveScore = UNKNOWN_SCORE
+  
   InitHash
   InitPieceSquares
+  MoreTimeForFirstMove = True
   OpeningHistory = " "
   If Not bUseBook Then
     BookPly = BOOK_MAX_PLY + 1
@@ -793,6 +810,7 @@ Public Sub InitGame()
   MatchInfo.Opponent = ""
   MatchInfo.OppRating = 0
   MatchInfo.OppComputer = False
+  MoveOverhead = CSng(Val("0" & Trim$(ReadINISetting("MOVEOVERHEAD", "500")))) / 1000# ' Move Overhead in milliseconds
 End Sub
 
 Public Sub InitUCIStartPos()
@@ -1083,11 +1101,11 @@ End Function
 Public Sub UCISetTimeControl(ByVal isTimeControl As String)
   ' sample: wtime 120000 btime 120000 winc 0 binc 0 movestogo 32
   Dim asList() As String, p As Long, i As Long, t As Long, WTime As Long, BTime As Long
-  MovesToTC = 0: TimeIncrement = 0: TimeLeft = 0: OpponentTime = 0: SecondsPerGame = 0
+  LevelMovesToTC = 0: MovesToTC = 0: TimeIncrement = 0: TimeLeft = 0: OpponentTime = 0: SecondsPerGame = 0
   FixedDepth = NO_FIXED_DEPTH: FixedTime = 0
   asList = Split(Trim$(isTimeControl))
   If bTimeTrace Then WriteTrace ">> UCISetTimeControl:  " & isTimeControl
-  WTime = -1: BTime = -1: MovesToTC = -1
+  WTime = -1: BTime = -1: MovesToTC = 0
   
   For i = 0 To UBound(asList) Step 2
     If asList(i) = "infinite" Then
@@ -1116,21 +1134,21 @@ Public Sub UCISetTimeControl(ByVal isTimeControl As String)
       Case "winc", "binc" ' should be equal
         t = Val("0" & Trim(asList(i + 1)))
         TimeIncrement = t / 1000#
-        If bTimeTrace Then WriteTrace ">> UCISetTimeControl: TimeIncrement=" & TimeIncrement
+        If bTimeTrace Then WriteTrace ">> UCISetTimeControl: TimeIncrement=" & asList(i) & " " & TimeIncrement
       Case "movestogo"
         t = Val("0" & Trim(asList(i + 1)))
-        MovesToTC = t
+        MovesToTC = t: LevelMovesToTC = MovesToTC
         If bTimeTrace Then WriteTrace ">> UCISetTimeControl: MoveToTC=" & MovesToTC
       Case "movetime"
         t = Val("0" & Trim(asList(i + 1)))
         FixedTime = t \ 1000#
         TimeLeft = FixedTime
-        MovesToTC = 0: WTime = 0: BTime = 0
+        MovesToTC = 0: WTime = 0: BTime = 0: LevelMovesToTC = 0
         If bTimeTrace Then WriteTrace ">> UCISetTimeControl: FixedTime=" & FixedTime
       Case "depth"
         t = Val("0" & Trim(asList(i + 1)))
         FixedDepth = t
-        MovesToTC = 0: WTime = 0: BTime = 0
+        MovesToTC = 0: WTime = 0: BTime = 0: LevelMovesToTC = 0
         If bTimeTrace Then WriteTrace ">> UCISetTimeControl: FixedDepth=" & FixedDepth
     End Select
 
@@ -1142,10 +1160,6 @@ Public Sub UCISetTimeControl(ByVal isTimeControl As String)
   
   If bTimeTrace Then WriteTrace ">> UCISetTimeControl: WTime=" & WTime & ", BTime=" & BTime & ", bWhiteToMove=" & bWhiteToMove & ", CompIsWHite=" & bCompIsWhite
   
-  If MovesToTC = -1 Then
-    MovesToTC = 60: If GameMovesCnt \ 2 > 40 Then MovesToTC = 40
-    If TimeIncrement >= 1 Then MovesToTC = MovesToTC - 10
-  End If
   If bCompIsWhite Then
     TimeLeft = WTime / 1000#
     If bTimeTrace Then WriteTrace ">> UCISetTimeControl: Comp=W TimeLeft=" & TimeLeft

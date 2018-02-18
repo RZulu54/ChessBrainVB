@@ -125,6 +125,7 @@ Function PollCommand() As Boolean
     #End If
   Else
     '--- Multi-thread mode: helper threads get commands from main thread
+    
     MainThreadStatus = ReadMainThreadStatus()
 
     'If bThreadTrace Then WriteTrace "PollCommand: ThreadStatusCheck:" & MainThreadStatus & " " & LastThreadStatus & " / " & Now()
@@ -133,11 +134,13 @@ Function PollCommand() As Boolean
         If LastThreadStatus <> MainThreadStatus Then
           ThreadCommand = "go" & vbLf: PollCommand = True
           If bThreadTrace Then WriteTrace "PollCommand: MainThreadStatus = 1" & " / " & Now()
-        End If
+      End If
       Case 0
         If LastThreadStatus <> MainThreadStatus Then
           ThreadCommand = "exit" & vbLf: PollCommand = True: bTimeExit = True
           If bThreadTrace Then WriteTrace "PollCommand: MainThreadStatus = 0" & " / " & Now()
+        Else
+          Sleep 25
         End If
     End Select
 
@@ -293,21 +296,20 @@ Public Sub ReadGame(sFile As String)
   Close #h
 End Sub
 
-Public Sub SendThinkInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Long)
+Public Sub SendThinkInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Long, Alpha As Long, Beta As Long)
   Static FinalMoveForHint As TMOVE
-  Dim sPost               As String, j As Long, sPostPV As String, EGTBScaledScore As Long
-  'EGTBScaledScore = ScaleScoreByEGTB(CurrentScore)
-  EGTBScaledScore = CurrentScore
+  Static sLastInfo As String
+  Dim sPost               As String, j As Long, sPostPV As String
   If pbIsOfficeMode Then
     '--- MS OFFICE
-    sPost = " " & Translate("Depth") & ":" & ActDepth & "/" & MaxPly & " " & Translate("Score") & ":" & FormatScore(EvalSFTo100(EGTBScaledScore)) & " " & Translate("Nodes") & ":" & Format("0.000", Nodes) & " " & Translate("Sec") & ":" & Format(Elapsed, "0.00")
+    sPost = " " & Translate("Depth") & ":" & ActDepth & "/" & MaxPly & " " & Translate("Score") & ":" & FormatScore(EvalSFTo100(CurrentScore)) & " " & Translate("Nodes") & ":" & Format("0.000", Nodes) & " " & Translate("Sec") & ":" & Format(Elapsed, "0.00")
     If plLastPostNodes <> Nodes Then
       SendCommand sPost
       plLastPostNodes = Nodes
       sPostPV = "      >" & Translate("Line") & ": "
 
       For j = 1 To PVLength(1) - 1
-        sPostPV = sPostPV & " " & MoveText(PV(1, j))
+        sPostPV = sPostPV & " " & GUIMoveText(PV(1, j))
         ' Save Hint move
         If j = 1 And Not MovesEqual(FinalMoveForHint, PV(1, 1)) Then HintMove = EmptyMove ' for case that 1. ply as hash move only
         If j = 2 Then
@@ -315,29 +317,26 @@ Public Sub SendThinkInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Lo
         End If
       Next
 
-      SendCommand sPostPV
-      ShowMoveInfo MoveText(FinalMove), ActDepth, MaxPly, EvalSFTo100(EGTBScaledScore), Elapsed
+      If sPost <> sLastInfo Then
+        SendCommand sPostPV
+        sLastInfo = sPost
+        ShowMoveInfo MoveText(FinalMove), ActDepth, MaxPly, EvalSFTo100(CurrentScore), Elapsed
+      End If
     End If
   Else
     '--- VB6
     If UCIMode Then
       ' format: info depth 1 seldepth 1 multipv 1 score cp 417 nodes 51 nps 25500 tbhits 0 time 2 pv e8g8
-      Dim UciScore As String
-      If CurrentScore <= -MATE_IN_MAX_PLY Then
-        UciScore = "mate -" & (1 + (MATE0 - Abs(CurrentScore)) \ 2)
-      ElseIf CurrentScore >= MATE_IN_MAX_PLY Then
-        UciScore = "mate " & (1 + (MATE0 - CurrentScore) \ 2)
-      Else
-        UciScore = "cp " & EvalSFTo100(EGTBScaledScore)
-      End If
-      sPost = "info depth " & ActDepth & " seldepth " & MaxPly & " multipv 1 score " & UciScore & " nodes " & Nodes & " nps " & CalcNPS(Elapsed) & " tbhits " & EGTBasesHitsCnt & " time " & Int(Elapsed * 1000#) & " pv"
+      sPost = "info depth " & ActDepth & " seldepth " & MaxPly & " multipv 1 score " & UciGUIScore(CurrentScore, Alpha, Beta)
+      If Nodes > 1000 Then sPost = sPost & " hashfull " & HashUsageUCI()
+      sPost = sPost & " nodes " & Nodes & " nps " & CalcNPS(Elapsed) & " tbhits " & EGTBasesHitsCnt & " time " & Int(Elapsed * 1000#) & " pv"
     Else
-      sPost = ActDepth & " " & EvalSFTo100(EGTBScaledScore) & " " & (Int(Elapsed) * 100) & " " & Nodes
+      sPost = ActDepth & " " & EvalSFTo100(CurrentScore) & " " & (Int(Elapsed) * 100) & " " & Nodes
     End If
     sPostPV = ""
 
     For j = 1 To PVLength(1)
-      If PV(1, j).From <> 0 Then sPostPV = sPostPV & " " & MoveText(PV(1, j))
+      If PV(1, j).From <> 0 Then sPostPV = sPostPV & " " & GUIMoveText(PV(1, j))
     Next
 
     If Len(Trim(sPostPV)) > 8 Then
@@ -352,18 +351,20 @@ Public Sub SendThinkInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Lo
     sPost = sPost & sPostPV
     If Not UCIMode Then sPost = sPost & "(" & MaxPly & "/" & HashUsagePerc & ")"
     If Not GotExitCommand() Then
-      SendCommand sPost
+      If sPost <> sLastInfo Then
+       SendCommand sPost
+       sLastInfo = sPost
+      End If
     End If
   End If
 End Sub
 
-Public Sub SendRootInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Long)
-  Dim sPost As String, j As Long, sPV As String, EGTBScaledScore As String
-  'EGTBScaledScore = ScaleScoreByEGTB(CurrentScore)
-  EGTBScaledScore = CurrentScore
+Public Sub SendRootInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Long, Alpha As Long, Beta As Long)
+  Dim sPost As String, j As Long, sPV As String
+  'CurrentScore = ScaleScoreByEGTB(CurrentScore)
   If pbIsOfficeMode Then
     '--- MS OFFICE
-    sPost = " " & Translate("Depth") & ":" & ActDepth & "/" & MaxPly & " " & Translate("Score") & ":" & FormatScore(EvalSFTo100(EGTBScaledScore)) & " " & Translate("Nodes") & ":" & Format("0.000", Nodes) & " " & Translate("Sec") & ":" & Format(Elapsed, "0.00")
+    sPost = " " & Translate("Depth") & ":" & ActDepth & "/" & MaxPly & " " & Translate("Score") & ":" & FormatScore(EvalSFTo100(CurrentScore)) & " " & Translate("Nodes") & ":" & Format("0.000", Nodes) & " " & Translate("Sec") & ":" & Format(Elapsed, "0.00")
     If plLastPostNodes <> Nodes Or Nodes = 0 Then
       SendCommand sPost
       plLastPostNodes = Nodes
@@ -374,28 +375,20 @@ Public Sub SendRootInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Lon
       Next
 
       SendCommand sPost
-      ShowMoveInfo MoveText(FinalMove), ActDepth, MaxPly, EvalSFTo100(EGTBScaledScore), Elapsed
+      ShowMoveInfo MoveText(FinalMove), ActDepth, MaxPly, EvalSFTo100(CurrentScore), Elapsed
     End If
   Else
     ' VB6
     If UCIMode Then
-      Dim UciScore As String
-      If CurrentScore <= -MATE_IN_MAX_PLY Then
-        UciScore = "mate -" & (1 + (MATE0 - Abs(CurrentScore)) \ 2)
-      ElseIf CurrentScore >= MATE_IN_MAX_PLY Then
-        UciScore = "mate " & (1 + (MATE0 - CurrentScore) \ 2)
-      Else
-        UciScore = "cp " & EvalSFTo100(EGTBScaledScore)
-      End If
       ' format: info depth 1 seldepth 1 multipv 1 score cp 417 nodes 51 nps 25500 tbhits 0 time 2 pv e8g8
-      sPost = "info depth " & ActDepth & " seldepth " & MaxPly & " multipv 1 score " & UciScore & " nodes " & Nodes & " nps " & CalcNPS(Elapsed) & " tbhits " & EGTBasesHitsCnt & " time " & Int(Elapsed * 1000#) & " pv"
+      sPost = "info depth " & ActDepth & " seldepth " & MaxPly & " multipv 1 score " & UciGUIScore(CurrentScore, Alpha, Beta) & " nodes " & Nodes & " nps " & CalcNPS(Elapsed) & " tbhits " & EGTBasesHitsCnt & " time " & Int(Elapsed * 1000#) & " pv"
     Else
-      sPost = ActDepth & " " & EvalSFTo100(EGTBScaledScore) & " " & (Int(Elapsed) * 100) & " " & Nodes
+      sPost = ActDepth & " " & EvalSFTo100(CurrentScore) & " " & (Int(Elapsed) * 100) & " " & Nodes
     End If
     sPV = ""
 
     For j = 1 To PVLength(1) - 1
-      If PV(1, j).From <> 0 Then sPV = sPV & " " & MoveText(PV(1, j))
+      If PV(1, j).From <> 0 Then sPV = sPV & " " & GUIMoveText(PV(1, j))
     Next
 
     If Len(Trim(sPV)) > 8 Then
@@ -443,7 +436,7 @@ End Function
             
 Public Sub SendAnalyzeInfo()
   Dim sPost As String, Elapsed As Single
-  Elapsed = TimerDiff(StartThinkingTime, Timer)
+  Elapsed = TimeElapsed
   sPost = "stat01: " & Int(Elapsed) & " " & Nodes & " " & IterativeDepth & " " & "1 1"
   If Not GotExitCommand() Then
     SendCommand sPost
@@ -671,7 +664,7 @@ Public Function IsTimeForEGTbBaseProbe() As Boolean
     IsTimeForEGTbBaseProbe = False
     If FixedDepth <> NO_FIXED_DEPTH Then IsTimeForEGTbBaseProbe = True: Exit Function
     ' If Ply < GetMax(3, IterativeDepth \ 3) Then
-    If CBool(TimeLeft > 1.5) Then  ' And (EGTBasesHitsCnt < (10 + IterativeDepth * 2 + TimeForIteration * 3)) Then
+    If CBool(TimeLeft > 1.5) Then
       IsTimeForEGTbBaseProbe = True
     End If
     ' End If
@@ -945,4 +938,19 @@ Public Function ScaleScoreByEGTB(Score As Long) As Long
   ElseIf EGTBRootResultScore = 0 Then
     ScaleScoreByEGTB = Score \ 10
   End If
+End Function
+
+Public Function UciGUIScore(ByVal UciScore As Long, ByVal Alpha As Long, ByVal Beta As Long) As String
+     If UciScore <= -MATE_IN_MAX_PLY Then
+        UciGUIScore = "mate -" & CStr((MATE0 - Abs(UciScore)) \ 2)
+      ElseIf UciScore >= MATE_IN_MAX_PLY Then
+        UciGUIScore = "mate " & CStr((MATE0 - UciScore) \ 2)
+      Else
+        UciGUIScore = "cp " & EvalSFTo100(UciScore)
+        If UciScore <= Alpha Then
+          UciGUIScore = UciGUIScore & " upperbound"
+        ElseIf UciScore >= Beta Then
+          UciGUIScore = UciGUIScore & " lowerbound"
+        End If
+      End If
 End Function

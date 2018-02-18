@@ -55,6 +55,7 @@ Private Declare Function RtlCompareMemory _
                 Lib "ntdll" (ByRef Source1 As Any, _
                              ByRef Source2 As Any, _
                              ByVal Length As Long) As Long
+                             
 Private Declare Function CreateFileMapping _
                 Lib "kernel32" _
                 Alias "CreateFileMappingA" (ByVal hFile As Long, _
@@ -85,6 +86,8 @@ Private lpMap          As Long
 Private mSize          As Long
 Private Ptr            As Long
 Private CheckData(128) As Byte, CheckDataPtr As Long
+Private VerifyArr(500) As Byte
+
 
 Public Sub CloseMap()
   UnmapViewOfFile lpMap
@@ -127,10 +130,29 @@ Public Sub ReadMapHashCluster(ByVal Index As Long, _
                               ByVal lpData As Long, _
                               ByVal Size As Long)
   'Pass a pointer lpData and a length in bytes Size.
+  Dim i As Long
   If Index * HashRecLen + Size > mSize Then Err.Raise 5, TypeName(Me), "Size must not exceed mapped size"
   If hObj = API_NULL Then Err.Raise &H80049308, TypeName(Me), "ReadMap: Map not open"
-  Ptr = lpMap + Index * HashRecLen
-  CopyMemory ByVal lpData, ByVal Ptr, ByVal Size
+  
+  Ptr = lpMap + HashMapSearchPtr + Index * HashRecLen
+  'If bHashTrace Then WriteTrace "ReadMapHashCluster: " & Index & "/" & Index & "Ptr:" & Ptr & "/ Nodes:" & Nodes & " / " & Now()
+  For i = 1 To 3 ' about 1 hash collision for 1.000.000.000 endgame nodes measured
+    CopyMemory ByVal lpData, ByVal Ptr, ByVal Size
+    If bHashVerify Then
+      ' If bHashTrace Then WriteTrace "ReadMapHashCluster:Verify :" & VarPtr(VerifyArr(0)) & "Ptr:" & Ptr & Now()
+      CopyMemory ByVal VarPtr(VerifyArr(0)), ByVal Ptr, ByVal Size
+      ' If bHashTrace Then WriteTrace "ReadMapHashCluster: Compare " & VarPtr(VerifyArr(0)) & "Ptr:" & Ptr & Now()
+      If RtlCompareMemory(ByVal Ptr, ByVal VarPtr(VerifyArr(0)), ByVal Size) <> Size Then
+        ' Difference found => try again
+        If bTraceHashCollision Then WriteTrace "HashMapDifference: Read " & Index & "/" & i & "/ Nodes:" & Nodes & " / " & Now()
+      Else
+        Exit For
+      End If
+    Else
+      Exit For
+    End If
+  Next
+  'If bHashTrace Then WriteTrace "ReadMapHashCluster:End "
 End Sub
 
 Public Sub WriteMapHashEntry(ByVal ReplaceIndex As Long, ByVal lpData As Long)
@@ -138,15 +160,15 @@ Public Sub WriteMapHashEntry(ByVal ReplaceIndex As Long, ByVal lpData As Long)
   Dim i As Long
   If (ReplaceIndex + 1) * HashRecLen > mSize Then Err.Raise 5, TypeName(Me), "Size must not exceed mapped size"
   If hObj = API_NULL Then Err.Raise &H8004930A, TypeName(Me), "WriteMap: Map not open"
-  Ptr = lpMap + ReplaceIndex * HashRecLen
+  Ptr = lpMap + HashMapSearchPtr + ReplaceIndex * HashRecLen
 
-  For i = 1 To 3
+  For i = 1 To 3  ' about 1 hash collision for 1.000.000.000 endgame nodes measured
     CopyMemory ByVal Ptr, ByVal lpData, ByVal HashRecLen
     '--- Reread the written entry to verify that there was no parallel write from other thread that mixed up the data
     '--- Try max 3 times
     If RtlCompareMemory(ByVal Ptr, ByVal lpData, ByVal HashRecLen) <> HashRecLen Then
       ' Difference found => try again
-      'WriteTrace "HashMapDifference " & Index & "/" & i & " / " & Now()
+      If bTraceHashCollision Then WriteTrace "HashMapDifference: Write " & ReplaceIndex & "/" & i & "/ Nodes:" & Nodes & " / " & Now()
     Else
       Exit For
     End If

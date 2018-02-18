@@ -17,6 +17,7 @@ Form=Forms\Main.frm
 Module=DebugBas; Modules\Debug.bas
 Class=clsHashMap; Modules\HashMap.cls
 Module=CmdOutput; Modules\CmdOutput.bas
+Module=Process; Modules\Process.bas
 IconForm="frmDebugMain"
 Startup="Sub Main"
 HelpFile=""

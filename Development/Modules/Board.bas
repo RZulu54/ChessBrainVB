@@ -1340,6 +1340,14 @@ Public Function MoveText(CompMove As TMOVE) As String
   MoveText = sCoordMove
 End Function
 
+Public Function GUIMoveText(CompMove As TMOVE) As String
+  If UCIMode Then
+    GUIMoveText = UCIMoveText(CompMove)
+  Else
+    GUIMoveText = MoveText(CompMove)
+  End If
+End Function
+
 Public Function UCIMoveText(CompMove As TMOVE) As String
   'UCI: no x for captrue or + for check
   ' Returns move string for data type TMove

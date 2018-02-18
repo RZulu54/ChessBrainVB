@@ -159,15 +159,16 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
       'For i = 0 To 2 ' number of time measure runs > 3x
       InitGame ' Reset FixedDepth
       ReadEPD EPD(x) ' Reset FixedDepth
-      'If False Then
-      If x = 3 Or x = 4 Or x = 5 Or x = 7 Then
-        FixedDepth = iDepth + 1
-      Else
-        FixedDepth = iDepth
-      End If
-      'Else
+      If True Then
+        If x = 3 Or x = 4 Or x = 5 Or x = 7 Then
+          FixedDepth = iDepth + 1
+        Else
+          FixedDepth = iDepth
+        End If
+      ' Else
       ' FixedTime = 4
-      ' End If
+       MovesToTC = 0: TimeLeft = 20: TimeIncrement = 10
+      End If
       If InStr(EPD(x), " w") > 0 Then
         bCompIsWhite = True   'False:
         bWhiteToMove = True   '---False
@@ -181,8 +182,11 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
       'SendCommand PrintPos
       If False Then  ' Time based end of thinking
         FixedDepth = NO_FIXED_DEPTH
+        LevelMovesToTC = 40
         MovesToTC = 0
-        TimeLeft = 340
+        TimeLeft = 120
+        TimeIncrement = 0
+        GameMovesCnt = 119 ' plies, /2 for MoveCnt
         BookPly = 31
       End If
       StartTime = Timer

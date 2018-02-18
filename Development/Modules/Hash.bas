@@ -4,7 +4,8 @@ Attribute VB_Name = "HashBas"
 '= Hash functions
 '==================================================
 Option Explicit
-Public Const MAX_THREADS       As Long = 8
+
+Public Const MAX_THREADS       As Long = 64
 'The style of the hash table rows
 Public Const TT_NO_BOUND       As Byte = 0
 Public Const TT_UPPER_BOUND    As Byte = 1
@@ -13,6 +14,8 @@ Public Const TT_EXACT          As Byte = 3
 Public Const HASH_CLUSTER      As Long = 4
 Public Const TT_TB_BASE_DEPTH  As Long = 222
 Public Const MATERIAL_HASHSIZE As Long = 8192
+
+Public Const HASH_SIZE_FACTOR  As Long = 38000  ' entries per MB hash
 
 Public Type THashKey
   ' 2x 32 bit
@@ -30,8 +33,10 @@ Public HashBCanCastle   As Long
 Public HashBCanCastle2  As Long
 Public HashExcluded     As Long
 Public InHashCnt        As Long
+Public HashAccessCnt    As Long
 Public HashUsage        As Long
 Private bHashUsed       As Boolean
+Public bHashVerify      As Boolean
 Public HashGeneration   As Long
 Public EmptyHash        As THashKey
 
@@ -51,7 +56,9 @@ Private Type HashTableEntry
 End Type
 
 Private moHashMap                              As clsHashMap
-Public HashSize                                As Long
+Public HashSizeMB                              As Long
+Public HashSize                                As Long ' bytes
+Public bHashSizeIgnoreGUI                      As Boolean ' HASHSIZE_IGNORE_GUI
 Dim ZobristTable(SQ_A1 To SQ_H8, 0 To 16)      As Long ' key for each piece typeand board position
 Dim ZobristTable2(SQ_A1 To SQ_H8, 0 To 16)     As Long
 Dim MatZobristTable(0 To 10, 0 To 12)          As Long
@@ -63,7 +70,9 @@ Public NoOfThreads                             As Long
 Public ThreadNum                               As Long  ' 0 = Main Thread
 Public MainThreadStatus                        As Long, LastThreadStatus  As Long ' 1 = start, 0 = stop, -1 = Exit
 Public ThreadCommand                           As String
+
 Public HashMapEnd                              As Long
+Public HashMapHashSizePtr                      As Long
 Public HashMapThreadStatusPtr(MAX_THREADS - 1) As Long
 Public HashMapBestPVPtr(MAX_THREADS - 1)       As Long ' Best pv for 10 moves
 Public HashMapBoardPtr                         As Long
@@ -72,10 +81,14 @@ Public HashMapWhiteToMovePtr                   As Long
 Public HashMapGameMovesCntPtr                  As Long
 Public HashMapGameMovesPtr                     As Long
 Public HashMapGamePosHashPtr                   As Long
+Public HashMapSearchPtr                        As Long
+
 Public HashRecLen                              As Long
 Public HashClusterLen                          As Long
 Private BestPV(10)                             As TMOVE
 Public SingleThreadStatus(MAX_THREADS - 1)     As Long ' 1 = start, 0 = stop, -1 = Stopped
+Private HashMapFile As String
+Public bTraceHashCollision                     As Boolean
 
 'Public HashFoundFromOtherThread As Long
 Private Type TMaterialHashEntry
@@ -89,28 +102,51 @@ Public Sub InitHash()
   'Initialize the hash-table
   ' Use maximum hash size form INI file and memory command
   bHashTrace = CBool(ReadINISetting("HASHTRACE", "0") <> "0")
-  HashSize = GetMin(400, Val(ReadINISetting("HASHSIZE", "64"))) ' in MB Limit 400 else overflow
-  HashSize = GetMax(HashSize, MemoryMB) ' memory command value
-  If bHashTrace Then WriteTrace "Init hash size start " & HashSize & "MB " & Now()
-  HashSize = HashSize * 38000   ' seems to fit...? hash len = 31
+  HashSizeMB = GetMin(1400, Val(ReadINISetting("HASHSIZE", "64"))) ' 2 GB for 32 bit ( max 1.5 GB?)
+  If CBool(ReadINISetting("HASHSIZE_IGNORE_GUI", "0") = "0") Then
+    HashSizeMB = GetMax(HashSizeMB, MemoryMB) ' memory command value from GUI
+  End If
+  If NoOfThreads = 1 Then HashSizeMB = GetMin(1400, HashSizeMB) ' in 1 core: vb array MB, in IDE max around 350MB, EXE 1.5 GB
+  If InIDE Then HashSizeMB = GetMin(256, HashSizeMB) ' Limited in IDE, depends on local memory usage
+  
+  If bHashTrace Then WriteTrace "Init hash size start " & HashSizeMB & "MB " & Now()
+  If ThreadNum <= 0 Then  ' for helper threads if hssh size was changed
+     WriteINISetting "HASH_USED", CStr(HashSizeMB)
+  Else
+     HashSizeMB = Val(ReadINISetting("HASH_USED", "64")) ' read fromm main thread
+  End If
+  
+  HashSize = HashSizeMB * HASH_SIZE_FACTOR   ' in Bytes, seems to fit...? hash len = 31
   HashUsage = 0
   bHashUsed = False
+  #If VBA_MODE = 0 Then
+    HashMapFile = ReadINISetting("HASH_MAP_FILE", "CBVBHash" & Trim(App.Major) & "." & Trim(App.Minor) & Trim(App.Revision))  ' Change in INI to run 2x CB engine
+  #End If
+  
+  bHashVerify = CBool(ReadINISetting("HASH_VERIFY", "0") <> "0") ' verify hash read/write to avoid collisions for many cores
+  If NoOfThreads < 2 Then bHashVerify = False
+  bTraceHashCollision = bHashVerify And CBool(ReadINISetting("HASH_COLL_TRACE", "0") <> "0") ' trace hash read/write collisions for > 1 core
   HashRecLen = LenB(HashCluster(0)): HashClusterLen = HashRecLen * HASH_CLUSTER
-  If NoOfThreads < 2 Then
-    ReDim HashTable(HashSize + HASH_CLUSTER)
+  
+  If bHashTrace Then WriteTrace "InitHash: HashSize:" & HashSize & ", Threads:" & NoOfThreads
+  If NoOfThreads <= 1 Then
+    ReDim HashTable(HashSize + HASH_CLUSTER) ' may be OutOfMemory Error here
     If bHashTrace Then WriteTrace "InitHash: Redim HashTable Size= " & HashSize & " entries " & Now()
     'MsgBox "Hashtable " & NoOfThreads & "/ " & ThreadNum
-  ElseIf NoOfThreads > 1 Or True Then
+  ElseIf NoOfThreads > 1 Then
     ' Structure for game data
     ' ThreadStatus as long ' 1 = start, 0 = stop, -1 = Exit
     ReDim HashTable(0)
-    If bHashTrace Then WriteTrace "InitHash: Init hash map " & HashSize & " entries " & Now()
-    HashMapEnd = HashRecLen * (HashSize + HASH_CLUSTER)
-    'MsgBox "HashMAp: " & NoOfThreads & "/ " & ThreadNum
+    If bHashTrace Then WriteTrace "InitHash: Init hash map " & HashSize & " Bytes " & Now()
+    
+    ' HashMapEnd value starts a 0, every part of memory added will increase the value to address the next one
+    HashMapEnd = 0
+    If bHashTrace Then WriteTrace "HashMap: " & NoOfThreads & "/ " & ThreadNum & ", HashMapEnd:" & HashMapEnd & " MB:" & HashSizeMB
     Dim i As Long
 
     For i = 0 To MAX_THREADS - 1
       HashMapThreadStatusPtr(i) = HashMapEnd: HashMapEnd = HashMapEnd + LenB(MainThreadStatus)
+      'If bHashTrace Then WriteTrace "InitHash:HashMapThreadStatusPtr:" & i & ":" & HashMapThreadStatusPtr(i)
     Next
 
     For i = 0 To MAX_THREADS - 1
@@ -123,7 +159,13 @@ Public Sub InitHash()
     HashMapGameMovesCntPtr = HashMapEnd: HashMapEnd = HashMapEnd + LenB(GameMovesCnt)
     HashMapGameMovesPtr = HashMapEnd: HashMapEnd = HashMapEnd + LenB(arGameMoves(0)) * MAX_GAME_MOVES
     HashMapGamePosHashPtr = HashMapEnd: HashMapEnd = HashMapEnd + LenB(GamePosHash(0)) * MAX_GAME_MOVES
+    
+    ' the real hash for search is allocated now:
+    HashMapSearchPtr = HashMapEnd
+    HashMapEnd = HashMapEnd + HashRecLen * (HashSize + HASH_CLUSTER)
+    
     If ThreadNum >= 0 Then
+      If bHashTrace Then WriteTrace "InitHash:OpenHashMap: HashMapEnd " & HashMapEnd
       OpenHashMap HashMapEnd
     End If
   End If
@@ -186,11 +228,13 @@ Public Function InsertIntoHashTable(HashKey As THashKey, _
   ZobristHash1 = HashKey.HashKey1: ZobristHash2 = HashKey.Hashkey2
   IndexKey = HashKeyCompute() * HASH_CLUSTER
   ReplaceIndex = IndexKey
+  If HashAccessCnt < 2100000000 Then HashAccessCnt = HashAccessCnt + 1
 
   For i = 0 To HASH_CLUSTER - 1
 
     With HashTable(IndexKey + i)
       If .Position1 <> 0 Then
+        If HashGeneration = .Generation Then If HashUsage < 2100000000 Then HashUsage = HashUsage + 1
         ' Don't overwrite more valuable entry
         If (.Position1 = ZobristHash1 And .Position2 = ZobristHash2) Then
           ' Position found: Preserve hash move if no new move
@@ -204,7 +248,6 @@ Public Function InsertIntoHashTable(HashKey As THashKey, _
           ReplaceValue = .Depth - 8 * (HashGeneration - .Generation)
           If ReplaceValue < MaxReplaceValue Then
             MaxReplaceValue = ReplaceValue: ReplaceIndex = IndexKey + i
-            'If HashUsage > 0 Then HashUsage = HashUsage - 1
           End If
         End If
       Else
@@ -213,8 +256,6 @@ Public Function InsertIntoHashTable(HashKey As THashKey, _
     End With
 
   Next
-
-  If HashTable(ReplaceIndex).Position1 = 0 And HashUsage < 2147483646 Then HashUsage = HashUsage + 1
 
   With HashTable(ReplaceIndex)
     '--- Save hash data, preserve hash move if no new move
@@ -429,12 +470,38 @@ Public Function HashUsagePerc() As String
   End If
 End Function
 
+Public Function HashUsageUCI() As Long
+  Dim x As Single
+  If HashSize = 0 Or HashUsage <= 0 Then
+    HashUsageUCI = 0
+  Else
+    x = HashUsage: x = x * CSng(1000) / CSng(1 + HashAccessCnt)
+    HashUsageUCI = GetMin(1000, CLng(x))
+  End If
+End Function
+
 Public Function OpenHashMap(TotalSize As Long) As Long
-  Set moHashMap = New clsHashMap
-  If ThreadNum = 0 Then
-    moHashMap.CreateMap "ChessbrainVBHash", TotalSize
-  ElseIf ThreadNum > 0 Then
-    moHashMap.OpenMap "ChessbrainVBHash", TotalSize
+  Static OldHashSize As Long
+  If OldHashSize = 0 Then
+    Set moHashMap = New clsHashMap
+  End If
+  If OldHashSize = 0 Or OldHashSize <> TotalSize Then
+    If ThreadNum = 0 Then
+      If OldHashSize = 0 Then
+        Set moHashMap = New clsHashMap
+        If bThreadTrace Then WriteTrace "OpenHashMap: New clsHashMap: " & TotalSize
+      Else
+        If bThreadTrace Then WriteTrace "OpenHashMap: CloseMap"
+        moHashMap.CloseMap
+      End If
+      moHashMap.CreateMap HashMapFile, TotalSize
+      If bThreadTrace Then WriteTrace "OpenHashMap: CreateMap: Size " & TotalSize
+    ElseIf ThreadNum > 0 Then
+      moHashMap.OpenMap HashMapFile, TotalSize
+      If bThreadTrace Then WriteTrace "OpenHashMap: OpenMap: Size " & TotalSize
+    End If
+    OldHashSize = TotalSize
+
   End If
 End Function
 
@@ -460,11 +527,13 @@ Public Function InsertIntoHashMap(HashKey As THashKey, _
   IndexKey = HashKeyComputeMap() * HASH_CLUSTER
   ReplaceIndex = 0
   moHashMap.ReadMapHashCluster IndexKey, VarPtr(HashCluster(0)), HashClusterLen
-
+  If HashAccessCnt < 2100000000 Then HashAccessCnt = HashAccessCnt + 1
+  
   For i = 0 To HASH_CLUSTER - 1
 
     With HashCluster(i)
       If .Position1 <> 0 Then
+        If HashGeneration = .Generation Then If HashUsage < 2100000000 Then HashUsage = HashUsage + 1
         ' Don't overwrite more valuable entry
         If (.Position1 = ZobristHash1 And .Position2 = ZobristHash2) Then
           ' Position found: Preserve hash move if no new move
@@ -478,7 +547,6 @@ Public Function InsertIntoHashMap(HashKey As THashKey, _
           ReplaceValue = .Depth - 8 * (HashGeneration - .Generation)
           If ReplaceValue < MaxReplaceValue Then
             MaxReplaceValue = ReplaceValue: ReplaceIndex = IndexKey + i
-            'If HashUsage > 0 Then HashUsage = HashUsage - 1
           End If
         End If
       Else
@@ -488,7 +556,6 @@ Public Function InsertIntoHashMap(HashKey As THashKey, _
 
   Next
 
-  If HashCluster(ReplaceIndex - IndexKey).Position1 = 0 And HashUsage < 2147483646 Then HashUsage = HashUsage + 1
 
   With HashCluster(ReplaceIndex - IndexKey)
     '--- Save hash data, preserve hash move if no new move
@@ -591,18 +658,22 @@ End Function
 Public Function InitThreads()
   Static bInitDone As Boolean
   Dim i            As Long
+  DoEvents
   #If VBA_MODE = 0 Then
     If Not bInitDone And NoOfThreads > 1 Then
       If CreateAppLockFile() Then ' Already started?
         If bThreadTrace Then WriteTrace "InitThreads: NoOfThreads=" & NoOfThreads
         MainThreadStatus = 0: WriteMainThreadStatus 0 ' idle
-
+  '  Dim tStart As Single, tEnd As Single
+  '  tStart = Timer
+  '  Dim sCmd As String
         For i = 2 To NoOfThreads
-          ' If False Then ' XXXBUGsearch SMP
-          Shell App.Path & "\ChessBrainVB.exe thread" & Trim$(CStr(i - 1)), vbMinimizedNoFocus
-          ' End If ' XXXBUGsearch SMP
+         StartProcess App.Path & "\ChessBrainVB.exe thread" & Trim$(CStr(i - 1)) ' Much faster
+         'Shell App.Path & "\ChessBrainVB.exe thread" & Trim$(CStr(i - 1)), vbMinimizedNoFocus  ' SHELL is MUCH slower ( 1 sec per call?!?)
         Next
-
+   '   tEnd = Timer()
+   '   WriteTrace "Threads started:" & ", Time:" & Format$(tEnd - tStart, "0.00000")
+ 
         Sleep 500
       End If
     End If
@@ -666,6 +737,7 @@ Public Function WriteMainThreadStatus(ByVal ilNewThreadStatus As Long) As Long
   Debug.Assert NoOfThreads > 1
   SingleThreadStatus(0) = ilNewThreadStatus
   moHashMap.WriteMapPos HashMapThreadStatusPtr(0), VarPtr(ilNewThreadStatus), CLng(LenB(ilNewThreadStatus))
+  If bThreadTrace Then WriteTrace "WriteMainThreadStatus: " & HashMapThreadStatusPtr(0)
 End Function
 
 Public Function ReadMainThreadStatus() As Long
@@ -675,7 +747,7 @@ Public Function ReadMainThreadStatus() As Long
   moHashMap.ReadMapPos HashMapThreadStatusPtr(0), VarPtr(MainThreadStatus), CLng(LenB(MainThreadStatus))
   SingleThreadStatus(0) = MainThreadStatus
   ReadMainThreadStatus = MainThreadStatus
-  If bThreadTrace Then If LastRead <> ReadMainThreadStatus Then WriteTrace "ReadMainThreadStatus:Threadnum=" & ThreadNum & ", MainStatus:" & ReadMainThreadStatus & " / " & Now()
+  If bThreadTrace Then If LastRead <> ReadMainThreadStatus Then WriteTrace "ReadMainThreadStatus:Threadnum=" & ThreadNum & ", Ptr:" & HashMapThreadStatusPtr(0) & ", MainStatus:" & ReadMainThreadStatus & " / " & Now()
   LastRead = ReadMainThreadStatus
 End Function
 
@@ -775,7 +847,7 @@ End Function
 
 Public Function SetThreads(ByVal iMaxThreads As Long)
   ' set thread numbers: 1-4
-  NoOfThreads = GetMax(1, "0" & Val(Trim$(ReadINISetting("THREADS", "1"))))
+  NoOfThreads = GetMax(1, Val("0" & Trim$(ReadINISetting("THREADS", "1"))))
   NoOfThreads = GetMax(NoOfThreads, iMaxThreads)
   NoOfThreads = GetMin(NoOfThreads, MAX_THREADS)
   If NoOfThreads <= 1 Then
@@ -814,4 +886,13 @@ Public Function ProbeMaterialHash(ByVal Key As Long) As Long
     End If
   End With
 
+End Function
+
+Public Function InIDE() As Boolean
+   ' running IDE ( VB development environment) ? if compiled EXE returns false
+    Static i As Byte
+    i = i + 1
+    If i = 1 Then Debug.Assert Not InIDE()
+    InIDE = i = 0
+    i = 0
 End Function

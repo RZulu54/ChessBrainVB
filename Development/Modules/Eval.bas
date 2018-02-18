@@ -16,28 +16,6 @@ Const RookCheck                   As Long = 880
 Const BishopCheck                 As Long = 435
 Const KnightCheck                 As Long = 790
 '---
-Public bTimeExit                  As Boolean
-Public StartThinkingTime          As Single
-Public TimeStart                  As Single
-Public SearchStart                As Single
-Public SearchTime                 As Single
-Public TimeForIteration           As Single
-Public ExtraTimeForMove           As Single
-Public TimeLeft                   As Single
-Public OpponentTime               As Single
-Public TimeIncrement              As Long
-Public MovesToTC                  As Long
-Public SecondsPerGame             As Long
-Public FixedDepth                 As Long  '=NO_FIXED_DEPTH if time limit is used
-Public FixedTime                  As Single
-Public LastChangeDepth            As Long, LastChangeMove As String, bExtraTime As Boolean
-Public TotalTimeGiven             As Single
-Public bAddExtraTime              As Boolean
-Public bResearching               As Boolean '--- out of aspiration windows: more time
-Public BestMoveChanges            As Single ' More time if best move changes often
-Public UnstablePvFactor           As Single
-Public MaximumTime                As Single
-Public OptimalTime                As Single
 Public IsolatedPenalty(1)         As TScore
 Public BackwardPenalty(1)         As TScore
 Public DoubledPenalty             As TScore
@@ -297,7 +275,7 @@ Public Function Eval() As Long
   Dim WBishopsOnBlackSq       As Long, WBishopsOnWhiteSq As Long, BBishopsOnBlackSq As Long, BBishopsOnWhiteSq As Long
   Dim WPawnCntOnWhiteSq       As Long, BPawnCntOnWhiteSq As Long
   Dim WKingFile               As Long, BKingFile As Long, WFrontMostPassedPawnRank As Long, BFrontMostPassedPawnRank As Long, ScaleFactor As Long
-  Dim WChecksCounted          As Long, BChecksCounted As Long, WOtherChecksCounted As Long, BOtherChecksCounted As Long
+  Dim WChecksCounted          As Long, BChecksCounted As Long, WOtherChecksCounted As Long, BOtherChecksCounted As Long, KingLevers As Long
   '
   '------ Init Eval
   '
@@ -962,7 +940,11 @@ lblNextPieceCnt:
             If r <> 0 Then
   
               For k = WKingFile + r To FileNum - r Step r ' own blocking pawns on files between king an rook
-                If WPawns(k) = 0 Then r = 0: Exit For
+                If WPawns(k) = 0 Then
+                  r = 0: Exit For
+                ElseIf PawnsWMin(k) > RankNum + 2 Then
+                  r = 0: Exit For
+                End If
               Next
   
               If r <> 0 Then SC.MG = SC.MG - (92 - MobCnt * 22) * (1 + Abs(Rank(WKingLoc) = 1 And (Moved(WKING_START) > 0 Or Moved(Square) > 0)))
@@ -1060,7 +1042,11 @@ lblNextPieceCnt:
             If r <> 0 Then
   
               For k = BKingFile + r To FileNum - r Step r ' own blocking pawns on files between king an rook
-                If BPawns(k) = 0 Then r = 0: Exit For
+                If BPawns(k) = 0 Then
+                  r = 0: Exit For
+                ElseIf PawnsBMax(k) < RankNum - 2 Then
+                  r = 0: Exit For
+                End If
               Next
   
               If r <> 0 Then SC.MG = SC.MG - (92 - MobCnt * 22) * (1 + Abs(Rank(BKingLoc) = 8 And (Moved(BKING_START) > 0 Or Moved(Square) > 0)))
@@ -1332,7 +1318,7 @@ lblNextPieceCnt:
       End If
       If bDoWKSafety Then
           '--- Check threats at king ring
-          Undefended = 0: KingOnlyDefended = 0: WKingAttPieces = 0
+          Undefended = 0: KingOnlyDefended = 0: WKingAttPieces = 0: KingLevers = 0
           '  add the 2 or 3 squares in front of king ring: king G1 => F3+G3+H3
           If RankNum = 1 Then
             For Target = WKingLoc + 19 To WKingLoc + 21
@@ -1340,6 +1326,9 @@ lblNextPieceCnt:
                 If BAttack(Target) <> 0 Then
                   If WAttack(Target) = 0 Then If PieceColor(Board(Target)) <> BCOL Then Undefended = Undefended + 1
                   WKingAttPieces = WKingAttPieces Or BAttack(Target)
+                  If Board(Target) = WPAWN Then
+                    If CBool(BAttack(Target) And PAttackBit) Then KingLevers = KingLevers + 1
+                  End If
                 End If
               End If
             Next
@@ -1353,6 +1342,9 @@ lblNextPieceCnt:
                 If WAttack(Target) = 0 Then KingOnlyDefended = KingOnlyDefended + 1
                 WKingAdjacentZoneAttCnt = WKingAdjacentZoneAttCnt + AttackBitCnt(BAttack(Target) And Not PAttackBit)
                 WKingAttPieces = WKingAttPieces Or BAttack(Target)
+                If Board(Target) = WPAWN Then
+                  If CBool(BAttack(Target) And PAttackBit) Then KingLevers = KingLevers + 1
+                End If
               End If
               rr = 1 ' rr=Distance to King
 
@@ -1515,7 +1507,7 @@ lblNextPieceCnt:
             End If
                       
             ' total KingDanger
-            KingDanger = KingDanger + WKingAttackersCount * WKingAttackersWeight + 102 * WKingAdjacentZoneAttCnt _
+            KingDanger = KingDanger + WKingAttackersCount * WKingAttackersWeight + 102 * WKingAdjacentZoneAttCnt + Abs(KingLevers > 0) * 64 _
                          + 191 * (KingOnlyDefended + Undefended) + 143 * (Abs(WPinnedCnt > 0)) - 848 * Abs(PieceCnt(BQUEEN) = 0) - 9 * Bonus \ 8 + 4 * (BNonPawnPieces + PieceCnt(BPAWN) + 1)
             
             ' Penalty for king on open or semi-open file
@@ -1566,7 +1558,7 @@ lblNextPieceCnt:
     '----------------------------------------------
     '--- Black King Safety Eval -------------------
     '----------------------------------------------
-    RankNum = Rank(BKingLoc): RelRank = (9 - RankNum): FileNum = BKingFile: Bonus = 0
+    RankNum = Rank(BKingLoc): RelRank = (9 - RankNum): FileNum = BKingFile: Bonus = 0: KingLevers = 0
     If (PieceCnt(WQUEEN) * 2 + PieceCnt(WROOK)) > 1 Then
       KingDanger = 0
       If BPawnCnt = 0 Then MinBKingPawnDistance = 0 Else MinBKingPawnDistance = MinBKingPawnDistance - 1
@@ -1601,6 +1593,9 @@ lblNextPieceCnt:
                 If WAttack(Target) <> 0 Then
                   If BAttack(Target) = 0 Then If PieceColor(Board(Target)) <> WCOL Then Undefended = Undefended + 1
                   BKingAttPieces = BKingAttPieces Or WAttack(Target)
+                  If Board(Target) = BPAWN Then
+                    If CBool(WAttack(Target) And PAttackBit) Then KingLevers = KingLevers + 1
+                  End If
                 End If
               End If
             Next
@@ -1615,6 +1610,9 @@ lblNextPieceCnt:
                 If BAttack(Target) = 0 Then KingOnlyDefended = KingOnlyDefended + 1
                 BKingAdjacentZoneAttCnt = BKingAdjacentZoneAttCnt + AttackBitCnt(BAttack(Target) And Not PAttackBit)
                 BKingAttPieces = BKingAttPieces Or WAttack(Target)
+                If Board(Target) = BPAWN Then
+                  If CBool(WAttack(Target) And PAttackBit) Then KingLevers = KingLevers + 1
+                End If
               End If
               rr = 1 ' rr=Distance to King
 
@@ -1780,7 +1778,7 @@ lblNextPieceCnt:
             
   
             ' total KingDanger
-            KingDanger = KingDanger + BKingAttackersCount * BKingAttackersWeight + 102 * BKingAdjacentZoneAttCnt _
+            KingDanger = KingDanger + BKingAttackersCount * BKingAttackersWeight + 102 * BKingAdjacentZoneAttCnt + Abs(KingLevers > 0) * 64 _
                          + 191 * (KingOnlyDefended + Undefended) + 143 * (Abs(BPinnedCnt > 0)) - 848 * Abs(PieceCnt(WQUEEN) = 0) - 9 * Bonus \ 8 + 4 * (WNonPawnPieces + PieceCnt(WPAWN) + 1)
             
             ' Penalty for king on open or semi-open file

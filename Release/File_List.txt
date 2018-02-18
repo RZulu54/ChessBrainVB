@@ -39,6 +39,8 @@ ExcelChessBrainX.xlsm:    EXCEL ChessBrainVB GUI. ALT+F8 to run auto_open macro 
 
 Fathom.exe:  helper exe for access to endgame tablebases, see source in Github: https://github.com/basil00/Fathom
 
+InBetween.exe:  UCI interface needed for Fritz/Chessbase GUI
+
 VB_Technical_Notes.txt: Technical hints about Visual Basic programming
 
 Wb2Uci.exe: select this file to run this winboard enginge with UCI protocol
