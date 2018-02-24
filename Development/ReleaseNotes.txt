@@ -4,6 +4,12 @@
 = Release notes for ChessBrainVB chess engine 
 =======================================================================================
 
+Changes from version 3.65 to 3.66 (Roger Zuehlsdorf 24-FEB-2018)
+----------------------------------------------------------------
+- fixed bug: enpassant capture ignored in mate escape move list (reason for game loosing moves)
+  this old bug was discovered in engine matches (many thanks to Graham Banks for running this matches)
+- some endgame knowledge added for positions with no pawns
+
 Changes from version 3.61 to 3.65 (Roger Zuehlsdorf 18-FEB-2018)
 ----------------------------------------------------------------
 - new time management, moveoverhead setting added

@@ -125,8 +125,17 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
   'EPD(1) = "8/5PK1/8/2Q5/4P1k1/8/8/8 b - - 0 14 "
   'EPD(1) = "8/4k3/8/8/5P2/5K2/8/8 b - - 4 3 "  ' EGTB KPK
   'EPD(1) = "8/3k3K/7P/1r6/5p2/8/8/8 b - - 0 1 "
+  'EPD(1) = "8/8/3R4/p3npk1/P3p2p/4P3/3K1PP1/r2B4 w - - 8 39 " ' EP capture mate bug
+  'EPD(1) = "8/2b5/8/4kN2/1r4K1/6N1/8/8 w - - 0 1"  ' endgame scale factor no pawns
+  'EPD(1) = "8/8/7k/p1P4p/P6P/7K/8/8 w - - 0 1"  ' passed pawn test 1 rank 5
+  'EPD(1) = "8/8/7k/p1P4p/P6P/7K/8/2R5 w - - 0 1"  ' passed pawn test 2 defended from behind
+  'EPD(1) = "8/8/7k/p1P4p/P6P/7K/8/2r5 w - - 0 1"  ' passed pawn test 3 attacked from behind
+  'EPD(1) = "8/7r/7k/p1P4p/P6P/7K/8/2R5 w - - 0 1"  ' passed pawn test 4 defended from behind + attacked path
+  'EPD(1) = "8/8/2P4k/p6p/P6P/7K/8/2R5 w - - 0 1"  ' passed pawn test 5 defended from behind rank 6
   
   
+  
+  '------ normal test ----
   EPD(1) = "r1bqk2r/p2p1pp1/1p2pn1p/n1pP2B1/1bP5/2N2N2/PPQ1PPPP/R3KB1R w KQkq - 0 9" '<<<<< AKT
   EPD(2) = "1rb2rk1/p3nppp/1p1qp3/3n2N1/2pP4/2P3P1/PP3PBP/R1BQR11K w - -"  'TEST 2
   EPD(3) = "r1b2rk1/p2nq1p1/1pp1p2p/5p2/2PPp3/2Q1P3/PP1N1PPP/2R1KB1R w K - 0 13" '--- Ruhig

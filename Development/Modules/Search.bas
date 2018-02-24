@@ -2018,13 +2018,12 @@ Private Sub OrderMoves(ByVal Ply As Long, _
       From = .From: Target = .Target: Promoted = .Promoted: Captured = .Captured: Piece = .Piece
       .IsLegal = False: .IsChecking = False: .SeeValue = UNKNOWN_SCORE
     End With
-
     lValue = 0
     ' Count legal moves if in check
     If bLegalsOnly Then
       If Moves(Ply, i).Castle = NO_CASTLE Then ' castling not allowed in check
-        ' Avoid costly legal proof for moves with cannot be a check evasion
-        If From <> KingLoc And PieceType(Captured) <> PT_KNIGHT And Not SameXRay(From, KingLoc) And Not SameXRay(Target, KingLoc) Then
+        ' Avoid costly legal proof for moves with cannot be a check evasion, EnPAssant bug fixed here(wrong mate score if ep Capture is only legal move)
+        If From <> KingLoc And PieceType(Captured) <> PT_KNIGHT And Not SameXRay(From, KingLoc) And Not SameXRay(Target, KingLoc) And EpPosArr(Ply) = 0 Then
           ' ignore
         Else
           ' Make move

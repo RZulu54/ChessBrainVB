@@ -229,7 +229,6 @@ Public Function InsertIntoHashTable(HashKey As THashKey, _
   IndexKey = HashKeyCompute() * HASH_CLUSTER
   ReplaceIndex = IndexKey
   If HashAccessCnt < 2100000000 Then HashAccessCnt = HashAccessCnt + 1
-
   For i = 0 To HASH_CLUSTER - 1
 
     With HashTable(IndexKey + i)

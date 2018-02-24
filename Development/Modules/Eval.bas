@@ -10,6 +10,13 @@ Public Const MAX_SEE_DIFF         As Long = 80  ' greater than value bishop minu
 Public Const TEMPO_BONUS          As Long = 23   ' 20 bonus for side to move
 Public Const SPACE_THRESHOLD      As Long = 12222 ' compute space eval for opening phase only
 
+'-- Endgame eval scale factors
+Const SCALE_FACTOR_DRAW = 0
+Const SCALE_FACTOR_ONEPAWN = 48
+Const SCALE_FACTOR_NORMAL = 64
+Const SCALE_FACTOR_MAX = 128
+Const SCALE_FACTOR_NONE = 255
+
 'SF7: Penalties for enemy's safe checks
 Const QueenCheck                  As Long = 780
 Const RookCheck                   As Long = 880
@@ -1917,6 +1924,7 @@ lblNextPieceCnt:
   WFrontMostPassedPawnRank = 0: BFrontMostPassedPawnRank = 0
 
   For a = 1 To PassedPawnsCnt
+    Dim AttackedFromBehind As Long, DefendedFromBehind As Long
     Square = PassedPawns(a): FileNum = File(Square): RankNum = Rank(Square)
     MBonus = 0: EBonus = 0: UnsafeCnt = 0
     If PieceColor(Board(Square)) = COL_WHITE Then
@@ -1959,43 +1967,48 @@ lblNextPieceCnt:
       BlockSq = Square + MoveUp
       If Board(BlockSq) <> FRAME Then
         '  Adjust bonus based on the king's proximity
+        AttackedFromBehind = 0: DefendedFromBehind = 0
         EBonus = EBonus + MaxDistance(BlockSq, OppKingLoc) * 5 * rr - MaxDistance(BlockSq, OwnKingLoc) * 2 * rr
         'If blockSq is not the queening square then consider also a second push
         If RelRank <> 7 Then EBonus = EBonus - MaxDistance(BlockSq + MoveUp, OwnKingLoc) * rr
         'If the pawn is free to advance, then increase the bonus
         If Board(BlockSq) >= NO_PIECE Then
           k = 0: bAllDefended = True: BlockSqDefended = True: BlockSqUnsafe = False
-          ' Rook or Queen attacking/defending from behind
+          ' Rook or Queen attacking/defending from behind?
           If CBool(BAttack(Square) And QRAttackBit) Or CBool(WAttack(Square) And QRAttackBit) Then
-
             For RankPath = RelRank - 1 To 1 Step -1
               sq = Square + (RankPath - RelRank) * MoveUp
-
               Select Case Board(sq)
                 Case NO_PIECE:
                 Case BROOK, BQUEEN:
-                  If OwnCol = COL_WHITE Then BlockSqUnsafe = True
+                  If OwnCol = COL_WHITE Then
+                    BlockSqUnsafe = True: AttackedFromBehind = 1
+                  Else
+                    DefendedFromBehind = 1
+                  End If
                   Exit For
                 Case WROOK, WQUEEN:
-                  If OwnCol = COL_BLACK Then BlockSqUnsafe = True
+                  If OwnCol = COL_BLACK Then
+                    BlockSqUnsafe = True: AttackedFromBehind = 1
+                  Else
+                    DefendedFromBehind = 1
+                  End If
                   Exit For
                 Case Else:
                   Exit For
               End Select
-
             Next
-
           End If
 
           For RankPath = RelRank + 1 To 8
             sq = Square + (RankPath - RelRank) * MoveUp
-            OwnAttCnt = AttackBitCnt(AttackByCol(OwnCol, sq)): OppAttCnt = AttackBitCnt(AttackByCol(OppCol, sq))
+            OwnAttCnt = AttackBitCnt(AttackByCol(OwnCol, sq)) + DefendedFromBehind
             If OwnAttCnt = 0 And sq <> OwnKingLoc Then
               bAllDefended = False: If sq = BlockSq Then BlockSqDefended = False
             End If
             If PieceColor(Board(sq)) = OppCol Then
               If sq = BlockSq Then BlockSqUnsafe = True Else UnsafeCnt = UnsafeCnt + 1
-            ElseIf OppAttCnt > 0 Then
+            ElseIf AttackBitCnt(AttackByCol(OppCol, sq)) + AttackedFromBehind > 0 Then ' OppAttCnt = AttackBitCnt(AttackByCol(OppCol, sq)) + AttackedFromBehind
               If CBool(AttackByCol(OwnCol, sq) And PAttackBit) And Not CBool(AttackByCol(OppCol, sq) And PAttackBit) Then
                 ' Own pawn support but no enemy pawn attack: square is safe ( NOT SF LOGIC )
                 ' Stop
@@ -2007,9 +2020,9 @@ lblNextPieceCnt:
 
           If BlockSqUnsafe Then UnsafeCnt = UnsafeCnt + 1
           If UnsafeCnt = 0 Then
-            k = 18
+            k = 20
           ElseIf Not BlockSqUnsafe Then
-            k = 8 '- UnsafeCnt
+            k = 9 '- UnsafeCnt
           Else
             k = 0
           End If
@@ -2024,6 +2037,9 @@ lblNextPieceCnt:
         End If
       End If
     End If ' rr>0
+    '
+    If UnsafeCnt > 0 Then MBonus = MBonus - UnsafeCnt * 8: EBonus = EBonus - UnsafeCnt
+    '
     If OwnCol = COL_WHITE Then
       If WPawnCnt < BPawnCnt Then EBonus = EBonus + EBonus \ 4
       MBonus = MBonus + PassedPawnFileBonus(FileNum).MG: EBonus = EBonus + PassedPawnFileBonus(FileNum).EG
@@ -2044,14 +2060,17 @@ lblNextPieceCnt:
       If bEvalTrace Then WriteTrace "BPassed: " & LocCoord(Square) & ">" & MBonus & ", " & EBonus
     End If
   Next a
-
+  '
   '---<<< end  Passed pawn
+  '
   '--- If both sides have only pawns, score for potential unstoppable pawns
   If WNonPawnMaterial + BNonPawnMaterial = 0 Then
     If WFrontMostPassedPawnRank > 0 Then AddScoreVal WPassed, 0, WFrontMostPassedPawnRank * 20
     If BFrontMostPassedPawnRank > 0 Then AddScoreVal BPassed, 0, WFrontMostPassedPawnRank * 20
   End If
+  '
   '---  Penalty for pawns on same color square of bishop
+  '
   If PieceCnt(WBISHOP) > 0 Then
     r = WPawnCntOnWhiteSq * WBishopsOnWhiteSq + (WPawnCnt - WPawnCntOnWhiteSq) * WBishopsOnBlackSq - WPawnCnt
     If r > 0 Then
@@ -2094,7 +2113,9 @@ lblNextPieceCnt:
       End If
     End If
   End If
+  '
   '--->>> Pawn Islands (groups of pawns) ---
+  '
   r = 0: bWIsland = False  ' r : white islands
   rr = 0: bBIsland = False ' rr: black islands
 
@@ -2126,13 +2147,33 @@ lblNextPieceCnt:
   '
   '--- Scale Factor ---
   '
-  ScaleFactor = 64 ' Normal ScaleFactor, scales EG value only
+  ScaleFactor = SCALE_FACTOR_NORMAL ' Normal ScaleFactor, scales EG value only
   If GamePhase < PHASE_MIDGAME Then
-    '- just one pawn makes it difficult to win
+    '- zero or just one pawn makes it difficult to win
     If WMaterial > BMaterial Then
-      If WPawnCnt = 1 Then If WNonPawnMaterial - BNonPawnMaterial <= ScoreBishop.MG Then ScaleFactor = 48
-    ElseIf BMaterial > WMaterial Then
-      If BPawnCnt = 1 Then If BNonPawnMaterial - WNonPawnMaterial <= ScoreBishop.MG Then ScaleFactor = 48
+      Select Case WPawnCnt
+      Case 0:
+        If WNonPawnMaterial - BNonPawnMaterial <= ScoreBishop.MG Then
+          If WNonPawnMaterial < ScoreRook.MG Then
+            ScaleFactor = SCALE_FACTOR_DRAW
+          Else
+            If BNonPawnMaterial <= ScoreBishop.MG Then ScaleFactor = 4 Else ScaleFactor = 44
+          End If
+        End If
+      Case 1: If WNonPawnMaterial - BNonPawnMaterial <= ScoreBishop.MG Then ScaleFactor = SCALE_FACTOR_ONEPAWN
+      End Select
+    Else
+      Select Case BPawnCnt
+      Case 0:
+        If BNonPawnMaterial - WNonPawnMaterial <= ScoreBishop.MG Then
+          If BNonPawnMaterial < ScoreRook.MG Then
+            ScaleFactor = SCALE_FACTOR_DRAW
+          Else
+            If WNonPawnMaterial <= ScoreBishop.MG Then ScaleFactor = 4 Else ScaleFactor = 44
+          End If
+        End If
+      Case 1: If BNonPawnMaterial - WNonPawnMaterial <= ScoreBishop.MG Then ScaleFactor = SCALE_FACTOR_ONEPAWN
+      End Select
     End If
     '- Endgame with opposite-colored bishops and no other pieces (ignoring pawns)
     '- is almost a draw, in case of KBP vs KB, it is even more a draw.
@@ -2174,7 +2215,7 @@ lblNextPieceCnt:
           End If
         End If
       End If
-      If ScaleFactor = 64 Or ScaleFactor = 48 Then ' SCALE_FACTOR_NORMAL or SCALE_FACTOR_ONEPAWN
+      If ScaleFactor = SCALE_FACTOR_NORMAL Or ScaleFactor = SCALE_FACTOR_ONEPAWN Then
         If Abs(AllTotal.EG) < ScoreBishop.EG And WMaterial <> BMaterial Then
           'Endings where weaker side can place his king in front of the opponent's pawns are drawish.
           If WMaterial > BMaterial Then ' White is strong side
@@ -2298,7 +2339,7 @@ lblNextPieceCnt:
   '
   '--- Added all to eval score (SF based scaling:  Eval*100/SFPawnEndGameValue= 100 centipawns =1 pawn)
   '--- Example: Eval=240 => 1.00 pawn
-  Eval = AllTotal.MG * GamePhase + AllTotal.EG * CLng(PHASE_MIDGAME - GamePhase) * ScaleFactor \ 64 '  * SF6 / 64=SCALE_FACTOR_NORMAL
+  Eval = AllTotal.MG * GamePhase + AllTotal.EG * CLng(PHASE_MIDGAME - GamePhase) * ScaleFactor \ SCALE_FACTOR_NORMAL
   Eval = Eval \ PHASE_MIDGAME
   If bEvalTrace Then
     Debug.Print "Mat:" & EvalSFTo100(MatEval) & ", Mob:" & EvalSFTo100(MobilityEval) & ", KSafety:" & EvalSFTo100(KingSafetyEval) & ", Threat:" & EvalSFTo100(ThreatEval)
