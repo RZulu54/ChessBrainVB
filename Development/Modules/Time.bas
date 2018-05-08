@@ -79,13 +79,17 @@ Public Function CalcTime(ByVal MovesToTC As Long, _
  SafetyMargin = 1.5
  
  If MovesToTC > 0 Then
-   If TimeTypeIsOptimum Then Ratio = 1# Else Ratio = 5#
+   If TimeTypeIsOptimum Then
+     Ratio = 1#
+   Else
+     If MovesToTC <= 10 Then Ratio = 2.5 Else Ratio = 4.5
+   End If
    Ratio = Ratio / CSng(GetMin(45, GetMax(1, MovesToTC)))
    
    If GameMovesDone <= 40 Then
      Ratio = Ratio * (1.3 - 0.001 * CSng((GameMovesDone - 23) * (GameMovesDone - 23)))
    Else
-     Ratio = Ratio * 1.55
+     Ratio = Ratio * 1.45
    End If
    Ratio = Ratio * (1# + Inc / (MyTime * 8.2))
    If MovesToTC <= 3 Then SafetyMargin = 3#
@@ -120,8 +124,8 @@ Public Function CheckTime() As Boolean
   If FinalScore = UNKNOWN_SCORE Then NewScore = 0 Else NewScore = FinalScore
   If PrevGameMoveScore = UNKNOWN_SCORE Then PrevScore = FinalScore - 80 Else PrevScore = PrevGameMoveScore
 
-  Improve = GetMaxSingle(229#, GetMinSingle(715#, 357# + 119# * Abs(bFailedLowAtRoot) - 6# * CSng(NewScore - PrevScore)))
-  Optimum2 = (OptimalTime * (1# + BestMoveChanges) * Improve) / 628#
+  Improve = GetMaxSingle(229#, GetMinSingle(715#, 357# + 119# * Abs(bFailedLowAtRoot) - 5# * CSng(NewScore - PrevScore)))
+  Optimum2 = (OptimalTime * (1# + BestMoveChanges) * Improve) / 640#
   
   If Elapsed >= GetMinSingle(MaximumTime, Optimum2) Then
     CheckTime = False

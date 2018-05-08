@@ -132,17 +132,28 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
   'EPD(1) = "8/8/7k/p1P4p/P6P/7K/8/2r5 w - - 0 1"  ' passed pawn test 3 attacked from behind
   'EPD(1) = "8/7r/7k/p1P4p/P6P/7K/8/2R5 w - - 0 1"  ' passed pawn test 4 defended from behind + attacked path
   'EPD(1) = "8/8/2P4k/p6p/P6P/7K/8/2R5 w - - 0 1"  ' passed pawn test 5 defended from behind rank 6
+  'EPD(1) = "7k/5K1p/7P/8/8/8/8/8 b - - 1 1" ' no move draw
+ ' EPD(1) = "r5k1/pp4pp/2pb3r/3p2q1/P1PP1nB1/1PB1P1PP/7K/R2Q2R1 b - - 0 27" ' KSafety
   
+  'EPD(1) = "5rk1/pp4pp/2pb3r/3p2q1/P1PP4/1PB1P1PB/7K/R4QR1 b - - 2 29" '
+  'EPD(1) = "6k1/4b1p1/5p1Q/1p2pP2/4P3/1P6/6PP/6rK w - - 0 41 " 'only one legalmove
+  'EPD(1) = " /4b1p1/8/1p2p3/8/7p/5p2/6bK w - - 0 1 " 'no legal move
+  
+  'EPD(1) = "8/8/7k/8/8/8/6PP/3r3K w - - 1 1  " ' mated result : bestmove (none)
+  
+  'EPD(1) = "r5k1/pp4pp/2pb3r/3p2q1/P1PP4/1PB1P1PB/7K/R2Q2R1 b - - 0 28 "
+   EPD(1) = "r5k1/pp4pp/2pb3r/3p2q1/P1PP1nB1/1PB1P1PP/7K/R2Q2R1 b - - 0 27"
+  'EPD(1) = "8/7k/8/8/6r1/7p/7P/7K w - - 2 1 "
   
   
   '------ normal test ----
-  EPD(1) = "r1bqk2r/p2p1pp1/1p2pn1p/n1pP2B1/1bP5/2N2N2/PPQ1PPPP/R3KB1R w KQkq - 0 9" '<<<<< AKT
+  'EPD(1) = "r1bqk2r/p2p1pp1/1p2pn1p/n1pP2B1/1bP5/2N2N2/PPQ1PPPP/R3KB1R w KQkq - 0 9" '<<<<< AKT
   EPD(2) = "1rb2rk1/p3nppp/1p1qp3/3n2N1/2pP4/2P3P1/PP3PBP/R1BQR11K w - -"  'TEST 2
   EPD(3) = "r1b2rk1/p2nq1p1/1pp1p2p/5p2/2PPp3/2Q1P3/PP1N1PPP/2R1KB1R w K - 0 13" '--- Ruhig
-  EPD(4) = "1b5k/7P/p1p2np1/2P2p2/PP3P2/4RQ1R/q2r3P/6K1 w - - 0 1" '--- Ruhig
+  EPD(4) = "6k1/p1r5/4b1p1/R1pprp1p/7P/1P1BP3/P1P3P1/4R1K1 w - - 4 25" ' no advantage
   EPD(5) = "8/8/2R5/1p2qp1k/1P2r3/2PQ2P1/5K2/8 w - - 0 1" ' Endgame
   EPD(6) = "r7/pbk5/1pp5/4n1q1/2P5/1P6/P4BBQ/4R1K1 b - - 0 33" ' wechsel QS FUTIL2
-  EPD(7) = "6k1/p1r5/4b1p1/R1pprp1p/7P/1P1BP3/P1P3P1/4R1K1 w - - 4 25" ' no advantage
+  EPD(7) = "1b5k/7P/p1p2np1/2P2p2/PP3P2/4RQ1R/q2r3P/6K1 w - - 0 1"
   ' EPD(8) = "5R2/8/3k4/3P4/8/3K4/8/8 b - - 0 2 "
   '  EPD(8) = "8/5k2/8/5P2/4K3/8/8/8 w - - 16 12  "
   '  EPD(8) = "8/6kn/6p1/5PP1/6K1/8/8/8 w - - 0 14  " ' EGTB draw
@@ -155,7 +166,7 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
   '  EPD(8) = "5n2/6k1/6P1/6P1/6K1/8/8/8 w - - 1 15 "
   'EPD(8) = "8/8/2k5/2p5/1n1R1K2/8/8/4R3 w - - 0 1  " ' EGTB test 6 pieces> 5 pieces
   'EPD(8) = "8/8/3p4/2P3pp/6Pk/7P/6K1/8 w - - 0 1   " ' EGTB test 7 pieces> 5 pieces
-  EPD(8) = "8/8/2k5/8/2P2K2/2P5/8/8 w - - 0 1 "
+  EPD(8) = "8/8/2k5/8/2P2K2/2P5/8/8 B - - 0 1 "
   '-------------------------------------------------------------------------------------
   DebugMode = True
 
@@ -163,7 +174,7 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
   ' ReadGame "Drawbug2.txt"
   'bForceMode = False
   'For x = 8 To 8 'if EPD(1) only to test
-  For x = 1 To 7
+  For x = 1 To 1 ' 7
     For i = 0 To 0 ' number of time measure runs  > 1x
       'For i = 0 To 2 ' number of time measure runs > 3x
       InitGame ' Reset FixedDepth
@@ -211,7 +222,7 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
       arTime(i) = EndTime - StartTime
       If arTime(i) = 0 Then arTime(i) = 1
       bPostMode = True
-      SendCommand vbCrLf & "time: " & Format$(arTime(i), "0.000") & " nod: " & Nodes & " qn: " & QNodes & " ev:" & EvalCnt & " sc: " & EvalSFTo100(BestScore) & " EGTB:" & EGTBasesHitsCnt & " Ply:" & MaxPly & " " & s & vbCrLf
+      SendCommand vbCrLf & "time: " & Format$(arTime(i), "0.000") & " nod: " & Nodes & " qn: " & QNodes & " ev:" & EvalCnt & " sc: " & EvalSFTo100(FinalScore) & " EGTB:" & EGTBasesHitsCnt & " Ply:" & MaxPly & " " & s & vbCrLf
     Next
 
     If arTime(0) < arTime(1) Then
@@ -273,7 +284,7 @@ Public Sub DEBUGLoadGame(ByVal iDepth As Long)
     arTime(i) = EndTime - StartTime
     If arTime(i) = 0 Then arTime(i) = 1
     bPostMode = True
-    SendCommand vbCrLf & "time: " & Format$(arTime(i), "0.000") & " nod: " & Nodes & " qn: " & QNodes & " ev:" & EvalCnt & " sc: " & EvalSFTo100(BestScore) & " Ply:" & MaxPly & " " & s & vbCrLf
+    SendCommand vbCrLf & "time: " & Format$(arTime(i), "0.000") & " nod: " & Nodes & " qn: " & QNodes & " ev:" & EvalCnt & " sc: " & EvalSFTo100(FinalScore) & " Ply:" & MaxPly & " " & s & vbCrLf
   Next
 
   SendCommand "-------------------"

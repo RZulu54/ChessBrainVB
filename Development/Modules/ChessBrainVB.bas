@@ -1,7 +1,7 @@
 Attribute VB_Name = "ChessBrainVBbas"
 '==================================================
-'= ChessBrainVB V3.65:
-'=   by Roger Zuehlsdorf (Copyright 2017)
+'= ChessBrainVB V3.67:
+'=   by Roger Zuehlsdorf (Copyright 2018)
 '=   based on LarsenVB by Luca Dormio (http://xoomer.virgilio.it/ludormio/download.htm) and Faile by Adrien M. Regimbald
 '=        and Stockfish by Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
 '= start of program
@@ -210,8 +210,8 @@ Public Sub InitEngine()
   ReadScoreArr ThreatBySafePawn, 0, 0, 0, 0, 176, 139, 141, 127, 217, 218, 203, 215
   SetScoreVal ThreatByRank, 16, 3
   'SF6: Outpost (Pair MG/EG )[0, 1=supported by pawn]
-  ReadScoreArr ReachableOutpostKnight, 22, 6, 33, 9
-  ReadScoreArr ReachableOutpostBishop, 9, 2, 14, 4
+  ReadScoreArr ReachableOutpostKnight, 22, 6, 36, 12
+  ReadScoreArr ReachableOutpostBishop, 9, 2, 15, 5
   ReadScoreArr OutpostBonusKnight, 44, 12, 66, 18
   ReadScoreArr OutpostBonusBishop, 18, 4, 28, 8
   'SF6: King Attack Weights by attacker { 0, 0, 7, 5, 4, 1 }  NO_PIECE_TYPE, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING,
@@ -227,6 +227,7 @@ Public Sub InitEngine()
   ReadScoreArr PassedPawnFileBonus(), 0, 0, 9, 10, 2, 10, 1, -8, -20, -12, -27, -12, 1, -8, 2, 10, 9, 10
   ReadScoreArr KingProtector(), 0, 0, 0, 0, -3, -5, -4, -3, -3, 0, -1, 1 ' for N,B,R,Q
   ReadIntArr QueenMinorsImbalance(), 31, -8, -15, -25, -5
+  ReadIntArr CaptPruneMargin(), 0, -238, -262, -244, -252, -241, -228
   ' King safety eval
   ' Weakness of our pawn shelter in front of the king by [distance from edge][rank]
   ReadIntArr2 ShelterWeakness(), 1, 0, 100, 10, 46, 82, 87, 86, 98 ' 1 = ArrIndex, 0: fill Array(0)
@@ -265,6 +266,7 @@ Public Sub InitEngine()
   SetScoreVal KingOnOneBonus, 3, 62
   SetScoreVal KingOnManyBonus, 9, 138
   SetScoreVal Hanging, 48, 27 ' Hanging piece penalty
+  SetScoreVal WeakUnopposedPawn, 5, 25 ' weak pawn when opp has Q/R
   SetScoreVal SafeCheck, 20, 20
   SetScoreVal OtherCheck, 10, 10
   SetScoreVal PawnlessFlank, 20, 80
@@ -855,7 +857,7 @@ End Sub
 
 Public Sub InitEpArr()
   Dim i As Long
-
+  EpPosArr(1) = 0
   For i = SQ_A1 To SQ_H8
     If Board(i) = WEP_PIECE Or Board(i) = BEP_PIECE Then EpPosArr(1) = i
   Next

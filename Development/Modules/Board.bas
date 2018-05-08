@@ -25,6 +25,7 @@ Public Squares(MAX_BOARD)                         As Long   '--- Squares on boar
 Public ColorSq(MAX_BOARD)                         As Long   '--- Squares color: COL_WHITE or COL_BLACK
 Public PieceCnt(16)                               As Long ' number of pieces per piece type and color
 Public SameXRay(MAX_BOARD, MAX_BOARD)             As Boolean ' are two squares on same rank or file or diagonal?
+Public DirOffset(MAX_BOARD, MAX_BOARD)            As Integer ' direction offset from sq1 to sq 2
 Public bWhiteToMove                               As Boolean  '--- false if black to move, often used
 Public bCompIsWhite                               As Boolean
 Public CastleFlag                                 As enumCastleFlag
@@ -42,7 +43,7 @@ Public arFiftyMove(499)                           As Long
 Public Fifty                                      As Long
 Public Rank(MAX_BOARD)                            As Long  ' Rank from black view
 Public RankB(MAX_BOARD)                           As Long ' Rank from black view  1 => 8
-Public RelativeSq(COL_WHITE, MAX_BOARD)           As Long ' sq from black view  1 => 8
+Public RelativeSq(col_White, MAX_BOARD)           As Long ' sq from black view  1 => 8
 Public File(MAX_BOARD)                            As Long
 Public SqBetween(MAX_BOARD, MAX_BOARD, MAX_BOARD) As Boolean ' (sq,sq1,sq2) is sq between sq1 and sq2?
 '--- For faster move generation
@@ -520,7 +521,7 @@ End Function
 '---------------------------------------------------------------------------
 Public Function IsAttacked(ByVal Location As Long, _
                            ByVal AttackByColor As enumColor) As Boolean
-  If AttackByColor = COL_WHITE Then
+  If AttackByColor = col_White Then
     IsAttacked = IsAttackedByW(Location)
   Else
     IsAttacked = IsAttackedByB(Location)
@@ -1119,7 +1120,7 @@ Public Function RankRev(ByVal sRank As String) As Long
 End Function
 
 Public Function RelativeRank(ByVal Col As enumColor, ByVal sq As Long) As Long
-  If Col = COL_WHITE Then
+  If Col = col_White Then
     RelativeRank = Rank(sq)
   Else
     RelativeRank = (9 - Rank(sq))
@@ -1161,13 +1162,13 @@ Public Function TextToMove(ByVal sMoveText As String) As TMOVE
 
   Select Case LCase(Mid$(sMoveText, 5, 1))
     Case "q":
-      If PieceColor(TextToMove.Piece) = COL_WHITE Then TextToMove.Promoted = WQUEEN Else TextToMove.Promoted = BQUEEN
+      If PieceColor(TextToMove.Piece) = col_White Then TextToMove.Promoted = WQUEEN Else TextToMove.Promoted = BQUEEN
     Case "r":
-      If PieceColor(TextToMove.Piece) = COL_WHITE Then TextToMove.Promoted = WROOK Else TextToMove.Promoted = BROOK
+      If PieceColor(TextToMove.Piece) = col_White Then TextToMove.Promoted = WROOK Else TextToMove.Promoted = BROOK
     Case "b":
-      If PieceColor(TextToMove.Piece) = COL_WHITE Then TextToMove.Promoted = WBISHOP Else TextToMove.Promoted = BBISHOP
+      If PieceColor(TextToMove.Piece) = col_White Then TextToMove.Promoted = WBISHOP Else TextToMove.Promoted = BBISHOP
     Case "n":
-      If PieceColor(TextToMove.Piece) = COL_WHITE Then TextToMove.Promoted = WKNIGHT Else TextToMove.Promoted = BKNIGHT
+      If PieceColor(TextToMove.Piece) = col_White Then TextToMove.Promoted = WKNIGHT Else TextToMove.Promoted = BKNIGHT
     Case Else
       TextToMove.Promoted = 0
   End Select
@@ -1408,7 +1409,7 @@ Public Sub InitRankFile()
     Rank(i) = (i \ 10) - 1
     RankB(i) = 9 - Rank(i)
     File(i) = i Mod 10
-    RelativeSq(COL_WHITE, i) = i
+    RelativeSq(col_White, i) = i
     RelativeSq(COL_BLACK, i) = SQ_A1 - 1 + File(i) + (8 - Rank(i)) * 10
   Next
 
@@ -1694,6 +1695,7 @@ Public Function GetSEE(Move As TMOVE) As Long
   If Move.Castle <> NO_CASTLE Then Exit Function
   From = Move.From: MoveTo = Move.Target: PieceMoved = CBool(Board(From) = NO_PIECE)
   If Not PieceMoved Then
+    'If PinnedPieceDir(From, MoveTo, PieceColor(PieceMoved)) <> 0 Then GetSEE = -100000: Exit Function
     Piece = Board(From): Board(From) = NO_PIECE ' Remove piece to open sliding xrays
     If Move.EnPassant = 3 Then  ' remove captured pawn not on target field
       If Piece = WPAWN Then Board(MoveTo + SQ_DOWN) = NO_PIECE Else Board(MoveTo + SQ_UP) = NO_PIECE
@@ -1779,7 +1781,7 @@ lblContinue:
   '---<<< End of collecting attackers ---
   ' Count Attackers for each color (non blocked only)
   For i = 1 To Cnt
-    If PieceList(i) > 0 And Blocker(i) >= 0 Then NumAttackers(COL_WHITE) = NumAttackers(COL_WHITE) + 1 Else NumAttackers(COL_BLACK) = NumAttackers(COL_BLACK) + 1
+    If PieceList(i) > 0 And Blocker(i) >= 0 Then NumAttackers(col_White) = NumAttackers(col_White) + 1 Else NumAttackers(COL_BLACK) = NumAttackers(COL_BLACK) + 1
   Next
 
   ' Init swap list
@@ -1792,7 +1794,7 @@ lblContinue:
   If NumAttackers(SideToMove) = 0 Then
     GoTo lblEndSEE
   End If
-  If SideToMove = COL_WHITE Then CurrSgn = 1 Else CurrSgn = -1
+  If SideToMove = col_White Then CurrSgn = 1 Else CurrSgn = -1
   '---- CALCULATE SEE ---
   CapturedVal = PieceAbsValue(Move.Piece)
 
@@ -1810,7 +1812,7 @@ lblContinue:
       If Blocker(MinValIndex) > 0 Then ' unblock other sliding piece?
         Blocker(Blocker(MinValIndex)) = 0
         'Increase attack number
-        If PieceList(Blocker(MinValIndex)) > 0 Then NumAttackers(COL_WHITE) = NumAttackers(COL_WHITE) + 1 Else NumAttackers(COL_BLACK) = NumAttackers(COL_BLACK) + 1
+        If PieceList(Blocker(MinValIndex)) > 0 Then NumAttackers(col_White) = NumAttackers(col_White) + 1 Else NumAttackers(COL_BLACK) = NumAttackers(COL_BLACK) + 1
       End If
       PieceList(MinValIndex) = 0 ' Remove from list by setting piece value to zero
     End If
@@ -1850,7 +1852,7 @@ Public Sub InitPieceColor()
     If Piece < 1 Or Piece >= NO_PIECE Then
       PieceCol = COL_NOPIECE ' NO_PIECE, or EP-PIECE  or FRAME
     Else
-      If Piece Mod 2 = WCOL Then PieceCol = COL_WHITE Else PieceCol = COL_BLACK
+      If Piece Mod 2 = WCOL Then PieceCol = col_White Else PieceCol = COL_BLACK
     End If
     PieceColor(Piece) = PieceCol
   Next
@@ -1858,7 +1860,7 @@ Public Sub InitPieceColor()
 End Sub
 
 Public Function SwitchColor(Color As enumColor) As enumColor
-  If Color = COL_WHITE Then SwitchColor = COL_BLACK Else SwitchColor = COL_WHITE
+  If Color = col_White Then SwitchColor = COL_BLACK Else SwitchColor = col_White
 End Function
 
 Public Sub InitSameXRay()
@@ -1866,17 +1868,21 @@ Public Sub InitSameXRay()
 
   For i = SQ_A1 To SQ_H8
     If File(i) >= 1 And File(i) <= 8 And Rank(i) >= 1 And Rank(i) <= 8 Then
-
+      DirOffset(i, j) = 0
       For j = SQ_A1 To SQ_H8
         If File(j) >= 1 And File(j) <= 8 And Rank(j) >= 1 And Rank(j) <= 8 Then
           If File(i) = File(j) Then
             SameXRay(i, j) = True
+            If i < j Then DirOffset(i, j) = 10 Else If i > j Then DirOffset(i, j) = -10
           ElseIf Rank(i) = Rank(j) Then
             SameXRay(i, j) = True
+            If i < j Then DirOffset(i, j) = 1 Else If i > j Then DirOffset(i, j) = -1
           ElseIf Abs(j - i) Mod 11 = 0 Then
             SameXRay(i, j) = True
+            If i < j Then DirOffset(i, j) = 11 Else If i > j Then DirOffset(i, j) = -11
           ElseIf Abs(j - i) Mod 9 = 0 Then
             SameXRay(i, j) = True
+            If i < j Then DirOffset(i, j) = 9 Else If i > j Then DirOffset(i, j) = -9
           Else
             SameXRay(i, j) = False
           End If
@@ -2021,10 +2027,10 @@ Public Sub InitBoardColors()
   Dim x As Long, y As Long, ColSq  As Long, IsWhite As Boolean
 
   For y = 1 To 8
-    IsWhite = CBool(y Mod 2 = WCOL)
+    IsWhite = CBool(y Mod 2 = 0)
 
     For x = 1 To 8
-      If IsWhite Then ColSq = COL_WHITE Else ColSq = COL_BLACK
+      If IsWhite Then ColSq = col_White Else ColSq = COL_BLACK
       ColorSq(20 + x + (y - 1) * 10) = ColSq
       IsWhite = Not IsWhite
     Next

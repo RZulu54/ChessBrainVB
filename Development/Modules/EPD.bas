@@ -141,7 +141,7 @@ Public Function ReadEPD(ByVal sEpdString As String) As Boolean
     sChar = arCmdList(5)
     If sChar <> "" Then
       If Val("0" & sChar) > 0 Then
-        GameMovesCnt = GetMax(0, Val(sChar) * 2 - 1)
+        GameMovesCnt = GetMax(0, (Val(sChar) - 1) * 2)
         If Not bWhiteToMove Then GameMovesCnt = GameMovesCnt + 1
       End If
     End If

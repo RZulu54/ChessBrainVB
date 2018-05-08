@@ -182,7 +182,7 @@ Function SendCommand(ByVal sCommand As String) As String
     ' OFFICE VBA
     With frmChessX
       If .txtIO.Visible Then
-        If Len(.txtIO) > 32000 Then .txtIO = ""
+        If Len(.txtIO) > 64000 Then .txtIO = ""
         .txtIO = .txtIO & vbCrLf & sCommand
         .txtIO.SetFocus
         .txtIO.SelStart = Len(.txtIO)
@@ -335,7 +335,7 @@ Public Sub SendThinkInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Lo
     End If
     sPostPV = ""
 
-    For j = 1 To PVLength(1) - 1
+    For j = 1 To PVLength(1)
       If PV(1, j).From <> 0 Then sPostPV = sPostPV & " " & GUIMoveText(PV(1, j))
     Next
 

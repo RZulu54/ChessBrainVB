@@ -107,7 +107,7 @@ Public Sub InitHash()
     HashSizeMB = GetMax(HashSizeMB, MemoryMB) ' memory command value from GUI
   End If
   If NoOfThreads = 1 Then HashSizeMB = GetMin(1400, HashSizeMB) ' in 1 core: vb array MB, in IDE max around 350MB, EXE 1.5 GB
-  If InIDE Then HashSizeMB = GetMin(256, HashSizeMB) ' Limited in IDE, depends on local memory usage
+  If InIDE Then HashSizeMB = GetMin(128, HashSizeMB) ' Limited in IDE, depends on local memory usage
   
   If bHashTrace Then WriteTrace "Init hash size start " & HashSizeMB & "MB " & Now()
   If ThreadNum <= 0 Then  ' for helper threads if hssh size was changed
@@ -229,36 +229,33 @@ Public Function InsertIntoHashTable(HashKey As THashKey, _
   IndexKey = HashKeyCompute() * HASH_CLUSTER
   ReplaceIndex = IndexKey
   If HashAccessCnt < 2100000000 Then HashAccessCnt = HashAccessCnt + 1
-  For i = 0 To HASH_CLUSTER - 1
 
+  For i = 0 To HASH_CLUSTER - 1
     With HashTable(IndexKey + i)
-      If .Position1 <> 0 Then
-        If HashGeneration = .Generation Then If HashUsage < 2100000000 Then HashUsage = HashUsage + 1
-        ' Don't overwrite more valuable entry
-        If (.Position1 = ZobristHash1 And .Position2 = ZobristHash2) Then
-          ' Position found: Preserve hash move if no new move
-          If TmpMove.From = 0 And .MoveFrom > 0 Then
-            TmpMove.From = .MoveFrom: TmpMove.Target = .MoveTarget: TmpMove.Promoted = .MovePromoted: TmpMove.IsChecking = .IsChecking
-          End If
-          ReplaceIndex = IndexKey + i: bPosFound = True
-          Exit For
-        Else
-          ' Other position found. Overwrite?
-          ReplaceValue = .Depth - 8 * (HashGeneration - .Generation)
-          If ReplaceValue < MaxReplaceValue Then
-            MaxReplaceValue = ReplaceValue: ReplaceIndex = IndexKey + i
-          End If
+      If .Position1 = 0 Then ReplaceIndex = IndexKey + i: Exit For
+      If HashGeneration = .Generation Then If HashUsage < 2100000000 Then HashUsage = HashUsage + 1
+      ' Don't overwrite more valuable entry
+      If (.Position1 = ZobristHash1 And .Position2 = ZobristHash2) Then
+        ' Position found: Preserve hash move if no new move
+        If TmpMove.From = 0 And .MoveFrom > 0 Then
+          TmpMove.From = .MoveFrom: TmpMove.Target = .MoveTarget: TmpMove.Promoted = .MovePromoted: TmpMove.IsChecking = .IsChecking
         End If
+        ReplaceIndex = IndexKey + i: bPosFound = True
+        Exit For
       Else
-        If MaxReplaceValue > -9000 Then MaxReplaceValue = -9000: ReplaceIndex = IndexKey + i
+        ' Other position found. Overwrite?
+        ReplaceValue = .Depth - 8 * (HashGeneration - .Generation)
+        If ReplaceValue < MaxReplaceValue Then
+          MaxReplaceValue = ReplaceValue: ReplaceIndex = IndexKey + i
+        End If
       End If
     End With
-
   Next
 
   With HashTable(ReplaceIndex)
     '--- Save hash data, preserve hash move if no new move
-    If Not bPosFound Or EvalType = TT_EXACT Or Depth > .Depth - 4 Or .Generation <> HashGeneration Then
+    'If Not bPosFound Or EvalType = TT_EXACT Or Depth > .Depth - 4 Or .Generation <> HashGeneration Then
+    If Not bPosFound Or EvalType = TT_EXACT Or Depth > .Depth - 4 Then
       .Position1 = ZobristHash1: .Position2 = ZobristHash2
       .MoveFrom = TmpMove.From: .MoveTarget = TmpMove.Target: .MovePromoted = TmpMove.Promoted
       .EvalType = EvalType: .Eval = ScoreToHash(Eval)
@@ -283,8 +280,7 @@ Public Function IsInHashTable(HashKey As THashKey, _
   IndexKey = HashKeyCompute() * HASH_CLUSTER
 
   For i = 0 To HASH_CLUSTER - 1
-    If HashTable(IndexKey + i).Position1 <> 0 And ZobristHash1 <> 0 Then
-
+    If HashTable(IndexKey + i).Position1 = 0 Then If ZobristHash1 <> 0 Then Exit Function '--- empty entry, not found
       With HashTable(IndexKey + i)
         If ZobristHash1 = .Position1 And ZobristHash2 = .Position2 Then
           If .Depth > HashDepth Then
@@ -342,8 +338,6 @@ Public Function IsInHashTable(HashKey As THashKey, _
           End If
         End If
       End With
-
-    End If
   Next
 
 End Function
@@ -531,28 +525,24 @@ Public Function InsertIntoHashMap(HashKey As THashKey, _
   For i = 0 To HASH_CLUSTER - 1
 
     With HashCluster(i)
-      If .Position1 <> 0 Then
-        If HashGeneration = .Generation Then If HashUsage < 2100000000 Then HashUsage = HashUsage + 1
-        ' Don't overwrite more valuable entry
-        If (.Position1 = ZobristHash1 And .Position2 = ZobristHash2) Then
-          ' Position found: Preserve hash move if no new move
-          If TmpMove.From = 0 And .MoveFrom > 0 Then
-            TmpMove.From = .MoveFrom: TmpMove.Target = .MoveTarget: TmpMove.Promoted = .MovePromoted: TmpMove.IsChecking = .IsChecking
-          End If
-          ReplaceIndex = IndexKey + i: bPosFound = True
-          Exit For
-        Else
-          ' Other position found. Overwrite?
-          ReplaceValue = .Depth - 8 * (HashGeneration - .Generation)
-          If ReplaceValue < MaxReplaceValue Then
-            MaxReplaceValue = ReplaceValue: ReplaceIndex = IndexKey + i
-          End If
+    If .Position1 = 0 Then ReplaceIndex = IndexKey + i: Exit For
+      If HashGeneration = .Generation Then If HashUsage < 2100000000 Then HashUsage = HashUsage + 1
+      ' Don't overwrite more valuable entry
+      If (.Position1 = ZobristHash1 And .Position2 = ZobristHash2) Then
+        ' Position found: Preserve hash move if no new move
+        If TmpMove.From = 0 And .MoveFrom > 0 Then
+          TmpMove.From = .MoveFrom: TmpMove.Target = .MoveTarget: TmpMove.Promoted = .MovePromoted: TmpMove.IsChecking = .IsChecking
         End If
+        ReplaceIndex = IndexKey + i: bPosFound = True
+        Exit For
       Else
-        If MaxReplaceValue > -9000 Then MaxReplaceValue = -9000: ReplaceIndex = IndexKey + i
+        ' Other position found. Overwrite?
+        ReplaceValue = .Depth - 8 * (HashGeneration - .Generation)
+        If ReplaceValue < MaxReplaceValue Then
+          MaxReplaceValue = ReplaceValue: ReplaceIndex = IndexKey + i
+        End If
       End If
     End With
-
   Next
 
 
@@ -590,7 +580,7 @@ Public Function IsInHashMap(HashKey As THashKey, _
   For i = 0 To HASH_CLUSTER - 1
 
     With HashCluster(i)
-      If .Position1 <> 0 And ZobristHash1 <> 0 Then
+      If .Position1 = 0 Then If ZobristHash1 <> 0 Then Exit Function '--- empty entry, not found
         If ZobristHash1 = .Position1 And ZobristHash2 = .Position2 Then
           If .Depth > HashDepth Then
             ' entry found
@@ -647,7 +637,6 @@ Public Function IsInHashMap(HashKey As THashKey, _
             Exit For
           End If
         End If
-      End If
     End With
 
   Next
@@ -783,6 +772,7 @@ Public Function ReadMapGameData() As Long
   Dim bToMove As Boolean
   Debug.Assert NoOfThreads > 1
   moHashMap.ReadMapPos HashMapBoardPtr, VarPtr(Board(0)), CLng(LenB(Board(0)) * MAX_BOARD)
+  InitEpArr
   moHashMap.ReadMapPos HashMapMovedPtr, VarPtr(Moved(0)), CLng(LenB(Moved(0)) * MAX_BOARD)
   moHashMap.ReadMapPos HashMapWhiteToMovePtr, VarPtr(bToMove), CLng(LenB(bToMove))
   bWhiteToMove = bToMove: bCompIsWhite = bWhiteToMove
