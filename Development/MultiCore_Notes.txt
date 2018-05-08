@@ -1,5 +1,5 @@
 
-ChessbrainVB - mUlti core implementation ( max 8 cores )
+ChessbrainVB - mUlti core implementation ( max 64 cores )
 =========================================================
 
 This implementatin does not use mutliple threads for one process (VB restrictions).

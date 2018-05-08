@@ -142,17 +142,15 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
   'EPD(1) = "8/8/7k/8/8/8/6PP/3r3K w - - 1 1  " ' mated result : bestmove (none)
   
   'EPD(1) = "r5k1/pp4pp/2pb3r/3p2q1/P1PP4/1PB1P1PB/7K/R2Q2R1 b - - 0 28 "
-   EPD(1) = "r5k1/pp4pp/2pb3r/3p2q1/P1PP1nB1/1PB1P1PP/7K/R2Q2R1 b - - 0 27"
-  'EPD(1) = "8/7k/8/8/6r1/7p/7P/7K w - - 2 1 "
-  
-  
+   EPD(1) = "6r1/2pq2pk/1p3p1p/1P1Pp2P/Q3P1P1/p1R3K1/P7/8 w - - 98 109 " ' fifty
+   
   '------ normal test ----
   'EPD(1) = "r1bqk2r/p2p1pp1/1p2pn1p/n1pP2B1/1bP5/2N2N2/PPQ1PPPP/R3KB1R w KQkq - 0 9" '<<<<< AKT
   EPD(2) = "1rb2rk1/p3nppp/1p1qp3/3n2N1/2pP4/2P3P1/PP3PBP/R1BQR11K w - -"  'TEST 2
-  EPD(3) = "r1b2rk1/p2nq1p1/1pp1p2p/5p2/2PPp3/2Q1P3/PP1N1PPP/2R1KB1R w K - 0 13" '--- Ruhig
+  EPD(3) = "r1b2rk1/p2nq1p1/1pp1p2p/5p2/2PPp3/2Q1P3/PP1N1PPP/2R1KB1R w K - 0 13" '--- quiet
   EPD(4) = "6k1/p1r5/4b1p1/R1pprp1p/7P/1P1BP3/P1P3P1/4R1K1 w - - 4 25" ' no advantage
   EPD(5) = "8/8/2R5/1p2qp1k/1P2r3/2PQ2P1/5K2/8 w - - 0 1" ' Endgame
-  EPD(6) = "r7/pbk5/1pp5/4n1q1/2P5/1P6/P4BBQ/4R1K1 b - - 0 33" ' wechsel QS FUTIL2
+  EPD(6) = "r7/pbk5/1pp5/4n1q1/2P5/1P6/P4BBQ/4R1K1 b - - 0 33" '
   EPD(7) = "1b5k/7P/p1p2np1/2P2p2/PP3P2/4RQ1R/q2r3P/6K1 w - - 0 1"
   ' EPD(8) = "5R2/8/3k4/3P4/8/3K4/8/8 b - - 0 2 "
   '  EPD(8) = "8/5k2/8/5P2/4K3/8/8/8 w - - 16 12  "
@@ -166,7 +164,6 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
   '  EPD(8) = "5n2/6k1/6P1/6P1/6K1/8/8/8 w - - 1 15 "
   'EPD(8) = "8/8/2k5/2p5/1n1R1K2/8/8/4R3 w - - 0 1  " ' EGTB test 6 pieces> 5 pieces
   'EPD(8) = "8/8/3p4/2P3pp/6Pk/7P/6K1/8 w - - 0 1   " ' EGTB test 7 pieces> 5 pieces
-  EPD(8) = "8/8/2k5/8/2P2K2/2P5/8/8 B - - 0 1 "
   '-------------------------------------------------------------------------------------
   DebugMode = True
 

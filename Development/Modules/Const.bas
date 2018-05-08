@@ -59,6 +59,10 @@ Public Const SQ_UP_RIGHT             As Long = 11
 Public Const SQ_UP_LEFT              As Long = 9
 Public Const SQ_DOWN_RIGHT           As Long = -9
 Public Const SQ_DOWN_LEFT            As Long = -11
+'--- Files A-H
+Public Const FILE_A                  As Long = 1, FILE_B As Long = 2, FILE_C As Long = 3, FILE_D As Long = 4, FILE_E As Long = 5, FILE_F As Long = 6, FILE_G As Long = 7, FILE_H As Long = 8
+
+
 '--- Score values
 Public Const MATE0                   As Long = 100000
 Public Const MATE_IN_MAX_PLY         As Long = 100000 - 1000

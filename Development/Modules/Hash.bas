@@ -6,6 +6,7 @@ Attribute VB_Name = "HashBas"
 Option Explicit
 
 Public Const MAX_THREADS       As Long = 64
+Public Const MAX_HASHSIZE_MB   As Long = 1400  ' limit by 32 bit around 1500mb, also long overflow for bytes
 'The style of the hash table rows
 Public Const TT_NO_BOUND       As Byte = 0
 Public Const TT_UPPER_BOUND    As Byte = 1
@@ -102,11 +103,11 @@ Public Sub InitHash()
   'Initialize the hash-table
   ' Use maximum hash size form INI file and memory command
   bHashTrace = CBool(ReadINISetting("HASHTRACE", "0") <> "0")
-  HashSizeMB = GetMin(1400, Val(ReadINISetting("HASHSIZE", "64"))) ' 2 GB for 32 bit ( max 1.5 GB?)
+  HashSizeMB = GetMin(MAX_HASHSIZE_MB, Val(ReadINISetting("HASHSIZE", "64"))) ' 2 GB for 32 bit ( max 1.5 GB?)
   If CBool(ReadINISetting("HASHSIZE_IGNORE_GUI", "0") = "0") Then
     HashSizeMB = GetMax(HashSizeMB, MemoryMB) ' memory command value from GUI
   End If
-  If NoOfThreads = 1 Then HashSizeMB = GetMin(1400, HashSizeMB) ' in 1 core: vb array MB, in IDE max around 350MB, EXE 1.5 GB
+  HashSizeMB = GetMin(MAX_HASHSIZE_MB, HashSizeMB) ' in 1 core: vb array MB, in IDE max around 350MB, EXE 1.5 GB
   If InIDE Then HashSizeMB = GetMin(128, HashSizeMB) ' Limited in IDE, depends on local memory usage
   
   If bHashTrace Then WriteTrace "Init hash size start " & HashSizeMB & "MB " & Now()
@@ -763,6 +764,7 @@ Public Function WriteMapGameData() As Long
   moHashMap.WriteMapPos HashMapMovedPtr, VarPtr(Moved(0)), CLng(LenB(Moved(0)) * MAX_BOARD)
   moHashMap.WriteMapPos HashMapWhiteToMovePtr, VarPtr(bWhiteToMove), CLng(LenB(bWhiteToMove))
   moHashMap.WriteMapPos HashMapGameMovesCntPtr, VarPtr(GameMovesCnt), CLng(LenB(GameMovesCnt))
+  arGameMoves(MAX_GAME_MOVES - 1).Target = Fifty ' tricky fix to avoid new map size
   moHashMap.WriteMapPos HashMapGameMovesPtr, VarPtr(arGameMoves(0)), CLng(LenB(arGameMoves(0)) * MAX_GAME_MOVES)
   moHashMap.WriteMapPos HashMapGamePosHashPtr, VarPtr(GamePosHash(0)), CLng(LenB(GamePosHash(0)) * MAX_GAME_MOVES)
 End Function
@@ -778,6 +780,7 @@ Public Function ReadMapGameData() As Long
   bWhiteToMove = bToMove: bCompIsWhite = bWhiteToMove
   moHashMap.ReadMapPos HashMapGameMovesCntPtr, VarPtr(GameMovesCnt), CLng(LenB(GameMovesCnt))
   moHashMap.ReadMapPos HashMapGameMovesPtr, VarPtr(arGameMoves(0)), CLng(LenB(arGameMoves(0)) * MAX_GAME_MOVES)
+  Fifty = arGameMoves(MAX_GAME_MOVES - 1).Target ' tricky fix to avoid new map size
   moHashMap.ReadMapPos HashMapGamePosHashPtr, VarPtr(GamePosHash(0)), CLng(LenB(GamePosHash(0)) * MAX_GAME_MOVES)
 End Function
 

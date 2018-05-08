@@ -5,11 +5,10 @@
 =======================================================================================
 
 
-Changes from version 3.66 to 3.67 (Roger Zuehlsdorf 10-APR-2018)
+Changes from version 3.67 to 3.68 (Roger Zuehlsdorf 1-MAR-2018)
 ----------------------------------------------------------------
-- fixed bug: wrong board setup in EnPassant positions for SMP helper threats 
+- fixed bug: fifty move counter not seen by helper threads 
 - code cleanup
-- no ELO difference expected
 
 Changes from version 3.61 to 3.65 (Roger Zuehlsdorf 24-FEB-2018)
 ----------------------------------------------------------------

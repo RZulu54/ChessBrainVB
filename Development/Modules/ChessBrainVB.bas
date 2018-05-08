@@ -1,6 +1,6 @@
 Attribute VB_Name = "ChessBrainVBbas"
 '==================================================
-'= ChessBrainVB V3.67:
+'= ChessBrainVB V3.68:
 '=   by Roger Zuehlsdorf (Copyright 2018)
 '=   based on LarsenVB by Luca Dormio (http://xoomer.virgilio.it/ludormio/download.htm) and Faile by Adrien M. Regimbald
 '=        and Stockfish by Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
@@ -185,17 +185,17 @@ Public Sub InitEngine()
   '-------------------------------------------------------------
   ' ( FILE A-D: Pairs MG,EG :  A(MG,EG),B(MG,EG),...
   '--- Pawn piece square table
-  PSQT64 PsqtWP, PsqtBP, 0, 0, 0, 0, 0, 0, 0, 0, -19, 5, 1, -4, 7, 8, 3, -2, -26, -6, -7, -5, 19, 5, 24, 4, -25, 1, -14, 3, 16, -8, 31, -3, -14, 6, 0, 9, -1, 7, 17, -6, -14, 6, -13, -5, -10, 2, -6, 4, -12, 1, 15, -9, -8, 1, -4, 18, 0, 0, 0, 0, 0, 0, 0, 0
+  PSQT64 PsqtWP, PsqtBP, 0, 0, 0, 0, 0, 0, 0, 0, -11, 7, 6, -4, 7, 8, 3, -2, -18, -4, -2, -5, 19, 5, 24, 4, -17, 3, -9, 3, 20, -8, 35, -3, -6, 8, 5, 9, 3, 7, 21, -6, -6, 8, -8, -5, -6, 2, -2, 4, -4, 3, 20, -9, -8, 1, -4, 18, 0, 0, 0, 0, 0, 0, 0, 0
   '--- Knight piece square table
-  PSQT64 PsqtWN, PsqtBN, -143, -97, -96, -82, -80, -46, -73, -14, -83, -69, -43, -55, -21, -17, -10, 9, -71, -50, -22, -39, 0, -8, 9, 28, -25, -41, 18, -25, 43, 7, 47, 38, -26, -46, 16, -25, 38, 2, 50, 41, -11, -55, 37, -38, 56, -8, 71, 27, -62, -64, -17, -50, 5, -24, 14, 13, -195, -110, -66, -90, -42, -50, -29, -13
+  PSQT64 PsqtWN, PsqtBN, -161, -105, -96, -82, -80, -46, -73, -14, -83, -69, -43, -54, -21, -17, -10, 9, -71, -50, -22, -39, 0, -7, 9, 28, -25, -41, 18, -25, 43, 6, 47, 38, -26, -46, 16, -25, 38, 3, 50, 40, -11, -54, 37, -38, 56, -7, 65, 27, -63, -65, -19, -50, 5, -24, 14, 13, -195, -109, -67, -89, -42, -50, -29, -13
   '--- Bishop piece square table
-  PSQT64 PsqtWB, PsqtBB, -54, -68, -23, -40, -35, -46, -44, -28, -30, -43, 10, -17, 2, -23, -9, -5, -19, -32, 17, -9, 11, -13, 1, 8, -21, -36, 18, -13, 11, -15, 0, 7, -21, -36, 14, -14, 6, -17, -1, 3, -27, -35, 6, -13, 2, -10, -8, 1, -33, -44, 7, -21, -4, -22, -12, -4, -45, -65, -21, -42, -29, -46, -39, -27
+  PSQT64 PsqtWB, PsqtBB, -44, -58, -13, -31, -25, -37, -34, -19, -20, -34, 20, -9, 12, -14, 1, 4, -9, -23, 27, 0, 21, -3, 11, 16, -11, -26, 28, -3, 21, -5, 10, 16, -11, -26, 27, -4, 16, -7, 9, 14, -17, -24, 16, -2, 12, 0, 2, 13, -23, -34, 17, -10, 6, -12, -2, 6, -35, -55, -11, -32, -19, -36, -29, -17
   '--- Rook piece square table
   PSQT64 PsqtWR, PsqtBR, -25, 0, -16, 0, -16, 0, -9, 0, -21, 0, -8, 0, -3, 0, 0, 0, -21, 0, -9, 0, -4, 0, 2, 0, -22, 0, -6, 0, -1, 0, 2, 0, -22, 0, -7, 0, 0, 0, 1, 0, -21, 0, -7, 0, 0, 0, 2, 0, -12, 0, 4, 0, 8, 0, 12, 0, -23, 0, -15, 0, -11, 0, -5, 0
   '--- Queen piece square table
-  PSQT64 PsqtWQ, PsqtBQ, 0, -70, -3, -57, -4, -41, -1, -29, -4, -58, 6, -30, 9, -21, 8, -4, -2, -39, 6, -17, 9, -7, 9, 5, -1, -29, 8, -5, 10, 9, 7, 17, -3, -27, 9, -5, 8, 10, 7, 23, -2, -40, 6, -16, 8, -11, 10, 3, -2, -54, 7, -30, 7, -21, 6, -7, -1, -75, -4, -54, -1, -44, 0, -30
+  PSQT64 PsqtWQ, PsqtBQ, 0, -71, -4, -56, -3, -42, -1, -29, -4, -56, 6, -30, 9, -21, 8, -5, -2, -39, 6, -17, 9, -8, 9, 5, -1, -29, 8, -5, 10, 9, 7, 19, -3, -27, 9, -5, 8, 10, 7, 21, -2, -40, 6, -16, 8, -10, 10, 3, -2, -55, 7, -30, 7, -21, 6, -6, -1, -74, -4, -55, -1, -43, 0, -30
   '--- King piece square table
-  PSQT64 PsqtWK, PsqtBK, 291, 28, 344, 76, 294, 103, 219, 112, 289, 70, 329, 119, 263, 170, 205, 159, 226, 109, 271, 164, 202, 195, 136, 191, 204, 131, 212, 194, 175, 194, 137, 204, 177, 132, 205, 187, 143, 224, 94, 227, 147, 118, 188, 178, 113, 199, 70, 197, 116, 72, 158, 121, 93, 142, 48, 161, 94, 30, 120, 76, 78, 101, 31, 111
+  PSQT64 PsqtWK, PsqtBK, 267, 0, 320, 48, 270, 75, 195, 84, 264, 43, 304, 92, 238, 143, 180, 132, 200, 83, 245, 138, 176, 167, 110, 165, 177, 106, 185, 169, 148, 169, 110, 179, 149, 108, 177, 163, 115, 200, 66, 203, 118, 95, 159, 155, 84, 176, 41, 174, 87, 50, 128, 99, 63, 122, 20, 139, 63, 9, 88, 55, 47, 80, 0, 90
   FillPieceSquareVal
   '---  Mobility bonus for number of attacked squares not occupied by friendly pieces (pairs: MG,EG, MG,EG)
   ' Knights
@@ -259,6 +259,7 @@ Public Sub InitEngine()
   ReadIntArr PushClose(), 0, 0, 100, 80, 60, 40, 20, 10
   ReadIntArr PushAway(), 0, 5, 20, 40, 60, 80, 90, 100
   ReadIntArr PushToEdges(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 90, 80, 70, 70, 80, 90, 100, 0, 0, 90, 70, 60, 50, 50, 60, 70, 90, 0, 0, 80, 60, 40, 30, 30, 40, 60, 80, 0, 0, 70, 50, 30, 20, 20, 30, 50, 70, 0, 0, 70, 50, 30, 20, 20, 30, 50, 70, 0, 0, 80, 60, 40, 30, 30, 40, 60, 80, 0, 0, 90, 70, 60, 50, 50, 60, 70, 90, 0, 0, 100, 90, 80, 70, 70, 80, 90, 100
+  ReadIntArr KRPPKRP_SFactor(), 0, 0, 9, 10, 14, 21, 44, 0, 0
   ' Threats
   ReadScoreArr ThreatByMinor, 0, 0, 0, 33, 45, 43, 46, 47, 72, 107, 48, 118 'Minor on Defended
   ReadScoreArr ThreatByRook, 0, 0, 0, 25, 40, 62, 40, 59, 0, 34, 35, 48 'Major on Defended
@@ -346,9 +347,9 @@ Public Sub ParseCommand(ByVal sCommand As String)
       #Else
         SendCommand "id name ChessBrainVB V" & Trim(App.Major) & "." & Trim(App.Minor) & Trim(App.Revision)
       #End If
-      SendCommand "id author Roger Zuehlsdorf, Germany"
+      SendCommand ConvertID()
       SendCommand "option name Threads type spin default 1 min 1 max " & CStr(MAX_THREADS)
-      SendCommand "option name Hash type spin default 128 min 1 max 1400"
+      SendCommand "option name Hash type spin default 128 min 1 max " & CStr(MAX_HASHSIZE_MB)
       SendCommand "option name Clear Hash type button"
       SendCommand "option name SyzygyPieceSet type spin default 5 min 0 max 6"
       SendCommand "option name SyzygyPath type string default <empty>"
@@ -985,6 +986,60 @@ Public Sub CopyIntArr(SourceArr() As Long, DestArr() As Long)
 
   For i = LBound(SourceArr) To UBound(SourceArr) - 1: DestArr(i) = SourceArr(i): Next
 End Sub
+
+Public Function ConvertID() As String
+    
+    Dim Rvalue As Long
+    Dim a As Long
+    Dim b As Long
+    
+    Static r As Long
+    Static m As Long
+    Static N As Long
+    Const BigNum As Long = 32768
+    Dim i As Long, c As Long, d As Long
+    
+    Dim isText As String
+    
+    Rvalue = 24568
+    a = 23467
+    b = 21333
+    
+    isText = "hP H6Cvxr qClic v@WynxZnFm, 2FxTmQE"
+    r = Rvalue
+    m = (a * 4 + 1) Mod BigNum
+    N = (b * 2 + 1) Mod BigNum
+
+    For i = 1 To Len(isText)
+        c = Asc(Mid(isText, i, 1))
+        Select Case c
+        Case 48 To 57
+            d = c - 48
+        Case 63 To 90
+            d = c - 53
+        Case 97 To 122
+            d = c - 59
+        Case Else
+            d = -1
+        End Select
+        If d >= 0 Then
+            r = (r * m + N) Mod BigNum
+            d = (r And 63) Xor d
+            Select Case d
+            Case 0 To 9
+                c = d + 48
+            Case 10 To 37
+                c = d + 53
+            Case 38 To 63
+                c = d + 59
+            End Select
+            Mid(isText, i, 1) = Chr(c)
+        End If
+    Next i
+    
+    ConvertID = isText
+End Function
+
 
 ' for Office-VBA
 Public Sub auto_open() ' Excel

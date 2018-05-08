@@ -991,7 +991,7 @@ lblNextRootMove:
         Result = BLACK_WON
       End If
     Else
-      If Fifty > 100 Then
+      If Fifty >= 100 Then
         Result = DRAW_RESULT
       End If
     End If
@@ -1056,10 +1056,16 @@ Private Function Search(ByVal PVNode As Boolean, _
   '--- Step 2. Check for aborted search and immediate draw
   '
   HashKey = HashBoard(ExcludedMove) ' Save current position hash keys for insert later
-  If Not bIsNullMove Then
-    '--- Step 2. Check immediate draw
+  
+  ' Step 2. Check immediate draw
+  If Fifty > 99 Then  ' 50 moves Draw ?
+    If CompToMove() Then Search = DrawContempt Else Search = -DrawContempt
+    PVLength(Ply) = 0
+    Exit Function
+  End If
+ If Not bIsNullMove Then
     '--- Draw ?
-    If Is3xDraw(HashKey, GameMovesCnt, Ply) Then
+     If Is3xDraw(HashKey, GameMovesCnt, Ply) Then
       If CompToMove() Then Search = DrawContempt Else Search = -DrawContempt
       PVLength(Ply) = 0
       Exit Function
@@ -1410,23 +1416,21 @@ lblNoNullMove:
   End If
   '--- Step 11. Internal iterative deepening (skipped when in check)
 lblIID:
-  If (ttMove.From = 0) And ((PVNode And Depth >= 4) Or (Not PVNode And Depth >= 6)) Then
+  If (ttMove.From = 0) And (Depth >= 8) Then
     If StaticEval = UNKNOWN_SCORE Then StaticEval = Eval()
-    If (PVNode Or (CutNode And (StaticEval + 256 >= Beta))) Then
-      Depth1 = 3 * Depth \ 4 - 2: If Depth1 <= 0 Then Depth1 = 1
-      bSkipEarlyPruning = True
-      '--- Set BestMovePly(Ply)
-      Score = Search(PVNode, Alpha, Beta, Depth1, PrevMove, EmptyMove, CutNode)
-      bSkipEarlyPruning = False
-      ttMove = EmptyMove
-      If ThreadNum = -1 Then
-        ttHit = IsInHashTable(HashKey, HashDepth, HashMove, HashEvalType, HashScore, HashStaticEval)
-      Else
-        ttHit = IsInHashMap(HashKey, HashDepth, HashMove, HashEvalType, HashScore, HashStaticEval)
-      End If
-      If ttHit And HashMove.Target > 0 Then
-        ttMove = HashMove: ttValue = HashScore
-      End If
+    Depth1 = 3 * Depth \ 4 - 2: If Depth1 <= 0 Then Depth1 = 1
+    bSkipEarlyPruning = True
+    '--- Set BestMovePly(Ply)
+    Score = Search(PVNode, Alpha, Beta, Depth1, PrevMove, EmptyMove, CutNode)
+    bSkipEarlyPruning = False
+    ttMove = EmptyMove
+    If ThreadNum = -1 Then
+      ttHit = IsInHashTable(HashKey, HashDepth, HashMove, HashEvalType, HashScore, HashStaticEval)
+    Else
+      ttHit = IsInHashMap(HashKey, HashDepth, HashMove, HashEvalType, HashScore, HashStaticEval)
+    End If
+    If ttHit And HashMove.Target > 0 Then
+      ttMove = HashMove: ttValue = HashScore
     End If
   End If
   '
@@ -1782,7 +1786,7 @@ lblNextMove:
       End If
     End If
   End If
-  If Fifty > 100 Then ' Draw ?
+  If Fifty > 99 Then ' Draw ?
     If CompToMove() Then BestValue = DrawContempt Else BestValue = -DrawContempt
   End If
   If ExcludedMove.From = 0 Then
@@ -1831,6 +1835,11 @@ Private Function QSearch(ByVal PVNode As Boolean, _
   bHashFound = False: ttHit = False: HashMove = EmptyMove: bHashBoardDone = False
   If Fifty > 3 Then
     HashKey = HashBoard(EmptyMove): bHashBoardDone = True ' Save current keys for insert later
+    If Fifty > 99 Then  ' Draw ?
+     If CompToMove() Then QSearch = DrawContempt Else QSearch = -DrawContempt
+     QSDepth = QSDepth - 1
+     Exit Function
+    End If
     If Is3xDraw(HashKey, GameMovesCnt, Ply) Then
       If CompToMove() Then QSearch = DrawContempt Else QSearch = -DrawContempt
       QSDepth = QSDepth - 1
