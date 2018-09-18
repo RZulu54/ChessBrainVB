@@ -1,6 +1,6 @@
 Attribute VB_Name = "ChessBrainVBbas"
 '==================================================
-'= ChessBrainVB V3.68:
+'= ChessBrainVB V3.70:
 '=   by Roger Zuehlsdorf (Copyright 2018)
 '=   based on LarsenVB by Luca Dormio (http://xoomer.virgilio.it/ludormio/download.htm) and Faile by Adrien M. Regimbald
 '=        and Stockfish by Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
@@ -60,6 +60,7 @@ Sub Main()
   bThreadTrace = CBool(ReadINISetting("THREADTRACE", "0") <> "0")
   bTimeTrace = CBool(ReadINISetting("TIMETRACE", "0") <> "0")
   bEGTbBaseTrace = CBool(ReadINISetting("TBBASE_TRACE", "0") <> "0")
+  bWbPvInUciFormat = CBool(ReadINISetting("WB_PV_IN_UCI", "0") <> "0")
   InitTranslate
   ' set main threadnum=-1
   SetThreads 1
@@ -119,9 +120,13 @@ Sub Main()
       bXBoardMode = CBool(Trim(ReadINISetting("XBOARD_MODE", "1")) = "1")
     End If
     If bXBoardMode Then
-      ' normal winboard mode without form
+      '------------------------------------------
+      '---  normal winboard/uci mode without form
+      '------------------------------------------
       InitEngine
-      MainLoop  '--- Wait for winboard commands
+      '>>> loop for new commands
+      MainLoop  '--- Wait for winboard/ uci commands
+      '<<<
     Else
       ' init winboard path
       frmMain.Show  '--- Show main form
@@ -223,8 +228,10 @@ Public Sub InitEngine()
   ReadScoreArr BackwardPenalty(), 40, 26, 24, 12 ' not opposed /  opposed
   SetScoreVal DoubledPenalty, 18, 38
   ReadScoreArr LeverBonus(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 17, 16, 33, 32, 0, 0, 0, 0
-  ReadScoreArr PassedPawnRankBonus(), 5, 7, 5, 14, 31, 38, 73, 73, 166, 166, 252, 252
-  ReadScoreArr PassedPawnFileBonus(), 0, 0, 9, 10, 2, 10, 1, -8, -20, -12, -27, -12, 1, -8, 2, 10, 9, 10
+  ReadIntArr PassedDanger(), 0, 0, 0, 0, 3, 6, 12, 21
+  ReadScoreArr PassedPawnRankBonus(), 0, 0, 0, 0, 7, 10, -12, 26, 3, 31, 42, 63, 178, 167, 279, 244
+  ReadScoreArr PassedPawnFileBonus(), 0, 0, 17, 3, 0, 10, 1, -23, -16, -20, _
+                                            -17, -8, 3, -1, -8, 4, 17, 9
   ReadScoreArr KingProtector(), 0, 0, 0, 0, -3, -5, -4, -3, -3, 0, -1, 1 ' for N,B,R,Q
   ReadIntArr QueenMinorsImbalance(), 31, -8, -15, -25, -5
   ReadIntArr CaptPruneMargin(), 0, -238, -262, -244, -252, -241, -228
@@ -267,7 +274,9 @@ Public Sub InitEngine()
   SetScoreVal KingOnOneBonus, 3, 62
   SetScoreVal KingOnManyBonus, 9, 138
   SetScoreVal Hanging, 48, 27 ' Hanging piece penalty
+  SetScoreVal Overload, 10, 5 ' attacked opp pieces defended onyl once
   SetScoreVal WeakUnopposedPawn, 5, 25 ' weak pawn when opp has Q/R
+  SetScoreVal ThreatByRank, 16, 3
   SetScoreVal SafeCheck, 20, 20
   SetScoreVal OtherCheck, 10, 10
   SetScoreVal PawnlessFlank, 20, 80
@@ -289,10 +298,10 @@ Public Sub InitEngine()
 End Sub
 
 '---------------------------------------------------------------------------
-'MainLoop() - main program loop
+' MainLoop() - main program loop
 '
-'contains two functions
-'ParseCommand:  parse for new input from winboard: setup board,time control, ...
+' contains two functions
+' ParseCommand:  parse for new input from winboard: setup board,time control, ...
 '
 ' StartEngine:  if computer to move:  execute commands (calculate moves)
 '---------------------------------------------------------------------------
@@ -317,7 +326,7 @@ Public Sub MainLoop()
 End Sub
 
 '---------------------------------------------------------------------------
-'ParseCommand() - parse winboard input
+' ParseCommand() - parse winboard input
 '
 ' a command list like "xboard\nnew\nrandom\nlevel 40 5 0\nhard" is splitted
 '---------------------------------------------------------------------------
@@ -767,7 +776,8 @@ NextCmd:
 End Sub
 
 '---------------------------------------------------------------------------
-'InitGame()
+'- InitGame()
+'- init all values for a new game
 '---------------------------------------------------------------------------
 Public Sub InitGame()
   ' Init start position
@@ -857,6 +867,7 @@ Public Sub GameMovesAdd(mMove As TMOVE)
 End Sub
 
 Public Sub InitEpArr()
+  ' init Enpassant array
   Dim i As Long
   EpPosArr(1) = 0
   For i = SQ_A1 To SQ_H8
@@ -903,8 +914,9 @@ Public Sub ExitProgram()
   ' END program ----------------------
   End
 End Sub
-
+'
 '---- Utility functions ----
+'
 '---------------------------------------------------------------------------
 'RndInt: Returns random value between iMin and IMax
 '---------------------------------------------------------------------------

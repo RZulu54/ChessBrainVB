@@ -4,6 +4,10 @@
 = Release notes for ChessBrainVB chess engine 
 =======================================================================================
 
+Changes from version 3.68 to 3.70 (Roger Zuehlsdorf 11-JUL-2018)
+----------------------------------------------------------------
+- bug fixes in evaluation
+- code cleanup
 
 Changes from version 3.67 to 3.68 (Roger Zuehlsdorf 1-MAR-2018)
 ----------------------------------------------------------------
@@ -25,7 +29,7 @@ Changes from version 3.61 to 3.65 (Roger Zuehlsdorf 18-FEB-2018)
     support for 64 cores
 	helper processess starting much faster
 	verify hash read/write option to detect hash collisions
-- ELO gain on self play: 40/4 about 20 ELO from time mamagement, no improvement for 40/40  
+- ELO gain on self play: 40/4 about 20 ELO from time management, no improvement for 40/40  
 
 Changes from version 3.60 to 3.61 (Roger Zuehlsdorf 25-DEC-2017)
 ----------------------------------------------------------------

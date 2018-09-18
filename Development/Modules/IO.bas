@@ -320,7 +320,7 @@ Public Sub SendThinkInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Lo
       If sPost <> sLastInfo Then
         SendCommand sPostPV
         sLastInfo = sPost
-        ShowMoveInfo MoveText(FinalMove), ActDepth, MaxPly, EvalSFTo100(CurrentScore), Elapsed
+        ShowMoveInfo MoveText(FinalMove), ActDepth, MaxPly, EvalSFTo100(CurrentScore), Elapsed ' VBA mode only
       End If
     End If
   Else
@@ -349,7 +349,7 @@ Public Sub SendThinkInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Lo
       End If
     End If
     sPost = sPost & sPostPV
-    If Not UCIMode Then sPost = sPost & "(" & MaxPly & "/" & HashUsagePerc & ")"
+    If Not UCIMode And Not bWbPvInUciFormat Then sPost = sPost & "(" & MaxPly & "/" & HashUsagePerc & ")"
     If Not GotExitCommand() Then
       If sPost <> sLastInfo Then
        SendCommand sPost
@@ -461,7 +461,7 @@ Public Sub WriteTrace(s As String)
 End Sub
 
 '---------------------------------------------------------------------------
-'ReadINISetting: Read values form INI file
+'ReadINISetting: Read values fromm INI file
 '---------------------------------------------------------------------------
 Function ReadINISetting(ByVal sSetting As String, ByVal sDefault As String) As String
   Dim sBuffer    As String

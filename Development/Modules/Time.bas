@@ -95,7 +95,7 @@ Public Function CalcTime(ByVal MovesToTC As Long, _
    If MovesToTC <= 3 Then SafetyMargin = 3#
  Else
    k = 1# + 21# * CSng(GameMovesDone) / CSng(500 + GameMovesDone)
-   If TimeTypeIsOptimum Then Ratio = 0.019 Else Ratio = 0.072
+   If TimeTypeIsOptimum Then Ratio = 0.021 Else Ratio = 0.075
    Ratio = Ratio * (k + Inc / MyTime)
  End If
  If MoreTimeForFirstMove Then Ratio = Ratio * 1.5

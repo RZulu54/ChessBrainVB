@@ -21,9 +21,9 @@ Option Explicit
 '
 Public NumPieces                                  As Long  '--- Current number of pieces at ply 0 in Pieces list
 Public Pieces(32)                                 As Long  '--- List of pieces: pointer to board position (Captured pieces ares set to zero during search)
-Public Squares(MAX_BOARD)                         As Long   '--- Squares on board: pointer to pieces list (Captured pieces ares set to zero during search)
-Public ColorSq(MAX_BOARD)                         As Long   '--- Squares color: COL_WHITE or COL_BLACK
-Public PieceCnt(16)                               As Long ' number of pieces per piece type and color
+Public Squares(MAX_BOARD)                         As Long  '--- Squares on board: pointer to pieces list (Captured pieces ares set to zero during search)
+Public ColorSq(MAX_BOARD)                         As Long  '--- Squares color: COL_WHITE or COL_BLACK
+Public PieceCnt(16)                               As Long  ' number of pieces per piece type and color
 Public SameXRay(MAX_BOARD, MAX_BOARD)             As Boolean ' are two squares on same rank or file or diagonal?
 Public DirOffset(MAX_BOARD, MAX_BOARD)            As Integer ' direction offset from sq1 to sq 2
 Public bWhiteToMove                               As Boolean  '--- false if black to move, often used
@@ -31,19 +31,19 @@ Public bCompIsWhite                               As Boolean
 Public CastleFlag                                 As enumCastleFlag
 Public WhiteCastled                               As enumCastleFlag
 Public BlackCastled                               As enumCastleFlag
-Public WPromotions(5)                             As Long '--- list of promotion pieces
+Public WPromotions(5)                             As Long  '--- list of promotion pieces
 Public BPromotions(5)                             As Long
 Public LegalMovesOutOfCheck                       As Long
 Public WKingLoc                                   As Long
 Public BKingLoc                                   As Long
 Public PieceType(16)                              As Long  ' sample: maps black pawn and white pawn pieces to PT_PAWN
 Public PieceColor(16)                             As Long  ' white / Black
-Public Ply                                        As Long ' current ply
+Public Ply                                        As Long  ' current ply
 Public arFiftyMove(499)                           As Long
 Public Fifty                                      As Long
 Public Rank(MAX_BOARD)                            As Long  ' Rank from black view
-Public RankB(MAX_BOARD)                           As Long ' Rank from black view  1 => 8
-Public RelativeSq(col_White, MAX_BOARD)           As Long ' sq from black view  1 => 8
+Public RankB(MAX_BOARD)                           As Long  ' Rank from black view  1 => 8
+Public RelativeSq(COL_WHITE, MAX_BOARD)           As Long  ' sq from black view  1 => 8
 Public File(MAX_BOARD)                            As Long
 Public SqBetween(MAX_BOARD, MAX_BOARD, MAX_BOARD) As Boolean ' (sq,sq1,sq2) is sq between sq1 and sq2?
 '--- For faster move generation
@@ -95,7 +95,7 @@ Public Function GenerateMoves(ByVal Ply As Long, _
 
     For i = WhitePiecesStart To WhitePiecesEnd
       From = Pieces(i)
-      Debug.Assert (From >= SQ_A1 And From <= SQ_H8) Or From = 0
+      Debug.Assert (From >= SQ_A1 And From <= SQ_H8) Or From = 0 ' from=0 if piece was captured during search
 
       Select Case Board(From)
         Case NO_PIECE, FRAME
@@ -521,7 +521,7 @@ End Function
 '---------------------------------------------------------------------------
 Public Function IsAttacked(ByVal Location As Long, _
                            ByVal AttackByColor As enumColor) As Boolean
-  If AttackByColor = col_White Then
+  If AttackByColor = COL_WHITE Then
     IsAttacked = IsAttackedByW(Location)
   Else
     IsAttacked = IsAttackedByB(Location)
@@ -557,9 +557,10 @@ Public Function IsAttackedByW(ByVal Location As Long) As Boolean
   For i = 4 To 7
     Offset = QueenOffsets(i): Target = Location + Offset: Piece = Board(Target)
     If Piece <> FRAME Then
-      If Piece = WPAWN Then If ((i = 5) Or (i = 7)) Then Exit Function
-      If Piece = WKING Then Exit Function
-      If OppQBCnt > 0 Then
+      If Piece = WPAWN Then
+        If ((i = 5) Or (i = 7)) Then Exit Function
+      ElseIf Piece = WKING Then Exit Function
+      ElseIf OppQBCnt <> 0 Then
 
         Do While Piece <> FRAME
           If Piece < NO_PIECE Then If Piece = WBISHOP Or Piece = WQUEEN Then Exit Function Else Exit Do
@@ -609,9 +610,10 @@ Public Function IsAttackedByB(ByVal Location As Long) As Boolean
   For i = 4 To 7
     Offset = QueenOffsets(i): Target = Location + Offset: Piece = Board(Target)
     If Piece <> FRAME Then
-      If Piece = BPAWN Then If ((i = 4) Or (i = 6)) Then Exit Function
-      If Piece = BKING Then Exit Function
-      If OppQBCnt > 0 Then
+      If Piece = BPAWN Then
+        If ((i = 4) Or (i = 6)) Then Exit Function
+      ElseIf Piece = BKING Then Exit Function
+      ElseIf OppQBCnt <> 0 Then
 
         Do While Piece <> FRAME
           If Piece < NO_PIECE Then If Piece = BBISHOP Or Piece = BQUEEN Then Exit Function Else Exit Do
@@ -1120,7 +1122,7 @@ Public Function RankRev(ByVal sRank As String) As Long
 End Function
 
 Public Function RelativeRank(ByVal Col As enumColor, ByVal sq As Long) As Long
-  If Col = col_White Then
+  If Col = COL_WHITE Then
     RelativeRank = Rank(sq)
   Else
     RelativeRank = (9 - Rank(sq))
@@ -1162,13 +1164,13 @@ Public Function TextToMove(ByVal sMoveText As String) As TMOVE
 
   Select Case LCase(Mid$(sMoveText, 5, 1))
     Case "q":
-      If PieceColor(TextToMove.Piece) = col_White Then TextToMove.Promoted = WQUEEN Else TextToMove.Promoted = BQUEEN
+      If PieceColor(TextToMove.Piece) = COL_WHITE Then TextToMove.Promoted = WQUEEN Else TextToMove.Promoted = BQUEEN
     Case "r":
-      If PieceColor(TextToMove.Piece) = col_White Then TextToMove.Promoted = WROOK Else TextToMove.Promoted = BROOK
+      If PieceColor(TextToMove.Piece) = COL_WHITE Then TextToMove.Promoted = WROOK Else TextToMove.Promoted = BROOK
     Case "b":
-      If PieceColor(TextToMove.Piece) = col_White Then TextToMove.Promoted = WBISHOP Else TextToMove.Promoted = BBISHOP
+      If PieceColor(TextToMove.Piece) = COL_WHITE Then TextToMove.Promoted = WBISHOP Else TextToMove.Promoted = BBISHOP
     Case "n":
-      If PieceColor(TextToMove.Piece) = col_White Then TextToMove.Promoted = WKNIGHT Else TextToMove.Promoted = BKNIGHT
+      If PieceColor(TextToMove.Piece) = COL_WHITE Then TextToMove.Promoted = WKNIGHT Else TextToMove.Promoted = BKNIGHT
     Case Else
       TextToMove.Promoted = 0
   End Select
@@ -1342,7 +1344,7 @@ Public Function MoveText(CompMove As TMOVE) As String
 End Function
 
 Public Function GUIMoveText(CompMove As TMOVE) As String
-  If UCIMode Then
+  If UCIMode Or bWbPvInUciFormat Then
     GUIMoveText = UCIMoveText(CompMove)
   Else
     GUIMoveText = MoveText(CompMove)
@@ -1409,7 +1411,7 @@ Public Sub InitRankFile()
     Rank(i) = (i \ 10) - 1
     RankB(i) = 9 - Rank(i)
     File(i) = i Mod 10
-    RelativeSq(col_White, i) = i
+    RelativeSq(COL_WHITE, i) = i
     RelativeSq(COL_BLACK, i) = SQ_A1 - 1 + File(i) + (8 - Rank(i)) * 10
   Next
 
@@ -1542,7 +1544,7 @@ Public Sub InitMaxDistance()
 End Sub
 
 Public Sub InitSqBetween()
-  ' Max distance x or y
+  ' sq between sq1 and sq2
   Dim i As Long, dir1 As Long, Dir2 As Long, sq As Long, sq1 As Long, sq2 As Long
 
   For sq = SQ_A1 To SQ_H8
@@ -1781,7 +1783,7 @@ lblContinue:
   '---<<< End of collecting attackers ---
   ' Count Attackers for each color (non blocked only)
   For i = 1 To Cnt
-    If PieceList(i) > 0 And Blocker(i) >= 0 Then NumAttackers(col_White) = NumAttackers(col_White) + 1 Else NumAttackers(COL_BLACK) = NumAttackers(COL_BLACK) + 1
+    If PieceList(i) > 0 And Blocker(i) >= 0 Then NumAttackers(COL_WHITE) = NumAttackers(COL_WHITE) + 1 Else NumAttackers(COL_BLACK) = NumAttackers(COL_BLACK) + 1
   Next
 
   ' Init swap list
@@ -1794,7 +1796,7 @@ lblContinue:
   If NumAttackers(SideToMove) = 0 Then
     GoTo lblEndSEE
   End If
-  If SideToMove = col_White Then CurrSgn = 1 Else CurrSgn = -1
+  If SideToMove = COL_WHITE Then CurrSgn = 1 Else CurrSgn = -1
   '---- CALCULATE SEE ---
   CapturedVal = PieceAbsValue(Move.Piece)
 
@@ -1812,7 +1814,7 @@ lblContinue:
       If Blocker(MinValIndex) > 0 Then ' unblock other sliding piece?
         Blocker(Blocker(MinValIndex)) = 0
         'Increase attack number
-        If PieceList(Blocker(MinValIndex)) > 0 Then NumAttackers(col_White) = NumAttackers(col_White) + 1 Else NumAttackers(COL_BLACK) = NumAttackers(COL_BLACK) + 1
+        If PieceList(Blocker(MinValIndex)) > 0 Then NumAttackers(COL_WHITE) = NumAttackers(COL_WHITE) + 1 Else NumAttackers(COL_BLACK) = NumAttackers(COL_BLACK) + 1
       End If
       PieceList(MinValIndex) = 0 ' Remove from list by setting piece value to zero
     End If
@@ -1852,7 +1854,7 @@ Public Sub InitPieceColor()
     If Piece < 1 Or Piece >= NO_PIECE Then
       PieceCol = COL_NOPIECE ' NO_PIECE, or EP-PIECE  or FRAME
     Else
-      If Piece Mod 2 = WCOL Then PieceCol = col_White Else PieceCol = COL_BLACK
+      If Piece Mod 2 = WCOL Then PieceCol = COL_WHITE Else PieceCol = COL_BLACK
     End If
     PieceColor(Piece) = PieceCol
   Next
@@ -1860,7 +1862,7 @@ Public Sub InitPieceColor()
 End Sub
 
 Public Function SwitchColor(Color As enumColor) As enumColor
-  If Color = col_White Then SwitchColor = COL_BLACK Else SwitchColor = col_White
+  If Color = COL_WHITE Then SwitchColor = COL_BLACK Else SwitchColor = COL_WHITE
 End Function
 
 Public Sub InitSameXRay()
@@ -1905,10 +1907,20 @@ Public Function IsCheckingMove(ByVal PieceFrom As Long, _
   If PieceFrom Mod 2 = WCOL Then ' White piece
     If Promoted > 0 Then
       PieceFrom = Promoted: If File(Target) = File(BKingLoc) And File(From) = File(Target) Then Target = From    '--- to get KingCheck array offset
+    ElseIf PieceFrom = WKING Then
+      ' Castling check?
+      If From = WKING_START Then
+        If Target = SQ_G1 Then ' 00
+          Target = SQ_F1: PieceFrom = WROOK
+        ElseIf Target = SQ_C1 Then ' 000
+          Target = SQ_D1: PieceFrom = WROOK
+        End If
+      End If
     End If
     If KingCheckB(From) = 0 Then If KingCheckB(Target) = 0 Then IsCheckingMove = False: Exit Function
-
+    
     Select Case KingCheckB(Target)
+      Case 0:  ' ignore
       Case -9, -11:
         If PieceFrom = WPAWN Then
           If MaxDistance(Target, BKingLoc) = 1 Then bFound = True
@@ -1919,7 +1931,7 @@ Public Function IsCheckingMove(ByVal PieceFrom As Long, _
       Case 1, -1, 10, -10: If PieceFrom = WQUEEN Or PieceFrom = WROOK Then bFound = True
       Case 8, -8, 12, -12, 19, -19, 21, -21: If PieceFrom = WKNIGHT Then bFound = True
     End Select
-
+    
     If Not bFound Then
       '--- Sliding Check?
       Offset = KingCheckB(From)
@@ -1927,7 +1939,9 @@ Public Function IsCheckingMove(ByVal PieceFrom As Long, _
       Select Case Abs(Offset)
         Case 0, 8, 12, 19, 21: 'empty or Knight> ignore
         Case Else
-          If SqBetween(From, BKingLoc, Target) Or SqBetween(Target, BKingLoc, From) Then  '--- ignore if move in same direction towards king
+          If SqBetween(From, BKingLoc, Target) Then '--- ignore if move in same direction towards king
+            ' ignore
+          ElseIf SqBetween(Target, BKingLoc, From) Then  '--- ignore if move in same direction towards king
             ' ignore
           Else
 
@@ -1942,8 +1956,8 @@ Public Function IsCheckingMove(ByVal PieceFrom As Long, _
               SlidePos = SlidePos + Offset
 
               Select Case Board(SlidePos)
-                Case 0, FRAME: Exit Do
                 Case NO_PIECE, WEP_PIECE, BEP_PIECE: ' - go on
+                Case FRAME: Exit Do
                 Case WQUEEN: bFound = True
                   Exit Do
                 Case WROOK: If Abs(Offset) = 10 Or Abs(Offset) = 1 Then bFound = True
@@ -1963,10 +1977,20 @@ Public Function IsCheckingMove(ByVal PieceFrom As Long, _
   ElseIf PieceFrom Mod 2 = BCOL Then ' Black piece
     If Promoted > 0 Then
       PieceFrom = Promoted: If File(Target) = File(WKingLoc) Then Target = From '--- to get KingCHeck array offset
+    ElseIf PieceFrom = WKING Then
+      ' Castling check?
+      If From = BKING_START Then
+        If Target = SQ_G8 Then ' 00
+          Target = SQ_F8: PieceFrom = BROOK
+        ElseIf Target = SQ_C8 Then ' 000
+          Target = SQ_D1: PieceFrom = BROOK
+        End If
+      End If
     End If
     If KingCheckW(From) = 0 Then If KingCheckW(Target) = 0 Then IsCheckingMove = False: Exit Function
 
     Select Case KingCheckW(Target)
+      Case 0:  ' ignore
       Case 9, 11:
         If PieceFrom = BPAWN Then
           If MaxDistance(Target, WKingLoc) = 1 Then bFound = True
@@ -1985,7 +2009,9 @@ Public Function IsCheckingMove(ByVal PieceFrom As Long, _
       Select Case Abs(Offset)
         Case 0, 8, 12, 19, 21: 'empty or Knight> ignore
         Case Else
-          If SqBetween(From, WKingLoc, Target) Or SqBetween(Target, WKingLoc, From) Then  '--- ignore if move in same direction towards king
+          If SqBetween(From, WKingLoc, Target) Then '--- ignore if move in same direction towards king
+            ' ignore
+          ElseIf SqBetween(Target, WKingLoc, From) Then  '--- ignore if move in same direction towards king
             ' ignore
           Else
 
@@ -1995,13 +2021,12 @@ Public Function IsCheckingMove(ByVal PieceFrom As Long, _
             End Select
 
             SlidePos = From
-
             Do
               SlidePos = SlidePos + Offset
 
               Select Case Board(SlidePos)
-                Case 0, FRAME: Exit Do
                 Case NO_PIECE, WEP_PIECE, BEP_PIECE: ' - go on
+                Case FRAME: Exit Do
                 Case BQUEEN: bFound = True
                   Exit Do
                 Case BROOK: If Abs(Offset) = 10 Or Abs(Offset) = 1 Then bFound = True
@@ -2030,7 +2055,7 @@ Public Sub InitBoardColors()
     IsWhite = CBool(y Mod 2 = 0)
 
     For x = 1 To 8
-      If IsWhite Then ColSq = col_White Else ColSq = COL_BLACK
+      If IsWhite Then ColSq = COL_WHITE Else ColSq = COL_BLACK
       ColorSq(20 + x + (y - 1) * 10) = ColSq
       IsWhite = Not IsWhite
     Next

@@ -11,7 +11,7 @@ Public Const MAX_HASHSIZE_MB   As Long = 1400  ' limit by 32 bit around 1500mb, 
 Public Const TT_NO_BOUND       As Byte = 0
 Public Const TT_UPPER_BOUND    As Byte = 1
 Public Const TT_LOWER_BOUND    As Byte = 2
-Public Const TT_EXACT          As Byte = 3
+Public Const TT_EXACT          As Byte = 3 ' = TT_UPPER_BOUND or TT_LOWER_BOUND !
 Public Const HASH_CLUSTER      As Long = 4
 Public Const TT_TB_BASE_DEPTH  As Long = 222
 Public Const MATERIAL_HASHSIZE As Long = 8192
@@ -102,6 +102,7 @@ Public MaterialHash(MATERIAL_HASHSIZE) As TMaterialHashEntry
 Public Sub InitHash()
   'Initialize the hash-table
   ' Use maximum hash size form INI file and memory command
+  Dim NewHashSize As Long
   bHashTrace = CBool(ReadINISetting("HASHTRACE", "0") <> "0")
   HashSizeMB = GetMin(MAX_HASHSIZE_MB, Val(ReadINISetting("HASHSIZE", "64"))) ' 2 GB for 32 bit ( max 1.5 GB?)
   If CBool(ReadINISetting("HASHSIZE_IGNORE_GUI", "0") = "0") Then
@@ -110,18 +111,22 @@ Public Sub InitHash()
   HashSizeMB = GetMin(MAX_HASHSIZE_MB, HashSizeMB) ' in 1 core: vb array MB, in IDE max around 350MB, EXE 1.5 GB
   If InIDE Then HashSizeMB = GetMin(128, HashSizeMB) ' Limited in IDE, depends on local memory usage
   
+'HashSizeMB = 1400
+'NoOfThreads = 2
+'ThreadNum = 0 ' TEST
+
+lblHashSize:
   If bHashTrace Then WriteTrace "Init hash size start " & HashSizeMB & "MB " & Now()
   If ThreadNum <= 0 Then  ' for helper threads if hssh size was changed
      WriteINISetting "HASH_USED", CStr(HashSizeMB)
   Else
      HashSizeMB = Val(ReadINISetting("HASH_USED", "64")) ' read fromm main thread
   End If
-  
   HashSize = HashSizeMB * HASH_SIZE_FACTOR   ' in Bytes, seems to fit...? hash len = 31
   HashUsage = 0
   bHashUsed = False
   #If VBA_MODE = 0 Then
-    HashMapFile = ReadINISetting("HASH_MAP_FILE", "CBVBHash" & Trim(App.Major) & "." & Trim(App.Minor) & Trim(App.Revision))  ' Change in INI to run 2x CB engine
+    HashMapFile = ReadINISetting("HASH_MAP_FILE", "CBVBHash" & Trim(App.Major) & Trim(App.Minor) & Trim(App.Revision) & "_" & GetAppTimeString() & ".DAT")  ' Change in INI to run 2x CB engine
   #End If
   
   bHashVerify = CBool(ReadINISetting("HASH_VERIFY", "0") <> "0") ' verify hash read/write to avoid collisions for many cores
@@ -164,10 +169,16 @@ Public Sub InitHash()
     ' the real hash for search is allocated now:
     HashMapSearchPtr = HashMapEnd
     HashMapEnd = HashMapEnd + HashRecLen * (HashSize + HASH_CLUSTER)
-    
+    ' allocate hash map file for multiple threads
     If ThreadNum >= 0 Then
       If bHashTrace Then WriteTrace "InitHash:OpenHashMap: HashMapEnd " & HashMapEnd
-      OpenHashMap HashMapEnd
+      NewHashSize = HashMapEnd
+      OpenHashMap NewHashSize
+      If NewHashSize <> HashMapEnd Then
+        HashSizeMB = NewHashSize \ 1024# \ 1024# ' use reduced hash size
+        WriteTrace "InitHash: New HashSize: " & HashSizeMB & " / " & Now()
+        GoTo lblHashSize
+      End If
     End If
   End If
   If bHashTrace Then WriteTrace "Init hash size done " & HashSize & " entries " & Now()
@@ -474,7 +485,8 @@ Public Function HashUsageUCI() As Long
   End If
 End Function
 
-Public Function OpenHashMap(TotalSize As Long) As Long
+Public Function OpenHashMap(ByRef TotalSize As Long) As Long
+  ' TotalSize may be reduced if not enough memory !!!
   Static OldHashSize As Long
   If OldHashSize = 0 Then
     Set moHashMap = New clsHashMap
@@ -488,7 +500,7 @@ Public Function OpenHashMap(TotalSize As Long) As Long
         If bThreadTrace Then WriteTrace "OpenHashMap: CloseMap"
         moHashMap.CloseMap
       End If
-      moHashMap.CreateMap HashMapFile, TotalSize
+        moHashMap.CreateMap HashMapFile, TotalSize ' TotalSize may be reduced if not enough memory !!!
       If bThreadTrace Then WriteTrace "OpenHashMap: CreateMap: Size " & TotalSize
     ElseIf ThreadNum > 0 Then
       moHashMap.OpenMap HashMapFile, TotalSize
@@ -888,3 +900,19 @@ Public Function InIDE() As Boolean
     InIDE = i = 0
     i = 0
 End Function
+
+Public Function GetAppTimeString() As String
+  ' returns exe filedatetime with digits only
+  Dim p As Long, s As String
+  GetAppTimeString = ""
+  s = Now()
+  #If VBA_MODE = 0 Then
+    If Dir(App.EXEName & ".exe") <> "" Then
+      s = FileDateTime(App.EXEName & ".exe")
+    End If
+  #End If
+  For p = 1 To Len(s)
+    If IsNumeric(Mid$(s, p, 1)) Then GetAppTimeString = GetAppTimeString & Mid$(s, p, 1)
+  Next
+End Function
+

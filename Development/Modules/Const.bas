@@ -14,8 +14,8 @@ Public Const USE_BOOK_KEY = "OPENING_BOOK"
 '--------------------------------------------------
 'Piece definition
 '--------------------------------------------------
-'White pieces      "Board(x) mod 2 = WCOL"
-'Black pieces      "Board(x) mod 2 = BCOL"
+'White pieces      "Board(x) mod 2 = WCOL"  WCOL = 1
+'Black pieces      "Board(x) mod 2 = BCOL"  BCOL = 0
 Public Const FRAME                   As Long = 0     'Frame of board array
 Public Const WPAWN                   As Long = 1
 Public Const BPAWN                   As Long = 2

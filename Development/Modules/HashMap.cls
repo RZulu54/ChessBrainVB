@@ -95,33 +95,61 @@ Public Sub CloseMap()
   hObj = 0
 End Sub
 
-Public Function CreateMap(ByVal Name As String, ByVal Size As Long) As Boolean
+Public Function CreateMap(ByVal Name As String, ByRef Size As Long) As Boolean
   'Returns True if the memory mapped file already exists.  If so CAUTION,
   'the size will be its previously-created size.
+  ' Size may be reduced if not enough memory - and returned to caller !!!
+  Dim i As Long, ErrCode As Long
   If Size < 1 Then Err.Raise 5, TypeName(Me), "Size must be at least 1 byte"
-  hObj = CreateFileMapping(INVALID_HANDLE_VALUE, API_NULL, PAGE_READWRITE, 0, Size, Name)
-  If hObj = API_NULL Then
-    Err.Raise &H80049300, TypeName(Me), "CreateFileMapping system error " & CStr(Err.LastDllError)
-  End If
-  CreateMap = (Err.LastDllError = ERROR_ALREADY_EXISTS)
-  lpMap = MapViewOfFile(hObj, FILE_MAP_WRITE, 0, 0, 0)
-  If lpMap = API_NULL Then
-    Err.Raise &H80049302, TypeName(Me), "MapViewOfFile system error " & CStr(Err.LastDllError)
-  End If
+  For i = 1 To 10
+    DoEvents
+    Err.Clear
+    hObj = CreateFileMapping(INVALID_HANDLE_VALUE, API_NULL, PAGE_READWRITE, 0, Size, Name)
+    ErrCode = Err.LastDllError
+    If hObj = API_NULL Then
+      Err.Raise &H80049300, TypeName(Me), "CreateFileMapping system error " & CStr(Err.LastDllError)
+    End If
+    CreateMap = (Err.LastDllError = ERROR_ALREADY_EXISTS)
+    
+    DoEvents
+    lpMap = MapViewOfFile(hObj, FILE_MAP_WRITE, 0, 0, 0)
+    If lpMap = API_NULL Then
+      Me.CloseMap
+      If i = 10 Then
+        Err.Raise &H80049302, TypeName(Me), "MapViewOfFile system error " & CStr(Err.LastDllError)
+        Exit Function
+      ElseIf i >= 3 Then ' try reducing size
+        Size = (Size / 3) * 2
+      End If
+        
+      WriteTrace "***error> CreateMap: " & i & " / " & Name & " / Size= " & Size & " / Err:" & CStr(Err.LastDllError) & " / " & Now()
+     ' Err.Raise &H80049302, TypeName(Me), "MapViewOfFile system error " & CStr(Err.LastDllError)
+      Sleep 100
+    Else
+      Exit For
+    End If
+  Next
   ZeroMemory2 ByVal lpMap, Size
   mSize = Size
 End Function
 
 Public Sub OpenMap(ByVal Name As String, ByVal Size As Long)
+  Dim i As Long
   If Size < 1 Then Err.Raise 5, TypeName(Me), "Size must be at least 1 byte"
+  DoEvents
   hObj = OpenFileMapping(FILE_MAP_WRITE, API_FALSE, Name)
   If hObj = API_NULL Then
     Err.Raise &H80049304, TypeName(Me), "OpenFileMapping system error " & CStr(Err.LastDllError)
   End If
-  lpMap = MapViewOfFile(hObj, FILE_MAP_WRITE, 0, 0, Size)
-  If lpMap = API_NULL Then
-    Err.Raise &H80049306, TypeName(Me), "MapViewOfFile system error " & CStr(Err.LastDllError)
-  End If
+  For i = 1 To 5
+    DoEvents
+    lpMap = MapViewOfFile(hObj, FILE_MAP_WRITE, 0, 0, Size)
+    If lpMap = API_NULL Then
+      Err.Raise &H80049306, TypeName(Me), "MapViewOfFile system error " & CStr(Err.LastDllError)
+    Else
+      Exit For
+    End If
+  Next
   mSize = Size
   CheckDataPtr = VarPtr(CheckData(0))
 End Sub
