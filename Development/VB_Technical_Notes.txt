@@ -53,7 +53,26 @@ for numerics use type declaration characters to avoid overflows or rounding prob
 debug.print 22222 * 22222  => Overflow because result is > 32767
 debug.print 22222& * 22222&  => 493817284  correct
 
-
+Slow User defined Data Types
+============================
+Own type structure are very slow when assigned or returned by a function.
+Calling a SUB and passing the parameters is about 3x faster.
+Type INT64
+  I0 as long
+  I1 as long
+ End Type
+ 
+ Dim X1 as INT64, X2 as INT64
+ X2 = X1  ' slow
+ 
+ Assign64 X2,X1   ' Fast!
+ 
+ Sub Assign64(ByRef Op1 as INT64,B yRef Op2 a INT64)
+   X2.I0=x1.I0: X2.I1=X1.I1
+ End Sub
+ 
+ -----------------------------------------------------------------
+  
 
 
  

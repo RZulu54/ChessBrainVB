@@ -212,8 +212,6 @@ Public Sub InitEngine()
   ' Queens
   ReadScoreArr MobilityQ, -40, -35, -25, -12, 2, 7, 4, 19, 14, 37, 24, 55, 25, 62, 40, 76, 43, 79, 47, 87, 54, 94, 56, 102, 60, 111, 70, 116, 72, 118, 73, 122, 75, 128, 77, 130, 85, 133, 94, 136, 99, 140, 108, 157, 112, 158, 113, 161, 118, 174, 119, 177, 123, 191, 128, 199
   'SF6: Threat by pawn (pairs MG/EG: NOPIECE,PAWN,KNIGHT (176,139), BISHOP, ROOK, QUEEN
-  ReadScoreArr ThreatBySafePawn, 0, 0, 0, 0, 176, 139, 141, 127, 217, 218, 203, 215
-  SetScoreVal ThreatByRank, 16, 3
   'SF6: Outpost (Pair MG/EG )[0, 1=supported by pawn]
   ReadScoreArr ReachableOutpostKnight, 22, 6, 36, 12
   ReadScoreArr ReachableOutpostBishop, 9, 2, 15, 5
@@ -270,13 +268,14 @@ Public Sub InitEngine()
   ' Threats
   ReadScoreArr ThreatByMinor, 0, 0, 0, 33, 45, 43, 46, 47, 72, 107, 48, 118 'Minor on Defended
   ReadScoreArr ThreatByRook, 0, 0, 0, 25, 40, 62, 40, 59, 0, 34, 35, 48 'Major on Defended
+  ReadScoreArr ThreatBySafePawn, 0, 0, 0, 0, 176, 139, 141, 127, 217, 218, 203, 215
+  SetScoreVal ThreatByRank, 16, 3
   SetScoreVal ThreatenedByHangingPawn, 71, 61
   SetScoreVal KingOnOneBonus, 3, 62
   SetScoreVal KingOnManyBonus, 9, 138
   SetScoreVal Hanging, 48, 27 ' Hanging piece penalty
   SetScoreVal Overload, 10, 5 ' attacked opp pieces defended onyl once
   SetScoreVal WeakUnopposedPawn, 5, 25 ' weak pawn when opp has Q/R
-  SetScoreVal ThreatByRank, 16, 3
   SetScoreVal SafeCheck, 20, 20
   SetScoreVal OtherCheck, 10, 10
   SetScoreVal PawnlessFlank, 20, 80
@@ -291,7 +290,7 @@ Public Sub InitEngine()
   bUseBook = InitBook
   ' Init Hash
   InitZobrist
-  ' Endgame tablebase access (via online web service)
+  ' Endgame tablebase access (via online web service or fathom.exe)
   InitTableBases
   ' Init game
   InitGame
@@ -635,7 +634,7 @@ Public Sub ParseCommand(ByVal sCommand As String)
       GoTo NextCmd
     End If
     If Left$(sCurrentCmd, 3) = "sd " Then
-      ' fixed depth (iterativedepth)
+      ' fixed depth (RootDepth)
       MovesToTC = 0
       SecondsPerGame = 0
       TimeIncrement = 0

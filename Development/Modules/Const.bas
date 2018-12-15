@@ -178,10 +178,5 @@ Public Enum enumEndOfGame ' Game result
   DRAW3REP_RESULT = 4
 End Enum
 
-'Public Type TBit64  ' emulate 64 bit, use 4x16 bit (positive values only)
-' i0 As Long
-' i1 As Long
-' i2 As Long
-' i3 As Long
-'End Type
+
 

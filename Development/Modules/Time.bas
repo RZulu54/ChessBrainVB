@@ -130,7 +130,7 @@ Public Function CheckTime() As Boolean
   If Elapsed >= GetMinSingle(MaximumTime, Optimum2) Then
     CheckTime = False
     If bTimeTrace Then
-        WriteTrace "CheckTime D" & IterativeDepth & ": Elapsed:" & Format$(Elapsed, "0.00") & ", Opt2:" & Format$(Optimum2, "0.00") & ", Opt:" & Format$(OptimalTime, "0.00") & ", Max:" & Format$(MaximumTime, "0.00")
+        WriteTrace "CheckTime D" & RootDepth & ": Elapsed:" & Format$(Elapsed, "0.00") & ", Opt2:" & Format$(Optimum2, "0.00") & ", Opt:" & Format$(OptimalTime, "0.00") & ", Max:" & Format$(MaximumTime, "0.00")
     End If
   End If
 

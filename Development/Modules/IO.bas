@@ -437,7 +437,7 @@ End Function
 Public Sub SendAnalyzeInfo()
   Dim sPost As String, Elapsed As Single
   Elapsed = TimeElapsed
-  sPost = "stat01: " & Int(Elapsed) & " " & Nodes & " " & IterativeDepth & " " & "1 1"
+  sPost = "stat01: " & Int(Elapsed) & " " & Nodes & " " & RootDepth & " " & "1 1"
   If Not GotExitCommand() Then
     SendCommand sPost
   End If
@@ -663,7 +663,7 @@ Public Function IsTimeForEGTbBaseProbe() As Boolean
   If Not pbIsOfficeMode Then
     IsTimeForEGTbBaseProbe = False
     If FixedDepth <> NO_FIXED_DEPTH Then IsTimeForEGTbBaseProbe = True: Exit Function
-    ' If Ply < GetMax(3, IterativeDepth \ 3) Then
+    ' If Ply < GetMax(3, RootDepth \ 3) Then
     If CBool(TimeLeft > 1.5) Then
       IsTimeForEGTbBaseProbe = True
     End If

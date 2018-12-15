@@ -93,12 +93,12 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
   'EPD(1) = "8/8/8/8/6p1/6Pp/5k2/7K w - - 2 95 "  ' bug hanging movepicker => one legal move out of check
   'EPD(1) = "r2qk2r/pp1n1ppp/2p1p3/5b2/P2Pn3/BBP1P3/3N1PPP/R3QRK1 w kq - 0 14 " ' Eval ?
   'EPD(1) = "2r5/7K/k5P1/8/8/1p6/8/8 b - - 0 1 " ' Passed pawn test
-  'EPD(1) = "3R4/p6r/8/1P2k3/2B5/8/4K3/8 w - - 50 103  " ' endgame king to pawn
+  'EPD(1) = "3R4/p6r/8/1P2k3/2B5/8/4K3/8 w - - 50 103  " ' endgame king to pawn1p2PP2
   'EPD(1) = "r1b2rk1/p4ppp/1p1Qp3/4P2N/1P6/8/P3qPPP/3R1RK1 w - - 0 1 " ' WAC 288
   'EPD(1) = "8/8/8/Q7/8/2K3k1/7r/8 w - - 0 1 " ' KQKR
   'EPD(1) = "8/8/8/Q7/8/2K3k1/7p/8 w - - 0 1 " ' KQKP
   'EPD(1) = "8/8/8/5pk1/8/2KR4/8/8 w - - 0 1" ' KRKP
-  'EPD(1) = "2qrr1n1/3b1kp1/2pBpn1p/1p2PP2/p2P4/1BP5/P3Q1PP/4RRK1 w - - 0 1" ' ; e2h5 "BWTC.0031"
+  'EPD(1) = "2qrr1n1/3b1kp1/2pBpn1p//p2P4/1BP5/P3Q1PP/4RRK1 w - - 0 1" ' ; e2h5 "BWTC.0031"
   ' EPD(1) = "5rk1/1pp3bp/3p2p1/2PPp3/1P2P3/2Q1B3/4q1PP/R5K1 b - - bm Bh6; id WAC.169"
   'EPD(1) = "8/7p/1R4pk/8/6PK/7P/1p6/1r6 b - - 3 1 " ' Passed pawn attacked by rook   SF6: mg:1.14 eg:2.24 cp
   'EPD(1) = "8/7p/1R4pk/8/6PK/7P/1pr5/8 b - - 0 1  " ' Passed pawn attacked by rook, blocked by own rook  SF6: 1.38 2.36
@@ -144,9 +144,17 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
   'EPD(1) = "r5k1/pp4pp/2pb3r/3p2q1/P1PP4/1PB1P1PB/7K/R2Q2R1 b - - 0 28 "
    'EPD(1) = "6r1/2pq2pk/1p3p1p/1P1Pp2P/Q3P1P1/p1R3K1/P7/8 w - - 98 109 " ' fifty
   ' EPD(1) = "k7/8/P7/1K6/8/8/8/8 w - - 12 1 " ' endgame kpk"
-  ' EPD(1) = "2nk4/8/8/8/6b1/8/8/R3K3 w Q - 0 1 " ' checking with castling
+ '  EPD(1) = "r1bq3r/1p1nbpk1/p2p1np1/P1pPp3/4P2p/2NBB2P/1PPQNPP1/R4RK1 b - - 1 14 " ' Tactic
+ 
+  ' EPD(1) = "4kb1r/1pqb1ppp/p3p3/3pP3/2r2P2/2NQB3/PPP3PP/R4RK1 w k - 6 14" ' a2a3 lost
+   EPD(1) = "4kb1r/1pqb1ppp/p3p3/3pP3/2r2P2/P1NQB3/1PP3PP/R4RK1 b k - 0 14 " ' d5d4 wins
+   EPD(1) = "4kb1r/1pqb1ppp/p3p3/4P3/2rB1P2/P1NQ4/1PP3PP/R4RK1 b k - 0 15 " ' Txd4 wins
+  ' EPD(1) = "4kb1r/1pqb1ppp/p3p3/4P3/3r1P2/P1NQ4/1PP3PP/R4RK1 w k - 0 16 " ' d3d4 lost
+  EPD(1) = "4kb1r/1pqb1ppp/p3p3/4P3/2rp1P2/P1NQB3/1PP3PP/R4RK1 w k - 0 15 " ' e3xd4 lost
+  
+  EPD(1) = "8/6k1/8/5P1P/6PK/3n4/8/8 w - - 0 81 "
   '------ normal test ----
-  EPD(1) = "1b5k/7P/p1p2np1/2P2p2/PP3P2/4RQ1R/q2r3P/6K1 w - - 0 1"
+ ' EPD(1) = "1b5k/7P/p1p2np1/2P2p2/PP3P2/4RQ1R/q2r3P/6K1 w - - 0 1"
   EPD(2) = "1rb2rk1/p3nppp/1p1qp3/3n2N1/2pP4/2P3P1/PP3PBP/R1BQR11K w - -"  'TEST 2
   EPD(3) = "r1b2rk1/p2nq1p1/1pp1p2p/5p2/2PPp3/2Q1P3/PP1N1PPP/2R1KB1R w K - 0 13" '--- quiet
   EPD(4) = "6k1/p1r5/4b1p1/R1pprp1p/7P/1P1BP3/P1P3P1/4R1K1 w - - 4 25" ' no advantage
@@ -159,8 +167,8 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
   'iDepth = 8
   ' ReadGame "Drawbug2.txt"
   'bForceMode = False
-  'For x = 1 To 1 'if EPD(1) only to test
-   For x = 1 To 7 ' 7
+  For x = 1 To 1 'if EPD(1) only to test
+  ' For x = 1 To 5 ' 7
     For i = 0 To 0 ' number of time measure runs  > 1x
       'For i = 0 To 2 ' number of time measure runs > 3x
       InitGame ' Reset FixedDepth
@@ -195,8 +203,11 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
         GameMovesCnt = 119 ' plies, /2 for MoveCnt
         BookPly = 31
       End If
+      
       StartTime = Timer
+      '--- start computing --------------
       StartEngine
+      '
       EndTime = Timer
       ' Test Counter
       s = ""
@@ -241,7 +252,7 @@ End Sub
 Public Sub DMoves()
   ' Debug: print current move line
   Dim i As Long, s As String
-  s = CStr(IterativeDepth) & "/" & CStr(Ply) & ">"
+  s = CStr(RootDepth) & "/" & CStr(Ply) & ">"
 
   For i = 1 To Ply - 1
     s = s & CStr(i) & ":" & MoveText(MovesList(i)) & "/"

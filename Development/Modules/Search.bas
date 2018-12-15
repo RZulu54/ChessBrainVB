@@ -13,7 +13,7 @@ Option Explicit
 '=             when all captures are done, the final position evaluation is returned
 '=======================================================
 Public Result                                           As enumEndOfGame
-Public IterativeDepth                                   As Long
+Public RootDepth                                   As Long
 Public Nodes                                            As Long
 Public QNodes                                           As Long
 Public QNodesPerc                                       As Double
@@ -39,6 +39,7 @@ Public PrevGameMoveScore                                As Long ' Eval score at 
 Private RootMatScore                                    As Long ' Material score at root from view of side to move
 Public RootMoveCnt                                      As Long ' current root move for GUI
 Public LastFinalScore                                   As Long
+Public bFailedLowAtRoot As Boolean
 
 '--- Search performance: move ordering, cuts of search tree ---
 Public History(COL_WHITE, MAX_BOARD, MAX_BOARD)         As Long     ' move history From square -> To square for color
@@ -109,7 +110,6 @@ Public bEasyMovePlayed          As Boolean
 Public QSDepth                  As Long
 Private TmpMove                 As TMOVE
 Public bFirstRootMove           As Boolean
-Public bFailedLowAtRoot         As Boolean
 Public bEvalBench               As Boolean
 Public LegalRootMovesOutOfCheck As Long
 Public IsTBScore                As Boolean
@@ -274,10 +274,12 @@ Public Function Think() As TMOVE
   Dim RootBeta            As Long
   Dim OldScore            As Long, Delta As Long, MaxValue As Long, MinValue As Long, ValueSpan As Long
   Dim bOldEvalTrace       As Boolean
+  Dim AdjustedDepth As Long, FailedHighCnt As Long
+  
   '--- Thread management
   Dim bHelperMove         As Boolean, HelperCompletedDepth As Long, HelperBestScore As Long, HelperNodes As Long, HelperPvLength As Long, HelperPV(11) As TMOVE
   '---------------------------------------------
-  CompMove = EmptyMove
+  ClearMove CompMove
   ResetMaterial
   ' init counters
   Nodes = 0
@@ -333,7 +335,7 @@ Public Function Think() As TMOVE
     ' Scores
     FinalScore = -MATE0
     RootStartScore = Eval()   ' Output for EvalTrace, sets EvalTrace=false
-    If bOldEvalTrace Then Think = EmptyMove: Exit Function ' Exit if we only want an EVAl trace
+    If bOldEvalTrace Then ClearMove Think: Exit Function  ' Exit if we only want an EVAl trace
     'LogWrite "Start Think "
     '
     '--- Timer ---
@@ -382,16 +384,16 @@ Public Function Think() As TMOVE
     '----------------------------
     '--- Iterative deepening ----
     '----------------------------
-    For IterativeDepth = 1 To IMax
+    For RootDepth = 1 To IMax
       '// Distribute search depths across the threads
       If ThreadNum > 0 Then
         Dim th As Long
         th = (ThreadNum - 1) Mod 20
-        If ((IterativeDepth + SkipPhase(th)) / SkipSize(th)) Mod 2 <> 0 And IterativeDepth > 1 Then
-          If IterativeDepth > 1 Then PlyScore(IterativeDepth) = PlyScore(IterativeDepth - 1)
-          GoTo lblNextIterativeDepth
+        If ((RootDepth + SkipPhase(th)) / SkipSize(th)) Mod 2 <> 0 And RootDepth > 1 Then
+          If RootDepth > 1 Then PlyScore(RootDepth) = PlyScore(RootDepth - 1)
+          GoTo lblNextRootDepth
         Else
-          If bThreadTrace Then WriteTrace "Think: IterativeDepth= " & IterativeDepth & " / " & Now()
+          If bThreadTrace Then WriteTrace "Think: RootDepth= " & RootDepth & " / " & Now()
         End If
       End If
       Elapsed = TimeElapsed
@@ -401,26 +403,27 @@ Public Function Think() As TMOVE
         bFailedLowAtRoot = False
       End If
       If Not FixedDepthMode And FixedTime = 0 And Not bAnalyzeMode Then
-        If Not CheckTime() And IterativeDepth > 1 Then
+        If Not CheckTime() And RootDepth > 1 Then
           If bTimeTrace Then WriteTrace "Exit SearchRoot2: Used: " & Format$(Elapsed, "0.00") & ", Given:" & Format$(OptimalTime, "0.00")
           Exit For
         End If
       Else
-        If IterativeDepth > FixedDepth Then Exit For ' Fixed depth reached -> Exit
+        If RootDepth > FixedDepth Then Exit For ' Fixed depth reached -> Exit
       End If
-      If EGTBasesHitsCnt > 0 And IterativeDepth > 40 Then bTimeExit = True: Exit For
+      If EGTBasesHitsCnt > 0 And RootDepth > 40 Then bTimeExit = True: Exit For
       bSearchingPV = True
       GoodMoves = 0
-      PlyScore(IterativeDepth) = 0
+      PlyScore(RootDepth) = 0
+      FailedHighCnt = 0
       '
       '--- Aspiration Window
       '
       ' Delta = Eval100ToSF(25) ' aspiration window size
       RootAlpha = -MATE0: RootBeta = MATE0: Delta = -MATE0
-      OldScore = PlyScore(IterativeDepth - 1)
-      If IterativeDepth >= 4 Then
+      OldScore = PlyScore(RootDepth - 1)
+      If RootDepth >= 4 Then
          Delta = 18 '45 '55 ' 30 ' 18 ' aspiration window size
-        'Delta = GetMax(10, GetMin(25, 45 - IterativeDepth))
+        'Delta = GetMax(10, GetMin(25, 45 - RootDepth))
         
         Debug.Assert Abs(Delta) <= 200000
         RootAlpha = GetMax(OldScore - Delta, -MATE0)
@@ -432,26 +435,29 @@ Public Function Think() As TMOVE
         End If
       End If
       bFailedLowAtRoot = False
+      AdjustedDepth = RootDepth
       Debug.Assert Abs(RootAlpha) <= Abs(UNKNOWN_SCORE)
 
       Do While (True)
         '
         '--------- SEARCH ROOT ----------------
         '
-        '  WriteTrace "Think Iterativedepth=" & IterativeDepth & " " & Now()
-        LastMove = SearchRoot(RootAlpha, RootBeta, IterativeDepth, GoodMoves) '<<<<<<<<< SEARCH
+        AdjustedDepth = GetMax(1, RootDepth - FailedHighCnt)
+        '  WriteTrace "Think RootDepth=" & RootDepth & " " & Now()
+        LastMove = SearchRoot(RootAlpha, RootBeta, AdjustedDepth, GoodMoves) '<<<<<<<<< SEARCH
+        'LastMove = SearchRoot(RootAlpha, RootBeta, RootDepth, GoodMoves) '<<<<<<<<< SEARCH
         #If DEBUG_MODE Then
-          If IterativeDepth > 5 Then
-      '      SendCommand "D:" & IterativeDepth & ">>> Search A:" & RootAlpha & ", B:" & RootBeta & " => SC: " & FinalScore
+          If RootDepth > 5 Then
+      '      SendCommand "D:" & RootDepth & ">>> Search A:" & RootAlpha & ", B:" & RootBeta & " => SC: " & FinalScore
           End If
         #End If        '
         Debug.Assert Abs(FinalScore) <= Abs(UNKNOWN_SCORE)
         Debug.Assert Abs(RootAlpha) <= Abs(UNKNOWN_SCORE)
         Debug.Assert Abs(RootBeta) <= Abs(UNKNOWN_SCORE)
         '--LastMove.From = 0  no move draw
-        If bTimeExit Or IsTBScore Or LastMove.From = 0 Or (bOnlyMove And IterativeDepth = 1) Then Exit Do
+        If bTimeExit Or IsTBScore Or LastMove.From = 0 Or (bOnlyMove And RootDepth = 1) Then Exit Do
         '
-        If IterativeDepth >= 4 Then
+        If RootDepth >= 4 Then
           If Abs(FinalScore) < 100000 Then
             MaxValue = GetMax(FinalScore, MaxValue - Abs(MaxValue) \ 3)
             MinValue = GetMin(FinalScore, MinValue + Abs(MinValue) \ 3)
@@ -464,27 +470,30 @@ Public Function Think() As TMOVE
         '
         bSearchingPV = True: GoodMoves = 0
         ' GUI info
-        If (IterativeDepth > 1 Or IsTBScore) And bPostMode And PVLength(1) >= 1 Then
+        If (RootDepth > 1 Or IsTBScore) And bPostMode And PVLength(1) >= 1 Then
           Elapsed = TimeElapsed()
-          If Not bExitReceived Then SendThinkInfo Elapsed, IterativeDepth, FinalScore, RootAlpha, RootBeta ' Output to GUI
+          If Not bExitReceived Then SendThinkInfo Elapsed, RootDepth, FinalScore, RootAlpha, RootBeta ' Output to GUI
         End If
         
         If FinalScore <= RootAlpha Then
           #If DEBUG_MODE Then
-            If IterativeDepth > 5 Then
+            If RootDepth > 5 Then
               SendCommand "             Research " & " SC:" & FinalScore & " <= A:" & RootAlpha
             End If
           #End If
           RootBeta = (RootAlpha + RootBeta) \ 2
           RootAlpha = GetMax(FinalScore - Delta, -MATE0)
+          
+          If ThreadNum <= 0 Then FailedHighCnt = 0
           bResearching = True
-          If ThreadNum <= 0 Then bFailedLowAtRoot = CBool(FinalScore < RootAlpha)
+          If ThreadNum <= 0 Then bFailedLowAtRoot = True
         ElseIf FinalScore >= RootBeta Then
           #If DEBUG_MODE Then
-            If IterativeDepth > 5 Then
+            If RootDepth > 5 Then
               SendCommand "             Research " & " SC:" & FinalScore & "       >= B:" & RootBeta
             End If
           #End If
+          If ThreadNum <= 0 Then FailedHighCnt = FailedHighCnt + 1
           RootBeta = GetMin(FinalScore + Delta, MATE0)
           bResearching = True
         Else
@@ -503,11 +512,11 @@ Public Function Think() As TMOVE
       Loop
 
       '--- Search result for current iteration ---
-      If (bOnlyMove And IterativeDepth = 1) Then FinalScore = LastFinalScore Else LastFinalScore = FinalScore
+      If (bOnlyMove And RootDepth = 1) Then FinalScore = LastFinalScore Else LastFinalScore = FinalScore
       
       If FinalScore <> UNKNOWN_SCORE Then
         If Not bTimeExit Then
-          If FinalMove.From > 0 Then FinalCompletedDepth = IterativeDepth
+          If FinalMove.From > 0 Then FinalCompletedDepth = AdjustedDepth
         End If
         If ThreadNum > 0 And Trim(MoveText(PV(1, 1))) = "" Then
           If bThreadTrace Then WriteTrace "!!!???Think:PV Empty "
@@ -515,23 +524,23 @@ Public Function Think() As TMOVE
           If ThreadNum > 0 Then WriteMapBestPVforThread FinalCompletedDepth, FinalScore, FinalMove
         End If
         CompMove = FinalMove
-        PlyScore(IterativeDepth) = FinalScore
+        PlyScore(RootDepth) = FinalScore
         If bPostMode And PVLength(1) >= 1 Then
           Elapsed = TimeElapsed()
-          If Not bExitReceived Then SendThinkInfo Elapsed, IterativeDepth, FinalScore, RootAlpha, RootBeta ' Output to GUI
+          If Not bExitReceived Then SendThinkInfo Elapsed, RootDepth, FinalScore, RootAlpha, RootBeta ' Output to GUI
         End If
       End If
       CopyIntArr BoardTmp, Board  ' copy old position to main board
       If bOnlyMove Or IsTBScore Then
         bOnlyMove = False: Exit For
       End If
-      If IterativeDepth > 2 And FinalScore > MATE0 - IterativeDepth Then
+      If RootDepth > 2 And FinalScore > MATE0 - RootDepth Then
         Exit For
       End If
-      If bTimeExit Or IsTBScore Or (IterativeDepth = 1 And LastMove.From = 0) Then GoTo lblIterationsExit
+      If bTimeExit Or IsTBScore Or (RootDepth = 1 And LastMove.From = 0) Then GoTo lblIterationsExit
       
-      If IterativeDepth >= 7 - 3 * Abs(pbIsOfficeMode) And EasyMove.From > 0 And Not FixedDepthMode And Not FixedTime > 0 Then
-        If bTimeTrace Then WriteTrace "Easy check PV (IT:" & IterativeDepth & "): EM:" & MoveText(EasyMove) & ": PV1:" & MoveText(PV(1, 1))
+      If RootDepth >= 7 - 3 * Abs(pbIsOfficeMode) And EasyMove.From > 0 And Not FixedDepthMode And Not FixedTime > 0 Then
+        If bTimeTrace Then WriteTrace "Easy check PV (IT:" & RootDepth & "): EM:" & MoveText(EasyMove) & ": PV1:" & MoveText(PV(1, 1))
         If MovesEqual(PV(1, 1), EasyMove) Then
           If bTimeTrace Then WriteTrace "Easy check2 bestmove: " & Format(BestMoveChanges, "0.000")
           If BestMoveChanges < 0.03 Then
@@ -549,8 +558,8 @@ Public Function Think() As TMOVE
           End If
         End If
       End If
-      If IterativeDepth > 15 Then
-        If IterativeDepth > 60 Or (Abs(FinalScore) > MATE0 - 6 And Abs(FinalScore) < MATE0) Then bTimeExit = True
+      If RootDepth > 15 Then
+        If RootDepth > 60 Or (Abs(FinalScore) > MATE0 - 6 And Abs(FinalScore) < MATE0) Then bTimeExit = True
       End If
       If bTimeExit Then
         Exit For
@@ -561,7 +570,7 @@ Public Function Think() As TMOVE
           If EasyMovePV(3).From > 0 Then ClearEasyMove
         End If
       End If
-lblNextIterativeDepth:
+lblNextRootDepth:
       If ThreadNum > 0 Then If ReadMainThreadStatus() = 0 Then bTimeExit = True: Exit For
     Next ' Iteration <<<<<<<<
 
@@ -644,7 +653,7 @@ lblIterationsExit:
       End If
 
       'If bNewPV Then
-      SendThinkInfo Elapsed, GetMax(IterativeDepth, FinalCompletedDepth), FinalScore, RootAlpha, RootBeta ' show always with new nodes count
+      SendThinkInfo Elapsed, GetMax(RootDepth, FinalCompletedDepth), FinalScore, RootAlpha, RootBeta ' show always with new nodes count
       'End If
     ElseIf ThreadNum > 0 Then
       If bThreadTrace Then WriteTrace "StartEngine: stopped thread: " & ThreadNum
@@ -677,10 +686,10 @@ Private Function SearchRoot(ByVal Alpha As Long, _
   CutNode = False: QSDepth = 0
   bOnlyMove = False
   GoodMoves = 0: RootMoveCnt = 0
-  PrevMove = EmptyMove
+  ClearMove PrevMove
   BestRootScore = -MATE0
-  BestRootMove = EmptyMove
-  PliesFromNull(0) = Fifty: PliesFromNull(1) = Fifty: BestMovePly(Ply) = EmptyMove
+  ClearMove BestRootMove
+  PliesFromNull(0) = Fifty: PliesFromNull(1) = Fifty: ClearMove BestMovePly(Ply)
   If GameMovesCnt > 0 Then PrevMove = arGameMoves(GameMovesCnt)
   PrevMove.IsChecking = InCheck()
   ' init history values
@@ -689,7 +698,7 @@ Private Function SearchRoot(ByVal Alpha As Long, _
   NullMovePly = 0: NullMoveOdd = 0
   
   With Killer(Ply + 2)
-    .Killer1 = EmptyMove: .Killer2 = EmptyMove: .Killer3 = EmptyMove
+    ClearMove .Killer1: ClearMove .Killer2: ClearMove .Killer3
   End With
 
   ' Debug.Print "-------------"
@@ -707,7 +716,6 @@ Private Function SearchRoot(ByVal Alpha As Long, _
   LegalMoveCnt = 0
   QuietMoves = 0
   bFirstRootMove = True
-  bFailedLowAtRoot = False
   PVLength(Ply) = Ply
   SearchStart = Timer
   ' Root check extent
@@ -724,7 +732,7 @@ Private Function SearchRoot(ByVal Alpha As Long, _
   '
   '---  Root moves loop --------------------
   '
-  If IterativeDepth = 1 Then
+  If RootDepth = 1 Then
     GenerateMoves 1, False, CntRootMoves
     For CurrMove = 1 To CntRootMoves - 1: PrevIterationScore(i) = -100000000: Next ' Save old scores as second ort criteria in SortMovesStable
     OrderMoves 1, CntRootMoves, PrevMove, EmptyMove, EmptyMove, False, LegalRootMovesOutOfCheck
@@ -732,10 +740,10 @@ Private Function SearchRoot(ByVal Alpha As Long, _
   Else
     For CurrMove = 1 To CntRootMoves - 1: PrevIterationScore(i) = Moves(1, CurrMove).OrderValue: Next ' Save old scores as second ort criteria in SortMovesStable
     SortMovesStable 1, 0, CntRootMoves - 1  ' Sort by last iteration scores
-    '  For CurrMove = 0 To CntRootMoves - 1: Debug.Print IterativeDepth, CurrMove, MoveText(Moves(1, CurrMove)), Moves(1, CurrMove).OrderValue: Next
+    '  For CurrMove = 0 To CntRootMoves - 1: Debug.Print RootDepth, CurrMove, MoveText(Moves(1, CurrMove)), Moves(1, CurrMove).OrderValue: Next
     For CurrMove = 1 To CntRootMoves - 1: Moves(1, CurrMove).OrderValue = -100000000: Next
   End If
-  SearchRoot = EmptyMove: IsTBScore = False
+  ClearMove SearchRoot: IsTBScore = False
   '--- Endgame Tablebase check for root position
   If EGTBasesEnabled And Not EGTBRootProbeDone Then
     EGTBRootProbeDone = True
@@ -766,7 +774,7 @@ Private Function SearchRoot(ByVal Alpha As Long, _
   For CurrMove = 0 To CntRootMoves - 1
     CurrentMove = Moves(1, CurrMove)
     MovePickerDat(Ply).CurrMoveNum = CurrMove
-    '  WriteTrace "SearchRoot Iterativedepth=" & IterativeDepth & " " & CurrMove & " " & MoveText(CurrentMove) & " Cnt=" & EGTBMoveListCnt(Ply)
+    '  WriteTrace "SearchRoot RootDepth=" & RootDepth & " " & CurrMove & " " & MoveText(CurrentMove) & " Cnt=" & EGTBMoveListCnt(Ply)
     ' Debug.Print MoveText(CurrentMove)
     RootScore = UNKNOWN_SCORE
     If EGTBMoveListCnt(1) > 0 Then
@@ -780,7 +788,7 @@ Private Function SearchRoot(ByVal Alpha As Long, _
     End If
 lblEGMoveOK:
     CmhPtr(Ply) = CurrentMove.Piece * MAX_BOARD + CurrentMove.Target
-    ' WriteTrace "SearchRoot Iterativedepth=" & IterativeDepth & " " & CurrMove & " OK "
+    ' WriteTrace "SearchRoot RootDepth=" & RootDepth & " " & CurrMove & " OK "
     RemoveEpPiece
     MakeMove CurrentMove
     Ply = Ply + 1
@@ -794,21 +802,21 @@ lblEGMoveOK:
       bMoveCountPruning = (Depth < 16 And LegalMoveCnt >= FutilityMoveCounts(1, Depth))
       '  bMoveCountPruning = Depth < 15 And LegalMoveCnt >= (GetMax(0, (MovePickerDat(Ply).EndMoves - 15)) \ 5) + FutilityMoveCounts(1, Depth) + Abs(RootScore = DrawContempt) * 10
       HashKey = HashBoard(EmptyMove)
-      If pbIsOfficeMode And IterativeDepth > 3 Then ' Show move cnt
-        ShowMoveInfo MoveText(FinalMove), IterativeDepth, MaxPly, EvalSFTo100(FinalScore), Elapsed
+      If pbIsOfficeMode And RootDepth > 3 Then ' Show move cnt
+        ShowMoveInfo MoveText(FinalMove), RootDepth, MaxPly, EvalSFTo100(FinalScore), Elapsed
       End If
       If UCIMode Then
         If TimeElapsed() > 3 Then
-          SendCommand "info depth " & IterativeDepth & " currmove " & UCIMoveText(CurrentMove) & " currmovenumber " & LegalMoveCnt
+          SendCommand "info depth " & RootDepth & " currmove " & UCIMoveText(CurrentMove) & " currmovenumber " & LegalMoveCnt
         End If
       End If
       bFirstRootMove = CBool(LegalMoveCnt = 1)
       bSkipEarlyPruning = False
-      MovesList(Ply - 1) = CurrentMove
+      SetMove MovesList(Ply - 1), CurrentMove
       StaticEvalArr(Ply - 1) = RootStartScore
       RootMove = CurrentMove
       '-----------------
-      'WriteTrace "Root:" & IterativeDepth & ": " & MoveText(CurrentMove) & " Score:" & FinalScore
+      'WriteTrace "Root:" & RootDepth & ": " & MoveText(CurrentMove) & " Score:" & FinalScore
       r = 0: bDoFullDepthSearch = True
       lExtension = 0
       If (CurrentMove.IsChecking) Then
@@ -816,8 +824,30 @@ lblEGMoveOK:
           lExtension = 1
         End If
       End If
+      '- queen exchange extent
+      If Depth < 12 Then
+        If PieceType(CurrentMove.Captured) = PT_QUEEN Then
+          If PieceType(CurrentMove.Piece) = PT_QUEEN Then
+            lExtension = 1
+          End If
+        End If
+      End If
+      
+      '--- king move but castling possible?
+      If Depth < 12 Then
+        If CurrentMove.Piece = WKING Then
+           If Moved(WKING_START) = 0 Then
+             If Moved(SQ_A1) = 0 Or Moved(SQ_H1) = 0 Then lExtension = 1
+           End If
+        ElseIf CurrentMove.Piece = WKING Then
+           If Moved(BKING_START) = 0 Then
+             If Moved(SQ_A8) = 0 Or Moved(SQ_H8) = 0 Then lExtension = 1
+           End If
+        End If
+      End If
+      '
       NewDepth = GetMax(0, Depth + lExtension - 1)
-      'If IterativeDepth <= 4 Then GoTo lblNoMoreReductions
+      'If RootDepth <= 4 Then GoTo lblNoMoreReductions
       '
       '--- Step 16. Reduced depth search (LMR). If the move fails high it will be re-searched at full depth.
       '
@@ -887,7 +917,7 @@ lblNoMoreReductions:
     End If
     '
     bCheckBest = True
-    If IterativeDepth = 1 Then
+    If RootDepth = 1 Then
       If EGTBMoveListCnt(1) > 0 And FinalMove.From > 0 Then
         bCheckBest = False ' Keep best EGTB move
       Else
@@ -896,7 +926,7 @@ lblNoMoreReductions:
     End If
     '
     If (LegalMoveCnt = 1 Or RootScore > Alpha) And bCheckBest Then
-      'Debug.Print "Root:" & IterativeDepth, Ply, RootScore, MoveText(FinalMove)
+      'Debug.Print "Root:" & RootDepth, Ply, RootScore, MoveText(FinalMove)
       ' Set root move order value for next iteration <<<<<<<<<<<<<<<<<
       FinalScore = RootScore: FinalMove = CurrentMove
       Moves(1, CurrMove).OrderValue = RootScore
@@ -904,7 +934,7 @@ lblNoMoreReductions:
       If LegalMoveCnt > 1 Then BestMoveChanges = BestMoveChanges + 1
       If Not bTimeExit Then
         GoodMoves = GoodMoves + 1
-        DepthInWork = IterativeDepth ' For decision if better thread
+        DepthInWork = RootDepth ' For decision if better thread
       End If
       '
       '--- Save final move
@@ -916,20 +946,20 @@ lblNoMoreReductions:
         If HashMove.From > 0 Then
           PV(1, 2) = HashMove: PVLength(1) = 3
         Else
-          PV(1, 2) = EmptyMove
+          ClearMove PV(1, 2)
         End If
       End If
       If PV(1, 1).From > 0 Then
         If ThreadNum > 0 Then WriteMapBestPVforThread FinalCompletedDepth, FinalScore, FinalMove
       End If
-      If IterativeDepth > 3 Then
-        If FinalScore < PlyScore(IterativeDepth - 1) - 30 Then BadRootMove = True Else BadRootMove = False
+      If RootDepth > 3 Then
+        If FinalScore < PlyScore(RootDepth - 1) - 30 Then BadRootMove = True Else BadRootMove = False
       End If
-      LastChangeDepth = IterativeDepth
+      LastChangeDepth = RootDepth
       LastChangeMove = MoveText(PV(1, 1))
-    '  If (IterativeDepth >= 3 Or Abs(FinalScore) >= MATE_IN_MAX_PLY) And bPostMode Then
+    '  If (RootDepth >= 3 Or Abs(FinalScore) >= MATE_IN_MAX_PLY) And bPostMode Then
     '    Elapsed = TimeElapsed()
-    '    If Not bExitReceived Then SendRootInfo Elapsed, IterativeDepth, FinalScore, Alpha, Beta ' Output to GUI
+    '    If Not bExitReceived Then SendRootInfo Elapsed, RootDepth, FinalScore, Alpha, Beta ' Output to GUI
     '  End If
     End If
     '------- normal alpha beta
@@ -957,7 +987,7 @@ lblNoMoreReductions:
         If TimeElapsed() >= FixedTime - 0.1 Then
           bTimeExit = True
         End If
-      ElseIf (IterativeDepth > LIGHTNING_DEPTH) Then ' Time for next move?
+      ElseIf (RootDepth > LIGHTNING_DEPTH) Then ' Time for next move?
         If Not CheckTime() Then
           SearchTime = TimeElapsed()
           If bTimeTrace Then WriteTrace "Exit SearchRoot3: Used:" & Format$(SearchTime, "0.00") & " OptimalTime:" & Format$(OptimalTime, "0.00")
@@ -974,12 +1004,12 @@ lblNoMoreReductions:
       #If VBA_MODE = 1 Then
         '-- Office sometimes lost focus for Powerpoint
         If Application.Name = "Microsoft PowerPoint" Then
-          If IterativeDepth > 4 Then frmChessX.cmdStop.SetFocus
+          If RootDepth > 4 Then frmChessX.cmdStop.SetFocus
         End If
       #End If
-      If IterativeDepth > 2 Then DoEvents
+      If RootDepth > 2 Then DoEvents
     Else
-      If IterativeDepth > 6 Then DoEvents
+      If RootDepth > 6 Then DoEvents
     End If
     If bTimeExit Then Exit For
     '
@@ -999,7 +1029,7 @@ lblNextRootMove:
     End If
     GoodMoves = -1
   Else
-    If (LegalMoveCnt = 1 And IterativeDepth = 1) And Not bTimeExit Then bOnlyMove = True: RootScore = 0: FinalScore = 0
+    If (LegalMoveCnt = 1 And RootDepth = 1) And Not bTimeExit Then bOnlyMove = True: RootScore = 0: FinalScore = 0
     If RootScore = MATE0 - 2 Then
       If bWhiteToMove Then
         Result = WHITE_WON
@@ -1013,16 +1043,17 @@ lblNextRootMove:
     End If
   End If
   If FinalMove.From > 0 And Not bTimeExit And FinalMove.Captured = NO_PIECE And FinalMove.Promoted = 0 Then
-    UpdateStats Ply, FinalMove, QuietMoves, EmptyMove, StatBonus(IterativeDepth)
+    UpdateStats Ply, FinalMove, QuietMoves, EmptyMove, StatBonus(RootDepth)
   End If
   
   SearchRoot = FinalMove
-  'WriteDebug "Root: " & IterativeDepth & " Best:" & MoveText(SearchRoot) & " Sc:" & BestRootScore & " M:" & GoodMoves
+  'WriteDebug "Root: " & RootDepth & " Best:" & MoveText(SearchRoot) & " Sc:" & BestRootScore & " M:" & GoodMoves
 End Function
 
 '---------------------------------------------------------------------------
 ' Search: Search moves from ply=2 to x, finally calls QSearch
-'         called by SEARCHROOT, calls SEARCH recursively , then QSEARCH
+'         called by SEARCHROOT, calls SEARCH recursively , then QSEARCH.
+'         Returns eval score
 '---------------------------------------------------------------------------
 Private Function Search(ByVal PVNode As Boolean, _
                         ByVal Alpha As Long, _
@@ -1031,6 +1062,7 @@ Private Function Search(ByVal PVNode As Boolean, _
                         InPrevMove As TMOVE, _
                         ExcludedMove As TMOVE, _
                         ByVal CutNode As Boolean, ByVal PrevMoveExtension As Long) As Long
+  '
   Dim CurrentMove       As TMOVE, Score As Long, bNoMoves As Boolean, bLegalMove As Boolean
   Dim NullScore         As Long, PrevMove As TMOVE, QuietMoves As Long, rBeta As Long, rDepth As Long
   Dim StaticEval        As Long, GoodMoves As Long, NewDepth As Long, LegalMoveCnt As Long, MoveCnt As Long
@@ -1050,14 +1082,14 @@ Private Function Search(ByVal PVNode As Boolean, _
   '
   '--- Step 1. Initialize node for search -------------------------------------upd
   '
-  PrevMove = InPrevMove '--- bug fix: make copy to avoid changes in parameter use
-  BestValue = UNKNOWN_SCORE: BestMove = EmptyMove: BestMovePly(Ply) = EmptyMove
+  SetMove PrevMove, InPrevMove  '--- bug fix: make copy to avoid changes in parameter use
+  BestValue = UNKNOWN_SCORE: ClearMove BestMove: ClearMove BestMovePly(Ply)
   EvalScore = UNKNOWN_SCORE: StaticEval = UNKNOWN_SCORE: StaticEvalArr(Ply) = UNKNOWN_SCORE
-  ThreatMove = EmptyMove: bTTMoveIsSingular = False
+  ClearMove ThreatMove: bTTMoveIsSingular = False
   bIsNullMove = (PrevMove.From < SQ_A1)
   EGTBMoveListCnt(Ply) = 0
   'If Ply = 2 And MoveText(PrevMove) = "c6d6" Then Stop
-  ' If IterativeDepth = 2 Then Stop
+  ' If RootDepth = 2 Then Stop
   If bSearchingPV Then PVNode = True: CutNode = False
   'If Nodes = 1127 Then Stop
   If Ply > MaxPly Then MaxPly = Ply '--- Max depth reached in normal search
@@ -1066,7 +1098,7 @@ Private Function Search(ByVal PVNode As Boolean, _
   CmhPtr(Ply) = 0
 
   With Killer(Ply + 2)
-    .Killer1 = EmptyMove: .Killer2 = EmptyMove: .Killer3 = EmptyMove
+    ClearMove .Killer1: ClearMove .Killer2: ClearMove .Killer3
   End With
 
   '
@@ -1124,15 +1156,15 @@ Private Function Search(ByVal PVNode As Boolean, _
   '
   '--- Step 4. Transposition table lookup
   '
-  bHashFound = False: ttHit = False: HashMove = EmptyMove
-  ttHit = False: ttMove = EmptyMove: ttValue = UNKNOWN_SCORE:  NullScore = UNKNOWN_SCORE
+  bHashFound = False: ttHit = False: ClearMove HashMove
+  ttHit = False: ClearMove ttMove: ttValue = UNKNOWN_SCORE:   NullScore = UNKNOWN_SCORE
   If Depth >= 0 Then
     If ThreadNum = -1 Then
       ttHit = IsInHashTable(HashKey, HashDepth, HashMove, HashEvalType, HashScore, HashStaticEval)
     Else
       ttHit = IsInHashMap(HashKey, HashDepth, HashMove, HashEvalType, HashScore, HashStaticEval)
     End If
-    If ttHit Then ttMove = HashMove: ttValue = HashScore: If HashMove.From > 0 Then BestMovePly(Ply) = HashMove
+    If ttHit Then SetMove ttMove, HashMove: ttValue = HashScore: If HashMove.From > 0 Then SetMove BestMovePly(Ply), HashMove
 
     If (Not PVNode Or HashDepth = TT_TB_BASE_DEPTH) And HashDepth >= Depth And ttHit And ttValue <> UNKNOWN_SCORE Then
       If ttValue >= Beta Then
@@ -1183,11 +1215,11 @@ Private Function Search(ByVal PVNode As Boolean, _
   StaticEval = UNKNOWN_SCORE
   StaticEvalArr(Ply + 1) = UNKNOWN_SCORE
   bNoMoves = True
-  BestMovePly(Ply + 1) = EmptyMove
+  ClearMove BestMovePly(Ply + 1)
   '--- Check Time ---
   If Not FixedDepthMode Or ThreadNum > 0 Then
     '-- Fix:Nodes Mod 1000 > not working because nodes are incremented in QSearch too
-    If (Nodes > LastNodesCnt + (GUICheckIntervalNodes * 2 \ (1 + Abs(bEndgame)))) And (IterativeDepth > LIGHTNING_DEPTH Or Ply = 2) Then
+    If (Nodes > LastNodesCnt + (GUICheckIntervalNodes * 2 \ (1 + Abs(bEndgame)))) And (RootDepth > LIGHTNING_DEPTH Or Ply = 2) Then
       ' --- Check new commands from GUI (i.e. analyze stop)
       If PollCommand Then
         If bThreadTrace Then WriteTrace "Search PollCommand: ThreadCommand =" & ThreadCommand & " / " & Now()
@@ -1231,7 +1263,7 @@ Private Function Search(ByVal PVNode As Boolean, _
       Else
         InsertIntoHashMap HashKey, TT_TB_BASE_DEPTH, EmptyMove, TT_EXACT, lEGTBResultScore, lEGTBResultScore
       End If
-      ttMove = BestMove
+      SetMove ttMove, BestMove
     End If
   End If
   
@@ -1268,8 +1300,9 @@ Private Function Search(ByVal PVNode As Boolean, _
   '--- Check for dangerous moves => do not cut here
   If bSkipEarlyPruning Then GoTo lblMovesLoop
   If (bWhiteToMove And CBool(WNonPawnMaterial = 0)) Or (Not bWhiteToMove And CBool(BNonPawnMaterial = 0)) Then GoTo lblMovesLoop
-  If IterativeDepth <= 4 Then GoTo lblMovesLoop 'lblNoRazor
-  
+  If RootDepth <= 4 Then GoTo lblMovesLoop 'lblNoRazor
+   'If MoveText(PrevMove) = "c4xd4" And Ply = 3 Then Stop
+ 
   '
   '--- Step 7. Razoring (skipped when in check)
   '
@@ -1278,7 +1311,7 @@ Private Function Search(ByVal PVNode As Boolean, _
       If Depth <= 1 Then
         Search = QSearch(NON_PV_NODE, Alpha, Alpha + 1, MAX_DEPTH, PrevMove, QS_CHECKS)
         Exit Function
-      End If
+    End If
       Dim rAlpha As Long
       rAlpha = Alpha - RazorMargin(Depth)
       Score = QSearch(NON_PV_NODE, rAlpha, rAlpha + 1, MAX_DEPTH, PrevMove, QS_CHECKS)
@@ -1293,7 +1326,7 @@ Private Function Search(ByVal PVNode As Boolean, _
   '--- Step 6.b Retire futile extensions
   '
   If Depth <= 3 Then
-    If Depth > IterativeDepth - Ply + 1 Then
+    If Depth > RootDepth - Ply + 1 Then
       If StaticEval > Beta + 30 Then
         Depth = Depth - 1
       End If
@@ -1313,7 +1346,7 @@ lblNoRazor:
   '--- Step 9. NULL MOVE ------------
   '
   If Not PVNode And PrevMoveExtension = 0 And Depth >= 2 And EvalScore >= Beta Then
-   If Not bIsNullMove And StatScore(Ply - 1) < 22222 Then
+   If Not bIsNullMove And StatScore(Ply - 1) < 22222 And ExcludedMove.From = 0 Then
     If Fifty < 80 And Abs(Beta) < VALUE_KNOWN_WIN And Abs(StaticEval) < 2 * VALUE_KNOWN_WIN And Alpha <> DrawContempt - 1 Then
       If (StaticEval >= Beta - 35 * (Depth - 6)) Or Depth >= 13 Then
         If (bWhiteToMove And WNonPawnPieces > 0) Or (Not bWhiteToMove And BNonPawnPieces > 0) Then
@@ -1322,13 +1355,13 @@ lblNoRazor:
           Dim bOldToMove As Boolean
           bOldToMove = bWhiteToMove
           bWhiteToMove = Not bWhiteToMove 'MakeNullMove
-          bSkipEarlyPruning = True: BestMovePly(Ply + 1) = EmptyMove
+          bSkipEarlyPruning = True: ClearMove BestMovePly(Ply + 1)
           CmhPtr(Ply) = 0
           RemoveEpPiece
-          MovesList(Ply) = EmptyMove
+          ClearMove MovesList(Ply)
           Ply = Ply + 1
           EpPosArr(Ply) = 0: PliesFromNull(Ply) = 0: Fifty = Fifty + 1
-          CurrentMove = EmptyMove: MovePickerDat(Ply).CurrMoveNum = 0
+          ClearMove CurrentMove: MovePickerDat(Ply).CurrMoveNum = 0
           Debug.Assert EvalScore - Beta >= 0
           '--- Stockfish
           r = (823 + 67 * Depth) \ 256 + GetMin((EvalScore - Beta) \ ScorePawn.MG, 3) '3 + Depth \ 4 + GetMin((StaticEval - Beta) \ ValueP,3) ' SF6 (problems: WAC 288,200)'
@@ -1348,7 +1381,7 @@ lblNoRazor:
           If bTimeExit Then Search = 0: Exit Function
           
           If NullScore < -MATE_IN_MAX_PLY Then ' Mate threat : not SF logic
-             ThreatMove = BestMovePly(Ply + 1)
+             SetMove ThreatMove, BestMovePly(Ply + 1)
              lPlyExtension = 1: GoTo lblMovesLoop
            End If
             
@@ -1383,14 +1416,14 @@ lblNoRazor:
           '--- Capture Threat?  ( not SF logic )
           If (BestMovePly(Ply + 1).Captured <> NO_PIECE Or NullScore < -MATE_IN_MAX_PLY) Then
             If Board(BestMovePly(Ply + 1).Target) = BestMovePly(Ply + 1).Captured Then ' not changed by previous move
-              ThreatMove = BestMovePly(Ply + 1)
+              SetMove ThreatMove, BestMovePly(Ply + 1)
             End If
           End If
-       End If
+         End If
+        End If
       End If
     End If
-  End If
-  End If
+   End If
   End If
 lblNoNullMove:
   '--- Step 10. ProbCut (skipped when in check)
@@ -1424,10 +1457,10 @@ lblNoNullMove:
             bLegalMove = False
             If CheckLegal(CurrentMove) Then
               ProbCutCnt = ProbCutCnt + 1
-              bLegalMove = True: MovesList(Ply - 1) = CurrentMove
+              bLegalMove = True: SetMove MovesList(Ply - 1), CurrentMove
               
               ' Perform a preliminary qsearch to verify that the move holds
-              Score = -QSearch(NON_PV_NODE, -rBeta, -rBeta + 1, MAX_DEPTH, PrevMove, QS_CHECKS)
+              Score = -QSearch(NON_PV_NODE, -rBeta, -rBeta + 1, MAX_DEPTH, CurrentMove, QS_CHECKS)
              
               ' If the qsearch held perform the regular search
               If Score >= rBeta Then
@@ -1440,7 +1473,7 @@ lblNoNullMove:
             UnmakeMove CurrentMove
             ResetEpPiece
             If Score >= rBeta And bLegalMove Then
-              BestMovePly(Ply) = CurrentMove
+              SetMove BestMovePly(Ply), CurrentMove
               Search = Score
               Exit Function '---<<< Return
             End If
@@ -1452,7 +1485,7 @@ lblNoNullMove:
       If ThreatMove.From = 0 And ProbCutCnt > 0 Then
         If BestMovePly(Ply + 1).Captured <> NO_PIECE Then
           If Board(BestMovePly(Ply + 1).Target) = BestMovePly(Ply + 1).Captured Then ' not changed by previous move
-             ThreatMove = BestMovePly(Ply + 1)
+             SetMove ThreatMove, BestMovePly(Ply + 1)
           End If
         End If
       End If
@@ -1467,14 +1500,14 @@ lblIID:
     '--- Set BestMovePly(Ply)
     Score = Search(PVNode, Alpha, Beta, Depth1, PrevMove, EmptyMove, CutNode, 0)
     bSkipEarlyPruning = False
-    ttMove = EmptyMove
+    ClearMove ttMove
     If ThreadNum = -1 Then
       ttHit = IsInHashTable(HashKey, HashDepth, HashMove, HashEvalType, HashScore, HashStaticEval)
     Else
       ttHit = IsInHashMap(HashKey, HashDepth, HashMove, HashEvalType, HashScore, HashStaticEval)
     End If
     If ttHit And HashMove.Target > 0 Then
-      ttMove = HashMove: ttValue = HashScore
+      SetMove ttMove, HashMove: ttValue = HashScore
     End If
   End If
   '
@@ -1541,7 +1574,7 @@ lblMovesLoop:
   bSkipEarlyPruning = False
   PVLength(Ply) = Ply
   LegalMoveCnt = 0: QuietMoves = 0: MoveCnt = 0
-  If ttMove.From > 0 Then TryBestMove = ttMove Else TryBestMove = EmptyMove
+  If ttMove.From > 0 Then SetMove TryBestMove, ttMove Else ClearMove TryBestMove
   ' Init MovePicker
   MovePickerInit Ply, TryBestMove, PrevMove, ThreatMove, False, False, GENERATE_ALL_MOVES
   Score = BestValue
@@ -1558,7 +1591,7 @@ lblMovesLoop:
     If ExcludedMove.From > 0 Then If MovesEqual(CurrentMove, ExcludedMove) Then GoTo lblNextMove
     If PrevMove.IsChecking Then If Not CurrentMove.IsLegal Then GoTo lblNextMove '--- Legal already tested in Ordermoves
     bLegalMove = False: MoveCnt = MoveCnt + 1
-    'Debug.Print "Search:" & IterativeDepth & ", Ply:" & Ply & " " & MoveText(CurrentMove)
+    'Debug.Print "Search:" & RootDepth & ", Ply:" & Ply & " " & MoveText(CurrentMove)
     If EGTBMoveListCnt(Ply) > 0 Then
       ' Filter for endgame tablebase move: Ignore loosingmoves if draw or win from tablebases
       MoveStr = CompToCoord(CurrentMove)
@@ -1590,29 +1623,55 @@ lblEGMoveOK:
     bDoFullDepthSearch = True
     lExtension = lPlyExtension
     bKillerMove = IsKiller1Move(Ply, CurrentMove)
+    '
+    '--- Step 13. Extensions
+    '
     If bTTMoveIsSingular Then
-      If MovesEqual(CurrentMove, ttMove) Then lExtension = 1
+      If MovesEqual(CurrentMove, ttMove) Then lExtension = 1: GoTo lblEndExtensions
     End If
     '
     '--- CHECK EXTENSION ---
     '
     If (CurrentMove.IsChecking) And lExtension = 0 Then
       If SEEGreaterOrEqual(CurrentMove, 0) Then
-        lExtension = 1
+        lExtension = 1: GoTo lblEndExtensions
       End If
     End If
     '- check single move escape extent
     If (PrevMove.IsChecking) And lExtension = 0 Then
       If LegalMovesOutOfCheck <= 1 And Ply < Depth \ 2 Then
-        lExtension = 1
+        lExtension = 1: GoTo lblEndExtensions
+      End If
+    End If
+    '- queen exchange extent
+    If Depth < 12 Then
+      If PieceType(CurrentMove.Captured) = PT_QUEEN Then
+        If PieceType(CurrentMove.Piece) = PT_QUEEN Then
+          lExtension = 1: GoTo lblEndExtensions
+        End If
       End If
     End If
     
+    '--- king move but castling possible?
+    If Depth < 12 Then
+      If CurrentMove.Piece = WKING Then
+         If Moved(WKING_START) = 0 Then
+           If Moved(SQ_A1) = 0 Or Moved(SQ_H1) = 0 Then lExtension = 1
+         End If
+      ElseIf CurrentMove.Piece = WKING Then
+         If Moved(BKING_START) = 0 Then
+           If Moved(SQ_A8) = 0 Or Moved(SQ_H8) = 0 Then lExtension = 1
+         End If
+      End If
+    End If
+lblEndExtensions:
+
+    '- Calculate new depth for this move
     NewDepth = GetMax(0, Depth - 1 + lExtension)
     '
     '--- Reductions ---------
     '
-    '--- Step 13. Pruning at shallow depth
+    '--- Step 14. Pruning at shallow depth
     If BestValue > -MATE_IN_MAX_PLY Then
       If Not bCaptureOrPromotion And Not CurrentMove.IsChecking And Not AdvancedPawnPush(CurrentMove.Piece, CurrentMove.Target) Then
         '--- LMP --- move count based, different formular to SF includes total number of moves and Improv
@@ -1623,7 +1682,7 @@ lblEGMoveOK:
                 If ThreatMove.From <> .From And ThreatMove.Target <> .Target Then ' new move?
                   If Board(.Target) = .Captured Then
                     If BestMovePly(Ply).Target <> .Target And BestMovePly(Ply).Target <> .From Then  ' not changed by previous move
-                      ThreatMove = BestMovePly(Ply + 1)
+                      SetMove ThreatMove, BestMovePly(Ply + 1)
                     End If
                   End If
                 End If
@@ -1663,10 +1722,10 @@ lblEGMoveOK:
         End If
         '--- SEE based LMP
         If LmrDepth < 8 Then
-          If Not SEEGreaterOrEqual(CurrentMove, -35 * LmrDepth * LmrDepth) Then GoTo lblNextMove
+          If Not SEEGreaterOrEqual(CurrentMove, -30 * LmrDepth * LmrDepth) Then GoTo lblNextMove
         End If
       Else
-        If Depth < 7 And Not CurrentMove.IsChecking And lExtension = 0 Then ' IsChecking better for me, not for SF
+        If lExtension = 0 Then  ' IsChecking better for me, not for SF
           If Not SEEGreaterOrEqual(CurrentMove, -ScorePawn.EG * Depth) Then GoTo lblNextMove
         End If
       End If
@@ -1679,11 +1738,21 @@ lblMakeMove:
     RemoveEpPiece
     MakeMove CurrentMove
     Ply = Ply + 1
-    If Not CurrentMove.IsLegal Then CurrentMove.IsLegal = CheckLegal(CurrentMove)
+    If Not PrevMove.IsChecking And CurrentMove.Castle = NO_CASTLE Then
+      CurrentMove.IsLegal = CheckLegalNotInCheck(CurrentMove)
+'      If CurrentMove.IsLegal Then ' verify correctness
+'         If Not CheckLegal(CurrentMove) Then WriteTrace PrintPos & MoveText(PrevMove) & " " & MoveText(CurrentMove): MsgBox "C1": Stop: End
+'      Else
+'        If CheckLegal(CurrentMove) Then WriteTrace PrintPos: MsgBox "C2": Stop: End
+'      End If
+    ElseIf Not CurrentMove.IsLegal Then
+      CurrentMove.IsLegal = CheckLegal(CurrentMove)
+    End If
+    '
     If CurrentMove.IsLegal Then
       Nodes = Nodes + 1: LegalMoveCnt = LegalMoveCnt + 1
       bNoMoves = False: bLegalMove = True
-      MovesList(Ply - 1) = CurrentMove
+      SetMove MovesList(Ply - 1), CurrentMove
       '
       '--- Step 16. Reduced depth search (LMR). If the move fails high it will be re-searched at full depth.
       '
@@ -1779,7 +1848,7 @@ lblSkipMove:
       BestValue = Score
       If (Score > Alpha) Then
         GoodMoves = GoodMoves + 1
-        BestMove = CurrentMove
+        SetMove BestMove, CurrentMove
         If PVNode Then UpdatePV Ply, CurrentMove '--- Save PV ---
         If PVNode And Score < Beta Then
           Alpha = Score
@@ -1793,7 +1862,7 @@ lblSkipMove:
     If bLegalMove Then
       '--- Add Quiet move, used for pruning and history update
       If Not bCaptureOrPromotion And QuietMoves < 64 Then
-        If Not MovesEqual(BestMove, CurrentMove) Then QuietMoves = QuietMoves + 1: QuietsSearched(Ply, QuietMoves) = CurrentMove
+        If Not MovesEqual(BestMove, CurrentMove) Then QuietMoves = QuietMoves + 1: SetMove QuietsSearched(Ply, QuietMoves), CurrentMove
       End If
     Else
       MoveCnt = MoveCnt - 1
@@ -1815,7 +1884,7 @@ lblNextMove:
     End If
   ElseIf BestMove.From > 0 Then
     ' New best move
-    BestMovePly(Ply) = BestMove
+    SetMove BestMovePly(Ply), BestMove
     If BestMove.Captured = NO_PIECE And BestMove.Promoted = 0 Then
       UpdateStats Ply, BestMove, QuietMoves, PrevMove, StatBonus(Depth + Abs((Not PVNode And Not CutNode) Or (BestValue > Beta + ScorePawn.MG)))
     End If
@@ -1829,7 +1898,7 @@ lblNextMove:
     End If
   Else
     '--- failed low - no best move
-    BestMovePly(Ply) = EmptyMove
+    ClearMove BestMovePly(Ply)
     ' Bonus for prior countermove that caused the fail low
     If Depth >= 3 Or PVNode Then
       If PrevMove.Captured = NO_PIECE Then
@@ -1876,16 +1945,12 @@ Private Function QSearch(ByVal PVNode As Boolean, _
                          ByVal Depth As Long, _
                          InPrevMove As TMOVE, _
                          ByVal GenerateQSChecks As Boolean) As Long
-  Dim CurrentMove As TMOVE, bNoMoves As Boolean, Score As Long, BestMove As TMOVE
-  Dim bLegalMove  As Boolean, PrevMove As TMOVE, FutilBase As Long, FutilScore As Long, StaticEval As Long
-  Dim bPrunable   As Boolean, BestValue As Long, ttDepth As Long
+  '
+  Dim PrevMove As TMOVE, HashKey As THashKey, HashMove As TMOVE, bHashBoardDone As Boolean, ttDepth As Long
   Dim bHashFound  As Boolean, ttHit As Boolean, HashEvalType As Long, HashScore As Long, HashStaticEval As Long, HashDepth As Long
-  Dim HashKey     As THashKey, HashMove As TMOVE, bCapturesOnly As Boolean, bHashBoardDone As Boolean, OldAlpha As Long
-  BestMovePly(Ply) = EmptyMove: BestMove = EmptyMove: PrevMove = InPrevMove
-  BestValue = UNKNOWN_SCORE: StaticEval = UNKNOWN_SCORE: HashScore = UNKNOWN_SCORE
-  QSDepth = QSDepth + 1
-  OldAlpha = Alpha
-  bHashFound = False: ttHit = False: HashMove = EmptyMove: bHashBoardDone = False
+  
+  SetMove PrevMove, InPrevMove: HashScore = UNKNOWN_SCORE: QSDepth = QSDepth + 1
+  bHashFound = False: ttHit = False: ClearMove HashMove: bHashBoardDone = False
   If Fifty > 3 Then
     HashKey = HashBoard(EmptyMove): bHashBoardDone = True ' Save current keys for insert later
     If Fifty > 99 Then  ' Draw ?
@@ -1928,7 +1993,16 @@ Private Function QSearch(ByVal PVNode As Boolean, _
         Exit Function ' -- Exit
       End If
     End If
-    If ttHit And HashMove.From > 0 Then BestMovePly(Ply) = HashMove
+    '-------
+    
+    '------------------------------------------------------------------------------------
+    Dim CurrentMove As TMOVE, bNoMoves As Boolean, Score As Long, BestMove As TMOVE
+    Dim bLegalMove  As Boolean, FutilBase As Long, FutilScore As Long, StaticEval As Long
+    Dim bPrunable   As Boolean, BestValue As Long
+    Dim bCapturesOnly As Boolean, OldAlpha As Long
+    
+    BestValue = UNKNOWN_SCORE: StaticEval = UNKNOWN_SCORE:  OldAlpha = Alpha
+    If ttHit And HashMove.From > 0 Then SetMove BestMovePly(Ply), HashMove Else ClearMove BestMovePly(Ply)
     '-----------------------
     If PrevMove.IsChecking Then
       FutilBase = UNKNOWN_SCORE  ':StaticEvalArr(Ply) = UNKNOWN_SCORE:
@@ -1979,9 +2053,9 @@ Private Function QSearch(ByVal PVNode As Boolean, _
     '
     If HashMove.From > 0 Then ' Hash move is capture or check ?
       If bCapturesOnly And HashMove.Captured = NO_PIECE Then
-        HashMove = EmptyMove
+        ClearMove HashMove
       ElseIf Not GenerateQSChecks And HashMove.IsChecking Then
-        HashMove = EmptyMove
+        ClearMove HashMove
       End If
     End If
     MovePickerInit Ply, HashMove, PrevMove, EmptyMove, bCapturesOnly, False, GenerateQSChecks
@@ -2004,12 +2078,12 @@ Private Function QSearch(ByVal PVNode As Boolean, _
           FutilScore = FutilBase
           If CurrentMove.Captured <> NO_PIECE Then FutilScore = FutilScore + PieceAbsValue(CurrentMove.Captured)
           If FutilScore <= Alpha Then
-            BestValue = GetMax(BestValue, FutilScore)
+            If FutilScore > BestValue Then BestValue = FutilScore
             GoTo lblNext
           End If
           If FutilBase <= Alpha Then
             If Not SEEGreaterOrEqual(CurrentMove, 1) Then
-              BestValue = GetMax(BestValue, FutilBase)
+              If FutilBase > BestValue Then BestValue = FutilBase
               GoTo lblNext
             End If
           End If
@@ -2024,11 +2098,22 @@ Private Function QSearch(ByVal PVNode As Boolean, _
       RemoveEpPiece
       MakeMove CurrentMove
       Ply = Ply + 1: bLegalMove = False
-      If Not CurrentMove.IsLegal Then CurrentMove.IsLegal = CheckLegal(CurrentMove)
+      
+      If Not PrevMove.IsChecking And CurrentMove.Castle = NO_CASTLE Then
+        CurrentMove.IsLegal = CheckLegalNotInCheck(CurrentMove)
+  '      If CurrentMove.IsLegal Then  ' verify correctness
+  '        If Not CheckLegal(CurrentMove) Then WriteTrace PrintPos & MoveText(PrevMove) & " " & MoveText(CurrentMove): MsgBox "C3": Stop: End
+  '      Else
+  '        If CheckLegal(CurrentMove) Then WriteTrace PrintPos: MsgBox "C4": Stop: End
+  '      End If
+      ElseIf Not CurrentMove.IsLegal Then
+        CurrentMove.IsLegal = CheckLegal(CurrentMove)
+      End If
+    
       If CurrentMove.IsLegal Then
         Nodes = Nodes + 1: QNodes = QNodes + 1
         bLegalMove = True: bNoMoves = False
-        MovesList(Ply - 1) = CurrentMove
+        SetMove MovesList(Ply - 1), CurrentMove
         '-------------------------------------
         '--- QSearch recursive  --------------
         '-------------------------------------
@@ -2044,14 +2129,14 @@ Private Function QSearch(ByVal PVNode As Boolean, _
           'If bSearchingPV And PVNode Then UpdatePV Ply, CurrentMove
           If PVNode And Score < Beta Then
             Alpha = BestValue
-            BestMove = CurrentMove: BestMovePly(Ply) = CurrentMove
+            SetMove BestMove, CurrentMove: SetMove BestMovePly(Ply), CurrentMove
           Else
             If ThreadNum = -1 Then
               InsertIntoHashTable HashKey, ttDepth, CurrentMove, TT_LOWER_BOUND, Score, StaticEval
             Else
               InsertIntoHashMap HashKey, ttDepth, CurrentMove, TT_LOWER_BOUND, Score, StaticEval
             End If
-            BestMovePly(Ply) = CurrentMove
+            SetMove BestMovePly(Ply), CurrentMove
             '--- Fail high: >= Beta
             QSearch = Score: QSDepth = QSDepth - 1
             Exit Function
@@ -2071,7 +2156,7 @@ lblNext:
     End If
   End If
   QSearch = BestValue
-  BestMovePly(Ply) = BestMove
+  SetMove BestMovePly(Ply), BestMove
   '--- Save Hash values ---
   If PVNode And BestValue > OldAlpha Then HashEvalType = TT_EXACT Else HashEvalType = TT_UPPER_BOUND
   If ThreadNum = -1 Then
@@ -2093,7 +2178,8 @@ Private Sub OrderMoves(ByVal Ply As Long, _
                        ThreatMove As TMOVE, _
                        ByVal bCapturesOnly As Boolean, _
                        LegalMovesOutOfCheck As Long)
-  Dim i               As Long, From As Long, Target As Long, Promoted As Long, Captured As Long, lValue As Long, Piece As Long
+                       
+  Dim i               As Long, From As Long, Target As Long, Promoted As Long, Captured As Long, lValue As Long, Piece As Long, EnPassant As Long
   Dim bSearchingPVNew As Boolean, BestValue As Long, BestIndex As Long, WhiteMoves As Boolean, Cmh As Long
   Dim bLegalsOnly     As Boolean, TmpVal As Long, PieceVal As Long, CounterMoveTmp As TMOVE, KingLoc As Long, v As Long
   Dim Fmh             As Long, Fm2 As Long, CurrPtr As Long, bIsChecking As Boolean
@@ -2103,26 +2189,30 @@ Private Sub OrderMoves(ByVal Ply As Long, _
   BestValue = -9999999: BestIndex = -1 '--- save highest score
   WhiteMoves = CBool(Board(Moves(Ply, 0).From) Mod 2 = 1) ' to be sure to have correct side ...
   Killer0 = Killer(Ply)
-  If Ply > 2 Then Killer2 = Killer(Ply - 2) Else Killer2 = EmptyKiller
+  If Ply > 2 Then
+    Killer2 = Killer(Ply - 2)
+  Else
+    ClearMove Killer2.Killer1: ClearMove Killer2.Killer2: ClearMove Killer2.Killer3
+  End If
   bLegalsOnly = PrevMove.IsChecking And Not bCapturesOnly ' Count legal moves in normal search (not in QSearch)
   If bWhiteToMove Then KingLoc = WKingLoc Else KingLoc = BKingLoc
   Cmh = PrevMove.Piece * MAX_BOARD + PrevMove.Target
   If Ply > 2 Then Fmh = CmhPtr(Ply - 2) Else Fmh = 0
   If Ply > 4 Then Fm2 = CmhPtr(Ply - 4) Else Fm2 = 0
-  CounterMoveTmp = CounterMove(PrevMove.Piece, PrevMove.Target)
+  SetMove CounterMoveTmp, CounterMove(PrevMove.Piece, PrevMove.Target)
 
   For i = 0 To NumMoves - 1
 
     With Moves(Ply, i)
-      From = .From: Target = .Target: Promoted = .Promoted: Captured = .Captured: Piece = .Piece
-      .IsLegal = False: .IsChecking = False: .SeeValue = UNKNOWN_SCORE
+      From = .From: Target = .Target: Promoted = .Promoted: Captured = .Captured: Piece = .Piece: EnPassant = .EnPassant
+      .IsLegal = False: .IsChecking = False: .SeeValue = UNKNOWN_SCORE: bIsChecking = .IsChecking
     End With
 
     lValue = 0
     ' Count legal moves if in check
     If bLegalsOnly Then
       If Moves(Ply, i).Castle = NO_CASTLE Then ' castling not allowed in check
-        ' Avoid costly legal proof for moves with cannot be a check evasion, EnPAssant bug fixed here(wrong mate score if ep Capture is only legal move)
+        ' Avoid costly legal proof for moves with cannot be a check evasion, EnPassant bug fixed here(wrong mate score if ep Capture is only legal move)
         If From <> KingLoc And PieceType(Captured) <> PT_KNIGHT And Not SameXRay(From, KingLoc) And Not SameXRay(Target, KingLoc) And EpPosArr(Ply) = 0 Then
           ' ignore
         Else
@@ -2144,8 +2234,7 @@ Private Sub OrderMoves(ByVal Ply As Long, _
     End If
     PieceVal = PieceAbsValue(Piece)
     '--- Is Move checking ?
-    bIsChecking = Moves(Ply, i).IsChecking
-    If Not bIsChecking Then bIsChecking = IsCheckingMove(Piece, From, Target, Promoted)
+    If Not bIsChecking Then bIsChecking = IsCheckingMove(Piece, From, Target, Promoted, EnPassant)
     If bIsChecking Then
       If Not bCapturesOnly Then
         If Captured = NO_PIECE Then lValue = lValue + 9000 ' 11000
@@ -2186,11 +2275,11 @@ Private Sub OrderMoves(ByVal Ply As Long, _
       If Piece = WKING Or Piece = BKING Then
         TmpVal = PieceAbsValue(Captured) ' cannot be defended because legal move
       Else
-        TmpVal = (PieceAbsValue(Captured) - PieceVal) \ 2
+        TmpVal = PieceAbsValue(Captured) - PieceVal
       End If
       If TmpVal > MAX_SEE_DIFF Then
         '--- Winning capture
-        lValue = lValue + TmpVal * 10 + 6000
+        lValue = lValue + TmpVal * 5 + 6000
       ElseIf TmpVal > -MAX_SEE_DIFF Then
         '--- Equal capture
         lValue = lValue + PieceAbsValue(Captured) - PieceVal \ 2 + 800
@@ -2279,7 +2368,8 @@ lblIgnoreMove:
   'Debug:  for i=0 to nummoves-1: Debug.Print i,Moves(ply,i).ordervalue, MoveText(Moves(ply,i)):next
   If BestIndex > 0 Then
     ' Swap best move to top
-    TempMove = Moves(Ply, 0): Moves(Ply, 0) = Moves(Ply, BestIndex): Moves(Ply, BestIndex) = TempMove
+    SwapMove Moves(Ply, 0), Moves(Ply, BestIndex)
+    'TempMove = Moves(Ply, 0): Moves(Ply, 0) = Moves(Ply, BestIndex): Moves(Ply, BestIndex) = TempMove
   End If
 End Sub
 
@@ -2290,17 +2380,21 @@ End Sub
 Public Sub BestMoveAtFirst(ByVal Ply As Long, _
                            ByVal StartIndex As Long, _
                            ByVal NumMoves As Long)
-  Dim TempMove As TMOVE, i As Long, MaxScore As Long, MaxPtr As Long
-  If StartIndex = NumMoves Then Exit Sub
+  'Dim TempMove As TMOVE
+  Static maxScore2 As Long
+  Static LastStartIndex As Long
+  Dim i As Long, MaxScore As Long, MaxPtr As Long, ActScore As Long
+    
   MaxScore = -9999999
   MaxPtr = StartIndex
 
   For i = StartIndex To NumMoves
-    If Moves(Ply, i).OrderValue > MaxScore Then MaxScore = Moves(Ply, i).OrderValue: MaxPtr = i
+    ActScore = Moves(Ply, i).OrderValue: If ActScore > MaxScore Then MaxScore = ActScore: MaxPtr = i
   Next i
-
+  
   If MaxPtr > StartIndex Then
-    TempMove = Moves(Ply, StartIndex): Moves(Ply, StartIndex) = Moves(Ply, MaxPtr): Moves(Ply, MaxPtr) = TempMove
+    SwapMove Moves(Ply, StartIndex), Moves(Ply, MaxPtr)
+    'TempMove = Moves(Ply, StartIndex): Moves(Ply, StartIndex) = Moves(Ply, MaxPtr): Moves(Ply, MaxPtr) = TempMove
   End If
   ' For i = StartIndex To NumMoves
   '   If Moves(Ply, StartIndex - 1).OrderValue < Moves(Ply, i - 1).OrderValue Then Stop
@@ -2309,7 +2403,7 @@ End Sub
 
 ' Stable sort
 Private Sub SortMovesStable(ByVal Ply As Long, ByVal iStart As Long, ByVal iEnd As Long)
-  Dim i As Long, j As Long, iMin As Long, IMax As Long, TempMove As TMOVE
+  Dim i As Long, j As Long, iMin As Long, IMax As Long, OVal As Long, TempMove As TMOVE
   iMin = iStart + 1: IMax = iEnd
   i = iMin: j = i + 1
 
@@ -2317,8 +2411,8 @@ Private Sub SortMovesStable(ByVal Ply As Long, ByVal iStart As Long, ByVal iEnd 
     'If Moves(Ply, i).OrderValue > Moves(Ply, i - 1).OrderValue Then
     If Moves(Ply, i).OrderValue > Moves(Ply, i - 1).OrderValue Or _
       (Moves(Ply, i).OrderValue = Moves(Ply, i - 1).OrderValue And PrevIterationScore(i) > PrevIterationScore(i - 1)) Then ' use old score if equal
-      
-      TempMove = Moves(Ply, i): Moves(Ply, i) = Moves(Ply, i - 1): Moves(Ply, i - 1) = TempMove ' Swap
+      SwapMove Moves(Ply, i), Moves(Ply, i - 1)
+      'TempMove = Moves(Ply, i): Moves(Ply, i) = Moves(Ply, i - 1): Moves(Ply, i - 1) = TempMove ' Swap
       If i > iMin Then i = i - 1
     Else
       i = j: j = j + 1
@@ -2329,6 +2423,7 @@ Private Sub SortMovesStable(ByVal Ply As Long, ByVal iStart As Long, ByVal iEnd 
  '  If Moves(Ply, i).OrderValue < Moves(Ply, i + 1).OrderValue Then Stop
  ' Next
 End Sub
+
 
 '
 '--- init move list
@@ -2344,11 +2439,11 @@ Public Function MovePickerInit(ByVal ActPly As Long, _
   With MovePickerDat(ActPly)
     .CurrMoveNum = 0
     .EndMoves = 0
-    .BestMove = BestMove
+    SetMove .BestMove, BestMove
     .bBestMoveChecked = False
     .bBestMoveDone = False
-    .PrevMove = PrevMove
-    .ThreatMove = ThreatMove
+    SetMove .PrevMove, PrevMove
+    SetMove .ThreatMove, ThreatMove
     .bCapturesOnly = bCapturesOnly
     .bMovesGenerated = bMovesGenerated
     .LegalMovesOutOfCheck = -1
@@ -2368,23 +2463,28 @@ Public Function MovePicker(ByVal ActPly As Long, _
 
   With MovePickerDat(ActPly)
     ' First: try BestMove. If Cutoff then no move generation needed.
-    BestMove = .BestMove: bBestMoveDone = .bBestMoveDone
     If Not .bBestMoveChecked Then
       .bBestMoveChecked = True
-      If .BestMove.From > 0 And Not .PrevMove.IsChecking Then ' Check: First generate all out of check moves, LegalMovesOutOfCheck needed
-        If MovePossible(BestMove) Then
-          Move = BestMove: .bBestMoveDone = True: MovePicker = True: Move.OrderValue = 5 * MATE0
-          If bSearchingPV Then
-            If Move.From = PV(1, ActPly).From And Move.Target = PV(1, ActPly).Target And Move.Promoted = PV(1, ActPly).Promoted Then
-              ' keep SearchingPV
-            Else
-              bSearchingPV = False
+      If .BestMove.From = 0 Then
+        bBestMoveDone = True
+      Else
+        SetMove BestMove, .BestMove: bBestMoveDone = .bBestMoveDone
+        If Not .PrevMove.IsChecking Then ' Check: First generate all out of check moves, LegalMovesOutOfCheck needed
+          If MovePossible(BestMove) Then
+            SetMove Move, BestMove: .bBestMoveDone = True: MovePicker = True: Move.OrderValue = 5 * MATE0
+            If bSearchingPV Then
+              If Move.From = PV(1, ActPly).From And Move.Target = PV(1, ActPly).Target And Move.Promoted = PV(1, ActPly).Promoted Then
+                ' keep SearchingPV
+              Else
+                bSearchingPV = False
+              End If
             End If
+            Exit Function '--- return best move before move generation
           End If
-          Exit Function '--- return best move before move generation
         End If
       End If
     End If
+    '
     If Not .bMovesGenerated Then
       ' Generate all moves
       GenerateMoves ActPly, .bCapturesOnly, .EndMoves
@@ -2397,15 +2497,13 @@ Public Function MovePicker(ByVal ActPly As Long, _
     ' ignore Hash move, already done
     If bBestMoveDone Then If MovesEqual(BestMove, Moves(ActPly, .CurrMoveNum - 1)) Then .CurrMoveNum = .CurrMoveNum + 1
     NumMovesPly = .EndMoves
-    If NumMovesPly <= 0 Or .CurrMoveNum > NumMovesPly Then Move = EmptyMove: Exit Function
-    If .CurrMoveNum = 1 Then
-      Move = Moves(ActPly, 0):  MovePicker = True: Exit Function  ' First move is already sorted to top in OrderMoves
-    Else
+    If NumMovesPly <= 0 Or .CurrMoveNum > NumMovesPly Then ClearMove Move: Exit Function
+    If .CurrMoveNum > 1 Then ' First move is already sorted to top in OrderMoves
       BestMoveAtFirst ActPly, .CurrMoveNum - 1, NumMovesPly - 1
     End If
-
+    '----
     Do
-      Move = Moves(ActPly, .CurrMoveNum - 1)
+      SetMove Move, Moves(ActPly, .CurrMoveNum - 1)
       If Not Move.IsChecking And Move.Captured = NO_PIECE Then MovePicker = True: Exit Function ' Quiet move
       If Move.OrderValue < MOVE_ORDER_BAD_CAPTURES + 5000 Then MovePicker = True: Exit Function  ' Bad Capture
       If .CurrMoveNum >= NumMovesPly Then MovePicker = True: Exit Function  ' Last move
@@ -2595,7 +2693,7 @@ Private Function UpdateStats(ByVal ActPly As Long, _
   '--- update killer moves
   With Killer(Ply)
     If CurrentMove.Target <> PrevMove.From Then ' not if opp moved attacked piece away > not a killer for other moves
-      .Killer3 = .Killer2: .Killer2 = .Killer1: .Killer1 = CurrentMove
+      SetMove .Killer3, .Killer2: SetMove .Killer2, .Killer1: SetMove .Killer1, CurrentMove
     End If
   End With
 
@@ -2603,7 +2701,7 @@ Private Function UpdateStats(ByVal ActPly As Long, _
   UpdateCmStats ActPly, CurrentMove.Piece, CurrentMove.Target, Bonus
   If PrevMove.From >= SQ_A1 And PrevMove.Captured = NO_PIECE Then
     '--- CounterMove:
-    CounterMove(PrevMove.Piece, PrevMove.Target) = CurrentMove
+    SetMove CounterMove(PrevMove.Piece, PrevMove.Target), CurrentMove
   End If
 
   '--- Decrease History for previous tried quiet moves that did not cut off
@@ -2814,11 +2912,11 @@ End Sub
 
 Public Function GetEasyMove() As TMOVE
   ' Return Easy move if previous moves are as expected
-  GetEasyMove = EmptyMove
+  SetMove GetEasyMove, EmptyMove
   If GameMovesCnt >= 2 And EasyMovePV(3).From > 0 Then
     If bTimeTrace Then WriteTrace "GetEasyMove: EM3" & MoveText(EasyMovePV(3)) & " ( EM1:" & MoveText(EasyMovePV(1)) & " = GM1:" & MoveText(arGameMoves(GameMovesCnt - 1)) & "  / EM2:" & MoveText(EasyMovePV(1)) & " = GM2:" & MoveText(arGameMoves(GameMovesCnt))
     If MovesEqual(EasyMovePV(1), arGameMoves(GameMovesCnt - 1)) And MovesEqual(EasyMovePV(2), arGameMoves(GameMovesCnt)) Then
-      GetEasyMove = EasyMovePV(3)
+      SetMove GetEasyMove, EasyMovePV(3)
     End If
   End If
 End Function
@@ -2851,14 +2949,14 @@ End Function
 
 Public Function GetHashMove(HashKey As THashKey) As TMOVE
   Dim ttHit As Boolean, HashEvalType As Long, HashScore As Long, HashStaticEval As Long, HashDepth As Long, HashMove As TMOVE
-  GetHashMove = EmptyMove
+  ClearMove GetHashMove
   If ThreadNum = -1 Then
     ttHit = IsInHashTable(HashKey, HashDepth, HashMove, HashEvalType, HashScore, HashStaticEval)
   Else
     ttHit = IsInHashMap(HashKey, HashDepth, HashMove, HashEvalType, HashScore, HashStaticEval)
   End If
   If ttHit Then
-    If HashMove.From <> 0 Then GetHashMove = HashMove
+    If HashMove.From <> 0 Then SetMove GetHashMove, HashMove
   End If
 End Function
 
@@ -2879,7 +2977,7 @@ Public Function MoveInMoveList(ByVal ActPly As Long, _
     If CheckMove.Promoted <> tmp.Promoted Then GoTo lblNext
     If CheckMove.Captured <> tmp.Captured Then GoTo lblNext
     ' Found
-    CheckMove = tmp ' return all attributes of the move
+    SetMove CheckMove, tmp  ' return all attributes of the move
     MoveInMoveList = True
     Exit Function
 lblNext:

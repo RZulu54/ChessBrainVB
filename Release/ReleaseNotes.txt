@@ -4,10 +4,18 @@
 = Release notes for ChessBrainVB chess engine 
 =======================================================================================
 
+Changes from version 3.70 to 3.72 (Roger Zuehlsdorf 02-DEC-2018)
+----------------------------------------------------------------
+- less optimistic king safety evaluation
+- 10% faster: slow VB6 assignments for user defined data types replaced
+- code cleanup
+- ELO gain: about 30 ELO for short time controls
+
 Changes from version 3.68 to 3.70 (Roger Zuehlsdorf 11-JUL-2018)
 ----------------------------------------------------------------
 - bug fixes in evaluation
 - code cleanup
+- ELO gain: about 20 ELO
 
 Changes from version 3.67 to 3.68 (Roger Zuehlsdorf 1-MAR-2018)
 ----------------------------------------------------------------

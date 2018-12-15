@@ -233,7 +233,7 @@ Public Function InsertIntoHashTable(HashKey As THashKey, _
   Dim IndexKey As Long, TmpMove As TMOVE, i As Long, ReplaceIndex As Long, MaxReplaceValue As Long, ReplaceValue As Long, bPosFound As Boolean
   Debug.Assert HashMove.From = 0 Or HashMove.Piece <> NO_PIECE
   If bTimeExit Then Exit Function ' score not exact
-  TmpMove = HashMove ' Don't overwrite
+  SetMove TmpMove, HashMove  ' Don't overwrite
   bHashUsed = True: bPosFound = False
   MaxReplaceValue = 9999
   '--- Compute hash key
@@ -287,7 +287,9 @@ Public Function IsInHashTable(HashKey As THashKey, _
                               ByRef Eval As Long, _
                               ByRef StaticEval As Long) As Boolean
   Dim IndexKey As Long, i As Long
-  IsInHashTable = False: HashMove = EmptyMove: EvalType = TT_NO_BOUND: Eval = UNKNOWN_SCORE: StaticEval = UNKNOWN_SCORE: HashDepth = -MAX_GAME_MOVES
+'IsInHashTable = False: Exit Function
+  
+  IsInHashTable = False: ClearMove HashMove: EvalType = TT_NO_BOUND: Eval = UNKNOWN_SCORE: StaticEval = UNKNOWN_SCORE: HashDepth = -MAX_GAME_MOVES
   ZobristHash1 = HashKey.HashKey1: ZobristHash2 = HashKey.Hashkey2
   IndexKey = HashKeyCompute() * HASH_CLUSTER
 
@@ -525,7 +527,7 @@ Public Function InsertIntoHashMap(HashKey As THashKey, _
   Debug.Assert HashMove.From = 0 Or HashMove.Piece <> NO_PIECE
   Debug.Assert NoOfThreads > 1
   If bTimeExit Then Exit Function ' score not exact
-  TmpMove = HashMove ' Don't overwrite
+  SetMove TmpMove, HashMove  ' Don't overwrite
   bHashUsed = True: bPosFound = False
   MaxReplaceValue = 9999
   '--- Compute hash key
@@ -585,7 +587,7 @@ Public Function IsInHashMap(HashKey As THashKey, _
                             ByRef StaticEval As Long) As Boolean
   Dim IndexKey As Long, i As Long
   Debug.Assert NoOfThreads > 1
-  IsInHashMap = False: HashMove = EmptyMove: EvalType = TT_NO_BOUND: Eval = UNKNOWN_SCORE: StaticEval = UNKNOWN_SCORE: HashDepth = -MAX_GAME_MOVES
+  IsInHashMap = False: ClearMove HashMove: EvalType = TT_NO_BOUND: Eval = UNKNOWN_SCORE: StaticEval = UNKNOWN_SCORE: HashDepth = -MAX_GAME_MOVES
   ZobristHash1 = HashKey.HashKey1: ZobristHash2 = HashKey.Hashkey2
   IndexKey = HashKeyComputeMap() * HASH_CLUSTER
   moHashMap.ReadMapHashCluster IndexKey, VarPtr(HashCluster(0)), HashClusterLen
