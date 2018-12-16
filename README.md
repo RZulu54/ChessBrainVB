@@ -1,5 +1,5 @@
 # ChessBrainVB
-Chess engine with GUI for Excel / Word / Powerpoint VBA - plus edition for UCI/Winboard+SMP: win32 engine with playing strength of 3000 ELO
+Chess engine with GUI for Excel / Word / Powerpoint VBA - plus edition for UCI/Winboard+SMP: win32 engine with playing strength of 3100 ELO (4 CPU)
 
 There are two ways to use this chess engine:
 
@@ -12,7 +12,7 @@ There are two ways to use this chess engine:
 2. Use ExcelChessBrainX.xlsm, WordChessBrainX.docm or PowerpointChessBrainX.pptm (full install needed, viewer not working)
    to play games using the GUI implemented in VBA forms.
   Files needed: ChessBrainVB.ini  for settings, ChessBrainVB_Book.opn, ChessBrainVB_Book.opi for opening book.
-  Playing strength 2300 ELO (CCRL 40/4 conditions, see http://www.computerchess.org.uk/ccrl/404/rating_list_all.html)
+  Playing strength 2500 ELO (CCRL 40/4 conditions, see http://www.computerchess.org.uk/ccrl/404/rating_list_all.html)
   Visual Basic for Applications is used for the chess engine.
   This pseudo code is not compiled and 15 times slower than the compiled VB6 EXE for winboard.
 
