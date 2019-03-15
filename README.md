@@ -1,5 +1,5 @@
 # ChessBrainVB
-Chess engine with GUI for Excel / Word / Powerpoint VBA - plus edition for UCI/Winboard+SMP: win32 engine with playing strength of 3100 ELO (4 CPU)
+Chess engine with GUI for Excel / Word / Powerpoint VBA - plus edition for UCI/Winboard+SMP: win32 engine with playing strength of 3150 ELO (4 CPU)
 
 There are two ways to use this chess engine:
 
