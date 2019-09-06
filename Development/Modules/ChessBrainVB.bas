@@ -1,6 +1,6 @@
 Attribute VB_Name = "ChessBrainVBbas"
 '==================================================
-'= ChessBrainVB V3.70:
+'= ChessBrainVB V3.74:
 '=   by Roger Zuehlsdorf (Copyright 2018)
 '=   based on LarsenVB by Luca Dormio (http://xoomer.virgilio.it/ludormio/download.htm) and Faile by Adrien M. Regimbald
 '=        and Stockfish by Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
@@ -219,7 +219,7 @@ Public Sub InitEngine()
   ReadScoreArr OutpostBonusBishop, 18, 4, 28, 8
   'SF6: King Attack Weights by attacker { 0, 0, 7, 5, 4, 1 }  NO_PIECE_TYPE, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING,
   ' SF values not clear: why queen is 1 and knight is 7 ?!? More attack fields in total for queen?
-  KingAttackWeights(PT_PAWN) = 5: KingAttackWeights(PT_KNIGHT) = 78: KingAttackWeights(PT_BISHOP) = 56: KingAttackWeights(PT_ROOK) = 45: KingAttackWeights(PT_QUEEN) = 11
+  KingAttackWeights(PT_PAWN) = 5: KingAttackWeights(PT_KNIGHT) = 80: KingAttackWeights(PT_BISHOP) = 56: KingAttackWeights(PT_ROOK) = 45: KingAttackWeights(PT_QUEEN) = 12
   ' Pawn eval
   ' Isolated pawn penalty by opposed flag
   ReadScoreArr IsolatedPenalty(), 27, 30, 13, 18
@@ -1189,7 +1189,7 @@ Public Sub UCISetTimeControl(ByVal isTimeControl As String)
       TimeLeft = 999
       OpponentTime = TimeLeft
       FixedDepth = NO_FIXED_DEPTH
-      bCompIsWhite = Not bCompIsWhite
+      bCompIsWhite = Not bWhiteToMove
       Exit For
     End If
     If i = UBound(asList) Then Exit For

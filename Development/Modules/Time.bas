@@ -125,6 +125,13 @@ Public Function CheckTime() As Boolean
   If PrevGameMoveScore = UNKNOWN_SCORE Then PrevScore = FinalScore - 80 Else PrevScore = PrevGameMoveScore
 
   Improve = GetMaxSingle(229#, GetMinSingle(715#, 357# + 119# * Abs(bFailedLowAtRoot) - 5# * CSng(NewScore - PrevScore)))
+  ' if score jumps up, extra time to make use it holds
+  If Abs(NewScore) < ScorePawn.MG * 5 Then
+    If (NewScore - PrevScore) > ScorePawn.MG * 2 \ 3 Then
+      Improve = Improve * 2
+      If (NewScore - PrevScore) > ScorePawn.MG * 2 Then Improve = Improve * 2
+    End If
+  End If
   Optimum2 = (OptimalTime * (1# + BestMoveChanges) * Improve) / 640#
   
   If Elapsed >= GetMinSingle(MaximumTime, Optimum2) Then

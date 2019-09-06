@@ -1,0 +1,80 @@
+
+=======================================================================================
+= Technical Notes.txt
+=
+= Technical hints related to chess programming in
+= Visual Basic 6 (VB6) / Visual Basic for Applications (VBA in MsOffice) 
+=======================================================================================
+
+   
+Performance hints
+-----------------
+ - datatype BYTE is slow, use INTEGER or LONG instead 
+ - datatype STRING is extremly slow, never use it in inner loops
+ - remove DEBUG.PRINT debug statements. Even if compiled they slow down the exe
+ - use integer division operator "\" instead of floating division operator "/" where possible: much faster
+ - SELECT CASE is much faster than ELSEIF when compiled (compiler generates jump tables)
+ - VB6 compiler: use optimization settings:  optimze speed, no array checks, no overflow checks
+                 Result: speed is about 15 times faster than PseudoCode-exe (equal to Office-VBA)
+
+Booleans
+========
+in VB: true = -1, false = 0  (in language C: 1, 0)
+for use as array index 0,1 => use ABS function :  TestArray( Abs(TestBoolean) )  
+
+Arrays
+======
+Dim TestArray(10) as integer  => VB array index 0-10 = 11 elements, in language C: 0-9   
+Fast way to reset arrays to zero or empty strings: ERASE TestArray
+
+Bit operators
+=============  
+comparing bits: use operator AND , but use Cbool for correct results!!!
+debug.print  not CBool(3 and 1)    
+  false                            => correct
+debug.print  Cbool(not (3 and 1))  
+  true                             => wrong
+debug.print  not (3 and 1))        
+  -2                               => wrong
+
+combine/add bits => use operator OR (used in Attack bit array)
+debug.print (4 or 1) or 1
+   5
+
+for hashing: XOr flips bits
+using XOR twice gives the original value (used in hash functions)
+debug.print (4 xor 1) xor 1
+   4
+   
+Type declaration characters
+===========================
+% = Integer (-32768 to 32767) , & = Long, ! = Single, # = Double, $ = String, @ = Currency    
+for numerics use type declaration characters to avoid overflows or rounding problems:
+debug.print 22222 * 22222  => Overflow because result is > 32767
+debug.print 22222& * 22222&  => 493817284  correct
+
+Slow User defined Data Types
+============================
+Own type structure are very slow when assigned or returned by a function.
+Calling a SUB and passing the parameters is about 3x faster.
+Type INT64
+  I0 as long
+  I1 as long
+ End Type
+ 
+ Dim X1 as INT64, X2 as INT64
+ X2 = X1  ' slow
+ 
+ Assign64 X2,X1   ' Fast!
+ 
+ Sub Assign64(ByRef Op1 as INT64,B yRef Op2 a INT64)
+   X2.I0=x1.I0: X2.I1=X1.I1
+ End Sub
+ 
+ -----------------------------------------------------------------
+  
+
+
+ 
+ 
+ 

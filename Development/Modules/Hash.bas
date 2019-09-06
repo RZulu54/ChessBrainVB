@@ -16,7 +16,7 @@ Public Const HASH_CLUSTER      As Long = 4
 Public Const TT_TB_BASE_DEPTH  As Long = 222
 Public Const MATERIAL_HASHSIZE As Long = 8192
 
-Public Const HASH_SIZE_FACTOR  As Long = 38000  ' entries per MB hash
+Public Const HASH_SIZE_FACTOR  As Long = 34000  ' entries per MB hash
 
 Public Type THashKey
   ' 2x 32 bit
@@ -53,6 +53,7 @@ Private Type HashTableEntry
   EvalType As Byte
   Eval As Long
   StaticEval As Long
+  PvHit As Byte
   'ThreadNum As Byte ' used for thread hit cnt => for testing only
 End Type
 
@@ -229,9 +230,11 @@ Public Function InsertIntoHashTable(HashKey As THashKey, _
                                     HashMove As TMOVE, _
                                     ByVal EvalType As Long, _
                                     ByVal Eval As Long, _
-                                    ByVal StaticEval As Long)
+                                    ByVal StaticEval As Long, _
+                                    ByVal PvHit As Boolean)
+                                    
   Dim IndexKey As Long, TmpMove As TMOVE, i As Long, ReplaceIndex As Long, MaxReplaceValue As Long, ReplaceValue As Long, bPosFound As Boolean
-  Debug.Assert HashMove.From = 0 Or HashMove.Piece <> NO_PIECE
+  Debug.Assert HashMove.From = 0 Or (HashMove.Piece <> NO_PIECE And Board(HashMove.From) <> NO_PIECE)
   If bTimeExit Then Exit Function ' score not exact
   SetMove TmpMove, HashMove  ' Don't overwrite
   bHashUsed = True: bPosFound = False
@@ -274,6 +277,7 @@ Public Function InsertIntoHashTable(HashKey As THashKey, _
       .StaticEval = StaticEval: .Depth = Depth
       .Generation = HashGeneration
       .IsChecking = TmpMove.IsChecking
+      .PvHit = PvHit
       Debug.Assert .MoveFrom = 0 Or Board(.MoveFrom) <> NO_PIECE
     End If
   End With
@@ -285,7 +289,9 @@ Public Function IsInHashTable(HashKey As THashKey, _
                               HashMove As TMOVE, _
                               ByRef EvalType As Long, _
                               ByRef Eval As Long, _
-                              ByRef StaticEval As Long) As Boolean
+                              ByRef StaticEval As Long, _
+                              ByRef PvHit As Boolean) As Boolean
+                            
   Dim IndexKey As Long, i As Long
 'IsInHashTable = False: Exit Function
   
@@ -299,7 +305,7 @@ Public Function IsInHashTable(HashKey As THashKey, _
         If ZobristHash1 = .Position1 And ZobristHash2 = .Position2 Then
           If .Depth > HashDepth Then
             ' entry found
-            IsInHashTable = True
+            IsInHashTable = True: PvHit = False
             If InHashCnt < 2000000 Then InHashCnt = InHashCnt + 1
             '--- Read hash data
             If .MoveFrom > 0 Then
@@ -347,6 +353,7 @@ Public Function IsInHashTable(HashKey As THashKey, _
             End If
             EvalType = .EvalType: Eval = HashToScore(.Eval): StaticEval = .StaticEval
             HashDepth = .Depth
+            PvHit = .PvHit
             .Generation = HashGeneration ' Update generation
             Exit For
           End If
@@ -522,7 +529,9 @@ Public Function InsertIntoHashMap(HashKey As THashKey, _
                                   HashMove As TMOVE, _
                                   ByVal EvalType As Long, _
                                   ByVal Eval As Long, _
-                                  ByVal StaticEval As Long)
+                                  ByVal StaticEval As Long, _
+                                  ByVal PvHit As Boolean)
+
   Dim IndexKey As Long, TmpMove As TMOVE, i As Long, ReplaceIndex As Long, MaxReplaceValue As Long, ReplaceValue As Long, bPosFound As Boolean
   Debug.Assert HashMove.From = 0 Or HashMove.Piece <> NO_PIECE
   Debug.Assert NoOfThreads > 1
@@ -570,6 +579,7 @@ Public Function InsertIntoHashMap(HashKey As THashKey, _
       .StaticEval = StaticEval: .Depth = Depth
       .Generation = HashGeneration
       .IsChecking = TmpMove.IsChecking
+      .PvHit = PvHit
       '.ThreadNum = GetMax(0, ThreadNum)
       '--- Write Hash Map: replace index in Cluster only
       moHashMap.WriteMapHashEntry ReplaceIndex, VarPtr(HashCluster(ReplaceIndex - IndexKey))
@@ -584,7 +594,8 @@ Public Function IsInHashMap(HashKey As THashKey, _
                             HashMove As TMOVE, _
                             ByRef EvalType As Long, _
                             ByRef Eval As Long, _
-                            ByRef StaticEval As Long) As Boolean
+                            ByRef StaticEval As Long, _
+                            ByRef PvHit As Boolean) As Boolean
   Dim IndexKey As Long, i As Long
   Debug.Assert NoOfThreads > 1
   IsInHashMap = False: ClearMove HashMove: EvalType = TT_NO_BOUND: Eval = UNKNOWN_SCORE: StaticEval = UNKNOWN_SCORE: HashDepth = -MAX_GAME_MOVES
@@ -599,7 +610,7 @@ Public Function IsInHashMap(HashKey As THashKey, _
         If ZobristHash1 = .Position1 And ZobristHash2 = .Position2 Then
           If .Depth > HashDepth Then
             ' entry found
-            IsInHashMap = True
+            IsInHashMap = True: PvHit = False
             If InHashCnt < 2000000 Then InHashCnt = InHashCnt + 1
             '--- Read hash data
             If .MoveFrom > 0 Then
@@ -647,6 +658,7 @@ Public Function IsInHashMap(HashKey As THashKey, _
             End If
             EvalType = .EvalType: Eval = HashToScore(.Eval): StaticEval = .StaticEval
             HashDepth = .Depth
+            PvHit = .PvHit
             .Generation = HashGeneration ' Update generation
             'If GetMax(0, .ThreadNum) <> GetMax(0, ThreadNum) Then HashFoundFromOtherThread = HashFoundFromOtherThread + 1
             Exit For

@@ -153,8 +153,10 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
   EPD(1) = "4kb1r/1pqb1ppp/p3p3/4P3/2rp1P2/P1NQB3/1PP3PP/R4RK1 w k - 0 15 " ' e3xd4 lost
   
   EPD(1) = "8/6k1/8/5P1P/6PK/3n4/8/8 w - - 0 81 "
+  EPD(1) = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1" 'Qsearch test
+  EPD(1) = "8/3Nb3/2R3p1/1p2qpnk/1P2r3/1BPQ2P1/5K1P/8 b - - 0 1  " '  Check evasion test
   '------ normal test ----
- ' EPD(1) = "1b5k/7P/p1p2np1/2P2p2/PP3P2/4RQ1R/q2r3P/6K1 w - - 0 1"
+  EPD(1) = "1b5k/7P/p1p2np1/2P2p2/PP3P2/4RQ1R/q2r3P/6K1 w - - 0 1"
   EPD(2) = "1rb2rk1/p3nppp/1p1qp3/3n2N1/2pP4/2P3P1/PP3PBP/R1BQR11K w - -"  'TEST 2
   EPD(3) = "r1b2rk1/p2nq1p1/1pp1p2p/5p2/2PPp3/2Q1P3/PP1N1PPP/2R1KB1R w K - 0 13" '--- quiet
   EPD(4) = "6k1/p1r5/4b1p1/R1pprp1p/7P/1P1BP3/P1P3P1/4R1K1 w - - 4 25" ' no advantage
@@ -167,7 +169,7 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
   'iDepth = 8
   ' ReadGame "Drawbug2.txt"
   'bForceMode = False
-  For x = 1 To 1 'if EPD(1) only to test
+  For x = 1 To 4 'if EPD(1) only to test
   ' For x = 1 To 5 ' 7
     For i = 0 To 0 ' number of time measure runs  > 1x
       'For i = 0 To 2 ' number of time measure runs > 3x
@@ -219,7 +221,7 @@ Public Sub DEBUGBench(ByVal iDepth As Long)
       arTime(i) = EndTime - StartTime
       If arTime(i) = 0 Then arTime(i) = 1
       bPostMode = True
-      SendCommand vbCrLf & "time: " & Format$(arTime(i), "0.000") & " nod: " & Nodes & " qn: " & QNodes & " ev:" & EvalCnt & " sc: " & FinalScore & " EGTB:" & EGTBasesHitsCnt & " Ply:" & MaxPly & " " & s & vbCrLf
+      SendCommand vbCrLf & "time: " & Format$(arTime(i), "0.000") & " nod: " & Nodes & " qn: " & QNodes & "(DMax:" & QSDepthMax & ")" & " ev:" & EvalCnt & " sc: " & FinalScore & " EGTB:" & EGTBasesHitsCnt & " Ply:" & MaxPly & " " & s & vbCrLf
     Next
 
     If arTime(0) < arTime(1) Then

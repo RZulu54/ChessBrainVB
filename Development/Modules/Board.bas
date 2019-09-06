@@ -36,7 +36,6 @@ Public WhiteCastled                               As enumCastleFlag
 Public BlackCastled                               As enumCastleFlag
 Public WPromotions(5)                             As Long  '--- list of promotion pieces
 Public BPromotions(5)                             As Long
-Public LegalMovesOutOfCheck                       As Long
 Public WKingLoc                                   As Long
 Public BKingLoc                                   As Long
 Public PieceType(16)                              As Long  ' sample: maps black pawn and white pawn pieces to PT_PAWN
@@ -91,6 +90,7 @@ Public Function GenerateMoves(ByVal Ply As Long, _
   Dim From As Long, i As Long
   '--- Init special board for fast detection of checking moves
   If bWhiteToMove Then FillKingCheckB Else FillKingCheckW
+  
   bGenCapturesOnly = bCapturesOnly: NumMoves = 0
   bGenQsChecks = (MovePickerDat(Ply).GenerateQSChecksCnt > 0)
   If bWhiteToMove Then
@@ -204,61 +204,46 @@ Private Function TryMoveWPawn(ByVal Ply As Long, _
                               ByVal From As Long, _
                               ByVal Target As Long) As Boolean
   If Board(Target) = FRAME Then Exit Function
-  Dim CurrentMove As TMOVE, PieceFrom As Long, PieceTarget As Long, PromotePiece As Long
+  Dim PieceFrom As Long, PieceTarget As Long, bDoCheckMove As Boolean
   PieceFrom = Board(From): PieceTarget = Board(Target)
-  With CurrentMove
-    If PieceTarget = BEP_PIECE Then
-      .From = From: .Target = Target: .Piece = PieceFrom: .Captured = PieceTarget: .EnPassant = 3: .Castle = NO_CASTLE: .Promoted = 0: .IsChecking = False
-      SetMove Moves(Ply, NumMoves), CurrentMove: NumMoves = NumMoves + 1
-      Exit Function
-    End If
-    ' Captures
-    If PieceTarget < NO_PIECE Then
-      ' Capture of own piece not allowed
-      If (PieceTarget Mod 2) = WCOL Then
-        Exit Function
-      ElseIf Rank(From) = 7 Then
-  
-        ' White Promotion with capture
-        For PromotePiece = 1 To 4
-          .From = From: .Target = Target: .Captured = PieceTarget: .EnPassant = 0: .Castle = NO_CASTLE: .Promoted = WPromotions(PromotePiece): .IsChecking = False: .Piece = .Promoted
-          SetMove Moves(Ply, NumMoves), CurrentMove: NumMoves = NumMoves + 1
-        Next
-  
-        Exit Function
-      Else
-        ' Normal capture.
-        .From = From: .Target = Target: .Piece = PieceFrom: .Captured = PieceTarget: .EnPassant = 0: .Castle = NO_CASTLE: .Promoted = 0: .IsChecking = False
-        SetMove Moves(Ply, NumMoves), CurrentMove: NumMoves = NumMoves + 1
-        Exit Function
-      End If
-    End If
-    If Rank(From) = 7 Then
-  
-      ' White Promotion no capture
+  Debug.Assert PieceTarget <> FRAME
+
+  If Rank(From) = 7 Then
+      ' White Promotion
+      Dim PromotePiece As Long
       For PromotePiece = 1 To 4
-        .From = From: .Target = Target: .Captured = PieceTarget: .EnPassant = 0: .Castle = NO_CASTLE: .Promoted = WPromotions(PromotePiece): .Piece = .Promoted: .IsChecking = False
-        SetMove Moves(Ply, NumMoves), CurrentMove: NumMoves = NumMoves + 1
+        With Moves(Ply, NumMoves)
+         .From = From: .Target = Target: .Captured = PieceTarget: .EnPassant = 0: .Castle = NO_CASTLE: .Promoted = WPromotions(PromotePiece): .Piece = .Promoted: .IsChecking = False: .IsLegal = False:
+        End With
+        NumMoves = NumMoves + 1
       Next
-  
-      Exit Function
-    Else
-      '--- Normal move, not a capture, castle, promotion ---
-      Dim bDoCheckMove As Boolean
-      bDoCheckMove = False
-      If bGenCapturesOnly Then
-        '--- in QSearch: Generate checking moves only for first QSearch ply
-        If bGenQsChecks Then If IsCheckingMove(PieceFrom, From, Target, 0, 0) Then bDoCheckMove = True
-      End If
-      If Not bGenCapturesOnly Or bDoCheckMove Then
-        '---Normal move, not generated in QSearch (exception: when in check)
-        .From = From: .Target = Target: .Piece = PieceFrom: .Captured = PieceTarget: .Castle = NO_CASTLE: .Promoted = 0: .IsChecking = bDoCheckMove
-        If Target - From = 20 Then .EnPassant = 1
-        SetMove Moves(Ply, NumMoves), CurrentMove: NumMoves = NumMoves + 1
-        Exit Function
-      End If
-    End If
-  End With
+  Else
+    With Moves(Ply, NumMoves)
+      .From = From: .Target = Target: .Piece = PieceFrom: .IsLegal = False: .IsChecking = False: .EnPassant = 0: .Castle = NO_CASTLE: .Captured = PieceTarget: .CapturedNumber = 0: .Promoted = 0
+      Select Case PieceTarget
+      Case BEP_PIECE
+        .EnPassant = 3: NumMoves = NumMoves + 1
+      Case NO_PIECE, WEP_PIECE ' WEP_PIECE should appear
+        '--- Normal move, not a capture, promotion ---
+        bDoCheckMove = False
+        If bGenCapturesOnly Then
+          '--- in QSearch: Generate checking moves only for first QSearch ply
+          If bGenQsChecks Then If IsCheckingMove(PieceFrom, From, Target, 0, 0) Then bDoCheckMove = True
+        End If
+        If Not bGenCapturesOnly Or bDoCheckMove Then
+          '---Normal move, not generated in QSearch (exception: when in check)
+          .IsChecking = bDoCheckMove
+          If Target - From = 20 Then .EnPassant = 1
+          NumMoves = NumMoves + 1
+        End If
+      Case FRAME
+      Case Else
+        ' Normal capture.
+        NumMoves = NumMoves + 1
+      End Select
+    End With
+  End If
+
 End Function
 
 Private Function TryMoveBPawn(ByVal Ply As Long, _
@@ -266,97 +251,83 @@ Private Function TryMoveBPawn(ByVal Ply As Long, _
                               ByVal From As Long, _
                               ByVal Target As Long) As Boolean
   If Board(Target) = FRAME Then Exit Function
-  '
-  Dim CurrentMove As TMOVE, PieceFrom As Long, PieceTarget As Long, PromotePiece As Long
-  
+  Dim PieceFrom As Long, PieceTarget As Long
   PieceFrom = Board(From): PieceTarget = Board(Target)
-  With CurrentMove
-    If PieceTarget = WEP_PIECE Then
-      .From = From: .Target = Target: .Piece = PieceFrom: .Captured = PieceTarget: .EnPassant = 3: .Castle = NO_CASTLE: .Promoted = 0: .IsChecking = False
-      SetMove Moves(Ply, NumMoves), CurrentMove: NumMoves = NumMoves + 1
-      Exit Function
-    End If
-    ' Captures
-    If PieceTarget < NO_PIECE Then
-      ' Capture of own piece not allowed
-      If (PieceTarget Mod 2) = BCOL Then
-        Exit Function
-      ElseIf Rank(From) = 2 Then
+  Debug.Assert PieceTarget <> FRAME
   
-        ' Black Promotion with capture
-        For PromotePiece = 1 To 4
-          .From = From: .Target = Target: .Captured = PieceTarget: .EnPassant = 0: .Castle = NO_CASTLE: .Promoted = BPromotions(PromotePiece): .IsChecking = False: .Piece = .Promoted
-          SetMove Moves(Ply, NumMoves), CurrentMove: NumMoves = NumMoves + 1
-        Next
-  
-        Exit Function
-      Else
-        ' Normal capture.
-        .From = From: .Target = Target: .Piece = PieceFrom: .Captured = PieceTarget: .EnPassant = 0: .Castle = NO_CASTLE: .Promoted = 0: .IsChecking = False
-        SetMove Moves(Ply, NumMoves), CurrentMove: NumMoves = NumMoves + 1
-        Exit Function
-      End If
-    End If
-    If Rank(From) = 2 Then
-  
-      ' Black Promotion no capture
+  If Rank(From) = 2 Then
+      ' Black Promotion
+      Dim PromotePiece As Long
       For PromotePiece = 1 To 4
-        .From = From: .Target = Target: .Captured = PieceTarget: .EnPassant = 0: .Castle = NO_CASTLE: .Promoted = BPromotions(PromotePiece): .Piece = .Promoted: .IsChecking = False
-        SetMove Moves(Ply, NumMoves), CurrentMove: NumMoves = NumMoves + 1
+        With Moves(Ply, NumMoves)
+         .From = From: .Target = Target: .Captured = PieceTarget: .EnPassant = 0: .Castle = NO_CASTLE: .Promoted = BPromotions(PromotePiece): .Piece = .Promoted: .IsChecking = False: .IsLegal = False:
+        End With
+        NumMoves = NumMoves + 1
       Next
-  
-      Exit Function
-    Else
-      '--- Normal move, not a capture, castle, promotion ---
-      Dim bDoCheckMove As Boolean
-      bDoCheckMove = False
-      If bGenCapturesOnly Then
-        '--- in QSearch: Generate checking moves only for first QSearch ply
-        If bGenQsChecks Then If IsCheckingMove(PieceFrom, From, Target, 0, 0) Then bDoCheckMove = True
-      End If
-      If Not bGenCapturesOnly Or bDoCheckMove Then
-        '---Normal move, not generated in QSearch (exception: when in check)
-        .From = From: .Target = Target: .Piece = PieceFrom: .Captured = PieceTarget: .Castle = NO_CASTLE: .Promoted = 0: .IsChecking = bDoCheckMove
-        If Target - From = -20 Then .EnPassant = 2
-        SetMove Moves(Ply, NumMoves), CurrentMove: NumMoves = NumMoves + 1
-        Exit Function
-      End If
-    End If
- End With
+  Else
+    With Moves(Ply, NumMoves)
+      .From = From: .Target = Target: .Piece = PieceFrom: .IsLegal = False: .IsChecking = False: .EnPassant = 0: .Castle = NO_CASTLE: .Captured = PieceTarget: .CapturedNumber = 0: .Promoted = 0
+      Select Case PieceTarget
+      Case WEP_PIECE
+        .EnPassant = 3: NumMoves = NumMoves + 1
+      Case NO_PIECE, BEP_PIECE ' BEP_PIECE should appear
+        '--- Normal move, not a capture, promotion ---
+        Dim bDoCheckMove As Boolean
+        bDoCheckMove = False
+        If bGenCapturesOnly Then
+          '--- in QSearch: Generate checking moves only for first QSearch ply
+          If bGenQsChecks Then If IsCheckingMove(PieceFrom, From, Target, 0, 0) Then bDoCheckMove = True
+        End If
+        If Not bGenCapturesOnly Or bDoCheckMove Then
+          '---Normal move, not generated in QSearch (exception: when in check)
+          .IsChecking = bDoCheckMove
+          If Target - From = -20 Then .EnPassant = 2
+          NumMoves = NumMoves + 1
+        End If
+      Case FRAME
+      Case Else
+        ' Normal capture.
+        NumMoves = NumMoves + 1
+      End Select
+    End With
+  End If
 End Function
 
 Private Function TryMoveListKnight(ByVal Ply As Long, _
                                    NumMoves As Long, _
                                    ByVal From As Long) As Boolean
   '--- Knights only
-  Dim Target As Long, m As Long, CurrentMove As TMOVE, PieceFrom As Long, PieceTarget As Long, bDoCheckMove As Boolean
+  Dim Target As Long, m As Long, PieceFrom As Long, PieceTarget As Long
   PieceFrom = Board(From)
-  CurrentMove.From = From: CurrentMove.Piece = PieceFrom: CurrentMove.Promoted = 0: CurrentMove.EnPassant = 0: CurrentMove.Castle = NO_CASTLE
 
   For m = 0 To 7
     Target = From + KnightOffsets(m): PieceTarget = Board(Target)
-    If PieceTarget = FRAME Then GoTo NextMove
-    ' Captures
-    If PieceTarget < NO_PIECE Then
-      ' Capture of own piece not allowed
-      If (PieceFrom Mod 2) <> (PieceTarget Mod 2) Then
-        CurrentMove.Target = Target: CurrentMove.Captured = PieceTarget: CurrentMove.IsChecking = False ' Normal capture.
-        SetMove Moves(Ply, NumMoves), CurrentMove: NumMoves = NumMoves + 1
+    Select Case PieceTarget
+    Case NO_PIECE, WEP_PIECE, BEP_PIECE
+      '--- Normal move, not a capture, castle, promotion ---
+      Dim bDoCheckMove As Boolean
+      bDoCheckMove = False
+      If bGenCapturesOnly Then
+        '--- in QSearch: Generate checking moves only for first QSearch ply
+        If bGenQsChecks Then bDoCheckMove = IsCheckingMove(PieceFrom, From, Target, 0, 0)
       End If
-      GoTo NextMove
-    End If
-    '--- Normal move, not a capture, castle, promotion ---
-    bDoCheckMove = False
-    If bGenCapturesOnly Then
-      '--- in QSearch: Generate checking moves only for first QSearch ply
-      If bGenQsChecks Then bDoCheckMove = IsCheckingMove(PieceFrom, From, Target, 0, 0)
-    End If
-    If Not bGenCapturesOnly Or bDoCheckMove Then
-      CurrentMove.Target = Target: CurrentMove.Captured = NO_PIECE: CurrentMove.IsChecking = bDoCheckMove
-      '---Normal move, not generated in QSearch (exception: when in check)
-      SetMove Moves(Ply, NumMoves), CurrentMove: NumMoves = NumMoves + 1
-    End If
-NextMove:
+      If Not bGenCapturesOnly Or bDoCheckMove Then
+        '---Normal move, not generated in QSearch (exception: when in check)
+        With Moves(Ply, NumMoves)
+          .From = From: .Target = Target: .Piece = PieceFrom: .IsLegal = False: .IsChecking = bDoCheckMove: .EnPassant = 0: .Castle = NO_CASTLE: .Captured = PieceTarget: .CapturedNumber = 0: .Promoted = 0
+        End With
+        NumMoves = NumMoves + 1
+      End If
+    Case FRAME: 'Ignore
+    Case Else
+      ' Captures
+      If (PieceFrom Mod 2) <> (PieceTarget Mod 2) Then ' Capture of own piece not allowed
+        With Moves(Ply, NumMoves)
+          .From = From: .Target = Target: .Piece = PieceFrom: .IsLegal = False: .IsChecking = False: .EnPassant = 0: .Castle = NO_CASTLE: .Captured = PieceTarget: .CapturedNumber = 0: .Promoted = 0
+        End With
+        NumMoves = NumMoves + 1
+      End If
+    End Select
   Next m
 
 End Function
@@ -365,27 +336,32 @@ Private Function TryMoveListKing(ByVal Ply As Long, _
                                  NumMoves As Long, _
                                  ByVal From As Long) As Boolean
   '--- Kings only
-  Dim Target As Long, m As Long, CurrentMove As TMOVE, PieceFrom As Long, PieceTarget As Long
+  Dim Target As Long, m As Long, PieceFrom As Long, PieceTarget As Long
   PieceFrom = Board(From)
-  CurrentMove.From = From: CurrentMove.Piece = PieceFrom: CurrentMove.Promoted = 0: CurrentMove.EnPassant = 0: CurrentMove.Castle = NO_CASTLE: CurrentMove.IsChecking = False
 
   For m = 0 To 7
     Target = From + QueenOffsets(m): PieceTarget = Board(Target)
-    If PieceTarget = FRAME Then GoTo NextMove
-    ' Captures
-    If PieceTarget < NO_PIECE Then
-      ' Capture of own piece not allowed
-      If (PieceFrom Mod 2) <> (PieceTarget Mod 2) Then
-        CurrentMove.Target = Target: CurrentMove.Captured = PieceTarget ' Normal capture.
-        SetMove Moves(Ply, NumMoves), CurrentMove: NumMoves = NumMoves + 1
+    Select Case PieceTarget
+    Case NO_PIECE, WEP_PIECE, BEP_PIECE
+      '--- Normal move, not a capture, castle, not generated in QSearch (exception: when in check)---
+      If Not bGenCapturesOnly Then
+        '---Normal move, not generated in QSearch (exception: when in check)
+        With Moves(Ply, NumMoves)
+          .From = From: .Target = Target: .Piece = PieceFrom: .IsLegal = False: .IsChecking = False: .EnPassant = 0: .Castle = NO_CASTLE: .Captured = PieceTarget: .CapturedNumber = 0: .Promoted = 0
+        End With
+        NumMoves = NumMoves + 1
       End If
-      GoTo NextMove
-    End If
-    '--- Normal move, not a capture, castle, promotion , not generated in QSearch (exception: when in check)---
-    If Not bGenCapturesOnly Then
-      CurrentMove.Target = Target: CurrentMove.Captured = NO_PIECE
-      SetMove Moves(Ply, NumMoves), CurrentMove: NumMoves = NumMoves + 1
-    End If
+    Case FRAME
+    Case Else
+      ' Captures
+      If (PieceFrom Mod 2) <> (PieceTarget Mod 2) Then ' Capture of own piece not allowed
+        With Moves(Ply, NumMoves)
+          .From = From: .Target = Target: .Piece = PieceFrom: .IsLegal = False: .IsChecking = False: .EnPassant = 0: .Castle = NO_CASTLE: .Captured = PieceTarget: .CapturedNumber = 0: .Promoted = 0
+        End With
+        NumMoves = NumMoves + 1
+      End If
+    End Select
+
 NextMove:
   Next m
 
@@ -560,6 +536,34 @@ Public Function CheckLegalNotInCheck(mMove As TMOVE) As Boolean
     End If
   End If
   CheckLegalNotInCheck = CheckLegal(mMove)
+End Function
+
+Public Function CheckEvasionPossible(mMove As TMOVE) As Boolean
+  CheckEvasionPossible = True
+  If mMove.EnPassant <> 0 Or mMove.Castle <> NO_CASTLE Or mMove.Promoted <> 0 Then Exit Function
+  
+  Dim KingLoc As Long
+  If PieceColor(mMove.Piece) = COL_WHITE Then KingLoc = WKingLoc Else KingLoc = BKingLoc
+  If mMove.Piece = KingLoc Then Exit Function
+  
+  If mMove.Captured <> NO_PIECE Then
+    If PieceType(mMove.Captured) = PT_KNIGHT Then If MaxDistance(KingLoc, mMove.Target) < 3 Then Exit Function ' checking knight captured?
+  End If
+  
+  If SameXRay(KingLoc, mMove.From) Then
+    If Not SqBetween(mMove.From, KingLoc, mMove.Target) And Not SqBetween(mMove.Target, KingLoc, mMove.From) Then
+      Exit Function ' may be new discovered check
+    End If
+  End If
+  If SameXRay(KingLoc, mMove.Target) Then
+    If Not SqBetween(mMove.From, KingLoc, mMove.Target) And Not SqBetween(mMove.Target, KingLoc, mMove.From) Then
+      Exit Function ' may be a blocker for check
+    End If
+    If mMove.Captured <> NO_PIECE Then Exit Function ' may capture checking piece
+  End If
+  
+  CheckEvasionPossible = False
+  
 End Function
 
 '---------------------------------------------------------------------------
@@ -1106,6 +1110,7 @@ Public Sub UnmakeMove(mMove As TMOVE)
   If Captured > 0 Then If Captured < NO_PIECE Then PieceCntPlus Captured
 lblExit:
   bWhiteToMove = Not bWhiteToMove ' switch side to move
+  
 End Sub
 
 '---------------------------------------------------------------------------
@@ -1394,7 +1399,7 @@ Public Function PrintPos() As String
 
   End If
  sBoard = sBoard & " ------------------" & vbCrLf
-  sBoard = sBoard & " " & vbTab & " A B C D E F G H" & vbCrLf
+  sBoard = sBoard & "  " & " A B C D E F G H" & vbCrLf
   PrintPos = sBoard
 End Function
 
@@ -1716,42 +1721,42 @@ Public Function IsBlockingMove(ThreatM As TMOVE, BlockM As TMOVE) As Boolean
   If SqBetween(BlockM.Target, ThreatM.From, ThreatM.Target) Then IsBlockingMove = True
 End Function
 
-Public Function SeeSign(Move As TMOVE) As Long
-  SeeSign = 0
-  ' Early return if SEE cannot be negative because captured piece value
-  ' is not less then capturing one. Note that king moves always return
-  ' here
-  If Move.Castle > 0 Or Move.Target = 0 Or Move.Piece = NO_PIECE Or Board(Move.Target) = FRAME Then Exit Function
-  If PieceType(Move.Piece) = PT_KING Then SeeSign = VALUE_KNOWN_WIN: Exit Function   ' King move always good because legal checked before
-  If Move.SeeValue = UNKNOWN_SCORE Then
-    If PieceAbsValue(Move.Piece) + MAX_SEE_DIFF <= PieceAbsValue(Move.Captured) Then SeeSign = VALUE_KNOWN_WIN: Exit Function ' winning or equal  move
-    ' Calculate exchange score
-    Move.SeeValue = GetSEE(Move) ' Returned for future use
-  End If
-  SeeSign = Move.SeeValue
-End Function
+'Public Function SeeSign(Move As TMOVE) As Long
+'  SeeSign = 0
+'  ' Early return if SEE cannot be negative because captured piece value
+'  ' is not less then capturing one. Note that king moves always return
+'  ' here
+'  If Move.Castle > 0 Or Move.Target = 0 Or Move.Piece = NO_PIECE Or Board(Move.Target) = FRAME Then Exit Function
+'  If PieceType(Move.Piece) = PT_KING Then SeeSign = VALUE_KNOWN_WIN: Exit Function   ' King move always good because legal checked before
+'  If Move.SeeValue = UNKNOWN_SCORE Then
+'    If PieceAbsValue(Move.Piece) + MAX_SEE_DIFF <= PieceAbsValue(Move.Captured) Then SeeSign = VALUE_KNOWN_WIN: Exit Function ' winning or equal  move
+'    ' Calculate exchange score
+'    Move.SeeValue = GetSEE(Move) ' Returned for future use
+'  End If
+'  SeeSign = Move.SeeValue
+'End Function
+'
+'Public Function BadSEEMove(Move As TMOVE) As Boolean
+'  BadSEEMove = False
+'  If Move.Castle > 0 Or Move.Target = 0 Or Move.Piece = NO_PIECE Or Board(Move.Target) = FRAME Then Exit Function
+'  If PieceType(Move.Piece) = PT_KING Then Exit Function   ' King move always good because legal checked before
+'  If Move.SeeValue = UNKNOWN_SCORE Then
+'    If PieceAbsValue(Move.Piece) + MAX_SEE_DIFF <= PieceAbsValue(Move.Captured) Then Exit Function ' winning or equal  move
+'    Move.SeeValue = GetSEE(Move) ' Returned for future use
+'  End If
+'  BadSEEMove = (Move.SeeValue < -MAX_SEE_DIFF)
+'End Function
 
-Public Function BadSEEMove(Move As TMOVE) As Boolean
-  BadSEEMove = False
-  If Move.Castle > 0 Or Move.Target = 0 Or Move.Piece = NO_PIECE Or Board(Move.Target) = FRAME Then Exit Function
-  If PieceType(Move.Piece) = PT_KING Then Exit Function   ' King move always good because legal checked before
-  If Move.SeeValue = UNKNOWN_SCORE Then
-    If PieceAbsValue(Move.Piece) + MAX_SEE_DIFF <= PieceAbsValue(Move.Captured) Then Exit Function ' winning or equal  move
-    Move.SeeValue = GetSEE(Move) ' Returned for future use
-  End If
-  BadSEEMove = (Move.SeeValue < -MAX_SEE_DIFF)
-End Function
-
-Public Function GoodSEEMove(Move As TMOVE) As Boolean
-  GoodSEEMove = True
-  If Move.Castle > 0 Or Move.Target = 0 Or Move.Piece = NO_PIECE Or Board(Move.Target) = FRAME Then Exit Function
-  If PieceType(Move.Piece) = PT_KING Then Exit Function   ' King move always good because legal checked before
-  If Move.SeeValue = UNKNOWN_SCORE Then
-    If PieceAbsValue(Move.Piece) + MAX_SEE_DIFF <= PieceAbsValue(Move.Captured) Then Exit Function ' winning or equal move
-    Move.SeeValue = GetSEE(Move) ' Returned for future use
-  End If
-  GoodSEEMove = (Move.SeeValue >= -MAX_SEE_DIFF)
-End Function
+'Public Function GoodSEEMove(Move As TMOVE) As Boolean
+'  GoodSEEMove = True
+'  If Move.Castle > 0 Or Move.Target = 0 Or Move.Piece = NO_PIECE Or Board(Move.Target) = FRAME Then Exit Function
+'  If PieceType(Move.Piece) = PT_KING Then Exit Function   ' King move always good because legal checked before
+'  If Move.SeeValue = UNKNOWN_SCORE Then
+'    If PieceAbsValue(Move.Piece) + MAX_SEE_DIFF <= PieceAbsValue(Move.Captured) Then Exit Function ' winning or equal move
+'    Move.SeeValue = GetSEE(Move) ' Returned for future use
+'  End If
+'  GoodSEEMove = (Move.SeeValue >= -MAX_SEE_DIFF)
+'End Function
 
 Public Function SEEGreaterOrEqual(Move As TMOVE, ByVal Score As Long) As Boolean
   '--- Optimized call of Static Exchange Evaluation (SEE): True if SEE greater or equal given Score

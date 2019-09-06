@@ -1,0 +1,32 @@
+ChessBrainVB is a chess program (32 bit Windows) that communicates with a chess GUI via the winboard protocol (or UCI since V3.6) and can be used with  MsOffice-VBA (EXCEL/WORD) also.
+Features: support for up to 8 cores. Support for Syzygy tablebases (for first 3 plies only).
+
+This engine is writen in Visual Basic 6. It does NOT use bitboards. The board uses the classic 10x12 board array.
+Search logic and evaluation is based an Stockfish 8 with adaptions to non-bitboard data structure and search changes 
+that perform better for slower move generation and evaluation. 
+
+### TERMS OF USE
+
+ChessBrainVB is free, and distributed under the GNU General Public License(GPL). 
+Essentially, this means that you are free to do almost what you want with the program, including distributing it among your friends, making it available for download from your web site, selling it (either by itself or as part of some bigger software package), or using it as the starting point for a software project of your own.
+
+The only real limitation is that whenever you distribute ChessBrainVB in some way, you must always include the full source code, or a pointer to where the source code can be found.  If you make any changes to the source code, these changes must also be made available under the GPL.
+For full details, read the copy of the GPL found in the file named Copying.txt.
+
+
+### CREDITS
+This chess engine is based on the source of the engine "LarsenVB" by Luca Dormio (http://xoomer.virgilio.it/ludormio/download.htm).
+LarsenVB was inspired by "Faile 0.6 by" Adrien M. Regimbald, which was also the base for the engine "Sjeng".
+I want to thank Luca Dormio for his permission to use his LarsenVB source. 
+
+ChessBrainVB is also based on many great ideas from the following people: 
+
+Marco Costabla/Tord Romstad/Joona Kiiski (Stockfish sources): Search logic, king safety, piece evaluation
+
+Ed Schroder (REBEL descriptions):  Killer move strucure, Search extensions
+
+Raimund Heid (Protector sources):  Material draw logic
+
+Norbert Raimund Leisner: Logo file
+
+The Syzygy tablebases were created by Ronald de Man. Fathom.exe was created by github user basil00.

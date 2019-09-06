@@ -302,10 +302,10 @@ Public Sub SendThinkInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Lo
   Dim sPost               As String, j As Long, sPostPV As String
   If pbIsOfficeMode Then
     '--- MS OFFICE
-    sPost = " " & Translate("Depth") & ":" & ActDepth & "/" & MaxPly & " " & Translate("Score") & ":" & FormatScore(EvalSFTo100(CurrentScore)) & " " & Translate("Nodes") & ":" & Format("0.000", Nodes) & " " & Translate("Sec") & ":" & Format(Elapsed, "0.00")
-    If plLastPostNodes <> Nodes Then
+    sPost = " " & Translate("Depth") & ":" & ActDepth & "/" & MaxPly & " " & Translate("Score") & ":" & FormatScore(EvalSFTo100(CurrentScore)) & " " & Translate("Nodes") & ":" & Format("0.000", CalcNodes()) & " " & Translate("Sec") & ":" & Format(Elapsed, "0.00")
+    If plLastPostNodes <> CalcNodes() Then
       SendCommand sPost
-      plLastPostNodes = Nodes
+      plLastPostNodes = CalcNodes()
       sPostPV = "      >" & Translate("Line") & ": "
 
       For j = 1 To PVLength(1) - 1
@@ -329,9 +329,9 @@ Public Sub SendThinkInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Lo
       ' format: info depth 1 seldepth 1 multipv 1 score cp 417 nodes 51 nps 25500 tbhits 0 time 2 pv e8g8
       sPost = "info depth " & ActDepth & " seldepth " & MaxPly & " multipv 1 score " & UciGUIScore(CurrentScore, Alpha, Beta)
       If Nodes > 1000 Then sPost = sPost & " hashfull " & HashUsageUCI()
-      sPost = sPost & " nodes " & Nodes & " nps " & CalcNPS(Elapsed) & " tbhits " & EGTBasesHitsCnt & " time " & Int(Elapsed * 1000#) & " pv"
+      sPost = sPost & " nodes " & CalcNodes() & " nps " & CalcNPS(Elapsed) & " tbhits " & EGTBasesHitsCnt & " time " & Int(Elapsed * 1000#) & " pv"
     Else
-      sPost = ActDepth & " " & EvalSFTo100(CurrentScore) & " " & (Int(Elapsed) * 100) & " " & Nodes
+      sPost = ActDepth & " " & EvalSFTo100(CurrentScore) & " " & (Int(Elapsed) * 100) & " " & CalcNodes()
     End If
     sPostPV = ""
 
@@ -341,6 +341,8 @@ Public Sub SendThinkInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Lo
 
     If Len(Trim(sPostPV)) > 8 Then
       LastFullPV = sPostPV
+      LastFullPVLen = PVLength(1)
+      For j = 1 To PVLength(1): SetMove LastFullPVArr(j), PV(1, j): Next
     Else
       If Left(Trim(sPostPV), 5) = Left(Trim(LastFullPV), 5) Then
         If Len(Trim(sPostPV)) < Len(Trim(LastFullPV)) Then
@@ -364,7 +366,7 @@ Public Sub SendRootInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Lon
   'CurrentScore = ScaleScoreByEGTB(CurrentScore)
   If pbIsOfficeMode Then
     '--- MS OFFICE
-    sPost = " " & Translate("Depth") & ":" & ActDepth & "/" & MaxPly & " " & Translate("Score") & ":" & FormatScore(EvalSFTo100(CurrentScore)) & " " & Translate("Nodes") & ":" & Format("0.000", Nodes) & " " & Translate("Sec") & ":" & Format(Elapsed, "0.00")
+    sPost = " " & Translate("Depth") & ":" & ActDepth & "/" & MaxPly & " " & Translate("Score") & ":" & FormatScore(EvalSFTo100(CurrentScore)) & " " & Translate("Nodes") & ":" & Format("0.000", CalcNodes()) & " " & Translate("Sec") & ":" & Format(Elapsed, "0.00")
     If plLastPostNodes <> Nodes Or Nodes = 0 Then
       SendCommand sPost
       plLastPostNodes = Nodes
@@ -381,9 +383,9 @@ Public Sub SendRootInfo(Elapsed As Single, ActDepth As Long, CurrentScore As Lon
     ' VB6
     If UCIMode Then
       ' format: info depth 1 seldepth 1 multipv 1 score cp 417 nodes 51 nps 25500 tbhits 0 time 2 pv e8g8
-      sPost = "info depth " & ActDepth & " seldepth " & MaxPly & " multipv 1 score " & UciGUIScore(CurrentScore, Alpha, Beta) & " nodes " & Nodes & " nps " & CalcNPS(Elapsed) & " tbhits " & EGTBasesHitsCnt & " time " & Int(Elapsed * 1000#) & " pv"
+      sPost = "info depth " & ActDepth & " seldepth " & MaxPly & " multipv 1 score " & UciGUIScore(CurrentScore, Alpha, Beta) & " nodes " & CalcNodes() & " nps " & CalcNPS(Elapsed) & " tbhits " & EGTBasesHitsCnt & " time " & Int(Elapsed * 1000#) & " pv"
     Else
-      sPost = ActDepth & " " & EvalSFTo100(CurrentScore) & " " & (Int(Elapsed) * 100) & " " & Nodes
+      sPost = ActDepth & " " & EvalSFTo100(CurrentScore) & " " & (Int(Elapsed) * 100) & " " & CalcNodes()
     End If
     sPV = ""
 
@@ -437,7 +439,7 @@ End Function
 Public Sub SendAnalyzeInfo()
   Dim sPost As String, Elapsed As Single
   Elapsed = TimeElapsed
-  sPost = "stat01: " & Int(Elapsed) & " " & Nodes & " " & RootDepth & " " & "1 1"
+  sPost = "stat01: " & Int(Elapsed) & " " & CalcNodes() & " " & RootDepth & " " & "1 1"
   If Not GotExitCommand() Then
     SendCommand sPost
   End If
@@ -923,8 +925,16 @@ lblErr:
   Resume lblExit
 End Function
 
+Public Function CalcNodes() As Long
+  Dim TotalNodes As Double
+  If NoOfThreads > 1 Then TotalNodes = CDbl(NoOfThreads) * CDbl(Nodes) Else TotalNodes = Nodes
+  If TotalNodes > 2147483647# Then CalcNodes = 9999999 Else CalcNodes = TotalNodes
+End Function
+
 Public Function CalcNPS(ByVal ElapsedTime As Single) As Long
-  CalcNPS = CDbl(Nodes) / GetMaxSingle(0.01, ElapsedTime)
+  Dim TotalNodes As Double
+  If NoOfThreads > 1 Then TotalNodes = CDbl(NoOfThreads) * CDbl(Nodes) Else TotalNodes = Nodes
+  CalcNPS = CDbl(TotalNodes) / GetMaxSingle(0.01, ElapsedTime)
 End Function
 
 Public Function ScaleScoreByEGTB(Score As Long) As Long

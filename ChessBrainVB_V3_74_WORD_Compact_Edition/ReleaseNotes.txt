@@ -4,12 +4,6 @@
 = Release notes for ChessBrainVB chess engine 
 =======================================================================================
 
-Changes from version 3.72 to 3.74 (Roger Zuehlsdorf 09-AUG-2019)
-----------------------------------------------------------------
-- minor fixes
-- code cleanup
-- ELO gain: about 10 ELO 
-
 Changes from version 3.70 to 3.72 (Roger Zuehlsdorf 02-DEC-2018)
 ----------------------------------------------------------------
 - less optimistic king safety evaluation
