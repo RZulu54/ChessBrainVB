@@ -16,6 +16,9 @@ There are two ways to use this chess engine:
   Visual Basic for Applications is used for the chess engine.
   This pseudo code is not compiled and 15 times slower than the compiled VB6 EXE for winboard.
 
+Hint: The program "Alice in Chessland" by Angelo Spartalis has a very nice GUI and is based on ChessbrainVB V3.05. 
+Link: https://www.spartalis.gr/chess/index_ENG.html
+
 For questions please contact me:
 rogzuehlsdorf@yahoo.de
 ----------------------------------------------------------------------
