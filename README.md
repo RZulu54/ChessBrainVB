@@ -1,5 +1,5 @@
 # ChessBrainVB
-Chess engine with GUI for Excel / Word / Powerpoint VBA - plus edition for UCI/Winboard+SMP: win32 engine with playing strength of 3150 ELO (4 CPU)
+Chess engine with GUI for Excel / Word / Powerpoint VBA - plus edition for UCI/Winboard+SMP: win32 engine with playing strength of 3150 ELO (4 CPU). 
 
 There are two ways to use this chess engine:
 
@@ -18,6 +18,8 @@ There are two ways to use this chess engine:
 
 Hint: The program "Alice in Chessland" by Angelo Spartalis has a very nice GUI and is based on ChessbrainVB V3.05. 
 Link: https://www.spartalis.gr/chess/index_ENG.html
+
+Note: Last version avialable is V3.74. No other versions are planned.
 
 For questions please contact me:
 rogzuehlsdorf@yahoo.de
