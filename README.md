@@ -37,4 +37,4 @@ Raimund Heid (Protector sources):  Material draw logic
 Norbert Raimund Leisner: Logo file
 
 ----------------------------------------------------------------------
-Keywords: "Excel chess engine", "Word chess engine", "Powerpoint chess engine", "VBA chess engine", "VB6 chess engine", "VBA chess game", "Excel chess game", "Visual Basic chess program", "Exel chess board", "VBA chess board"
+Keywords: "Excel chess engine", "Excel chess", "Word chess engine", "Powerpoint chess engine", "VBA chess", "VBA chess engine", "VB6 chess engine", "VBA chess game", "Excel chess game", "Visual Basic chess program", "Exel chess board", "VBA chess board"
