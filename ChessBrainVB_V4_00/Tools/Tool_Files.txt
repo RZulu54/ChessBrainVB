@@ -1,0 +1,8 @@
+Tools
+=====
+
+fathom.exe : not used anymore - for access to tablebases
+
+Inbetween.exe : interface for some GUIs (Fritz)
+
+Wb2Uci: no longer needed, UCI is supported now

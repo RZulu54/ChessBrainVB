@@ -1,0 +1,165 @@
+=======================================================================================
+= ReleaseNotes.txt
+=
+= Release notes for ChessBrainVB chess engine 
+=======================================================================================
+
+Changes from version 3.74 to 4.00 (Roger Zuehlsdorf 24-DEC-2023)
+----------------------------------------------------------------
+- Several bug fixes
+- Many changes in search logic. No changes in evaluation.
+  > Playing strength: about 80-100 ELO gain for short time controls. 
+    In test tournament 2min/game+2sec/move against ICE 4.0 and WASP 3.75: +50 ELO  (V3.74 was -50 ELO)
+	Eigenmann test suite 30 sec: V3.74 = 41 solved / V4.00 = 58 solved
+- Opening book 
+- EXCEL version: all data (i.e. opening book) included in Excel file, no external file needed.
+- Code cleanup, more comments
+
+
+Changes from version 3.72 to 3.74 (Roger Zuehlsdorf 09-AUG-2019)
+----------------------------------------------------------------
+- minor fixes
+- code cleanup
+- ELO gain: about 10 ELO 
+
+Changes from version 3.70 to 3.72 (Roger Zuehlsdorf 02-DEC-2018)
+----------------------------------------------------------------
+- less optimistic king safety evaluation
+- 10% faster: slow VB6 assignments for user defined data types replaced
+- code cleanup
+- ELO gain: about 30 ELO for short time controls
+
+Changes from version 3.68 to 3.70 (Roger Zuehlsdorf 11-JUL-2018)
+----------------------------------------------------------------
+- bug fixes in evaluation
+- code cleanup
+- ELO gain: about 20 ELO
+
+Changes from version 3.67 to 3.68 (Roger Zuehlsdorf 1-MAR-2018)
+----------------------------------------------------------------
+- fixed bug: fifty move counter not seen by helper threads 
+- code cleanup
+
+Changes from version 3.61 to 3.65 (Roger Zuehlsdorf 24-FEB-2018)
+----------------------------------------------------------------
+- fixed bug: enpassant capture ignored in mate escape move list (reason for game loosing moves)
+  this old bug was discovered in engine matches (many thanks to Graham Banks for running this matches)
+- some endgame knowledge added for positions with no pawns
+
+Changes from version 3.61 to 3.65 (Roger Zuehlsdorf 18-FEB-2018)
+----------------------------------------------------------------
+- new time management, moveoverhead setting added
+- UCI fixes, hashfull info added, Chessbase GUI supported using InBetween.exe
+- hash file limit 1400MB for compiled exe (IDE and VBA still 384)
+- SMP improvements: 
+    support for 64 cores
+	helper processess starting much faster
+	verify hash read/write option to detect hash collisions
+- ELO gain on self play: 40/4 about 20 ELO from time management, no improvement for 40/40  
+
+Changes from version 3.60 to 3.61 (Roger Zuehlsdorf 25-DEC-2017)
+----------------------------------------------------------------
+- UCI time management problems fixed (tested with ARENA, other GUIs should use Winboard interface)
+- UCI buffer overflow problem fixed with long matches (more than 200 moves)
+- time management optimized for sudden death games
+
+
+Changes from version 3.50 to 3.60 (Roger Zuehlsdorf 17-DEC-2017)
+----------------------------------------------------------------
+this is a feature release:
+- support for UCI protocol (includes settings for number of cores and endgame tablebases)
+- very limited support for Syzygy endgame tablebases using the fathom.exe tool output
+  (limited to first the first 3 plies because slow - about 10 positions per second)
+- code cleanup and changes in singular extensions
+- ELO gain in self-play against V3.50 is small: 40/4 about 10 ELO, may be more for 40/40
+
+Changes from version 3.31 to 3.50 (Roger Zuehlsdorf 26-AUG-2017)
+----------------------------------------------------------------
+- multi-processor support up to 8 threads (not for VBA office)
+  using CreateFileMapping-API for shared hash and PV. (see file MultiCore_Notes.txt)
+  Note: Used memory may not show up in task mananger (but displayed correctly in ARENA)
+- keep history values for next game move (don't delete values at begin of search)
+- better move count pruning exceptions for threat move evasions
+- bug fix in pawn eval
+- speed optimized
+- ELO gain in self-play against V3.31: 60 ELO at 40/4, 30 ELo at 40/40.
+
+Changes from version 3.20 to 3.31 (Roger Zuehlsdorf 4-JUN-2017)
+---------------------------------------------------------------
+- several small fixes and code cleanup 
+- speed optimized
+- changed move heuristic
+- ELO increase about 20 ELO
+- time management bug fixed
+
+Changes from version 3.03 to 3.20 (Roger Zuehlsdorf 10-MAR-2017)
+----------------------------------------------------------------
+- bugfix in king safety
+- several small fixes and code cleanup 
+- move counter added to Office GUI
+- ELO increase about 20 ELO
+
+Changes from version 3.03 to 3.03a (Roger Zuehlsdorf 15-DEC-2016)
+----------------------------------------------------------------
+- compact edition for WORD and POWERPOINT added
+
+
+Changes from version 3.02 to 3.03 (Roger Zuehlsdorf 13-DEC-2016)
+----------------------------------------------------------------
+- VBA overflow at depth 100 fixed
+- VBA move list output fixed
+
+
+Changes from version 2.05 to 3.02 (Roger Zuehlsdorf 09-DEC-2016)
+----------------------------------------------------------------
+- major rewrite of move generation, king safety and search logic (new stockfish7 patches added if helpful)
+- bug fixes and speed improvements
+- ELO increase 100 ELO ( CCRL 40/4: 2750 for compiled VB6 EXE, 2250 for VBA code)
+
+
+----------------------------------------------------------------
+Changes in version 2.05 / 9-FEB-2016
+ - fixed problem with Winboard.exe: removed: message box says that draws are not accepted
+
+Changes in version 2.04 / 27-FEB-2016
+ - fixed problem with Winboard.exe with black to move
+
+Changes in version 2.03 
+ - fixed WORD VBA problem with Avast virus scanner: creates false positive alert => AutoOpen removed fixed it
+
+Changes in version 2.02
+ - fixed VBA GUI problem with promotions
+
+Changes in version 2.01
+ - show endgame table base access in VBA GUI
+
+
+Changes from version 1.02 to 2.0 (Roger Zuehlsdorf 14-FEB-2016)
+----------------------------------------------------------------
+
+- improved evalution and search
+
+- problem fixes in hash logic and castling rights
+
+- added special functions for endgames with KQKP, KQKR, KRKP
+
+- added endgame table base access to web service for root position and first ply (see ini file)
+
+- added Wb2Uci files for use with UCI interface
+
+- ELO increase: 100 ELO 
+
+
+Playing strength (Test matches: CCRL conditions 40  moves in 4 minutes, Powerbook2010-8 moves):
+ 
+ - ChessBrainVB.exe: Winboard 32bit version, compiled Visual Basic 6 : >>> 2600 ELO <<<
+
+   ChessBrainVB_V2 (250kn/s) - Colossus2008b  ...(1600 kn/s / ELO 2644): 51,5/100 36-33-31 52% +14 
+   ChessBrainVB_V2 (250kn/s) - SOS 5.1 for Arena (1000 kn/s / ELO 2577): 56,0/100 36-24-40 56% +42
+
+ - ChessbrainVB_PCode.exe: VB6 Pseudo Code (VBA speed as used in Excel/Word): >>> 2100 ELO <<<
+
+   ChessBrainVB_PCode_V2 (20kn/s) - Wing2.0a ....(1800 kn/s / ELO 2097): 51,0/100 41-39-20 51% + 7
+   ChessBrainVB_PCode_V2 (20kn/s) - Matheus-2.3  (4000 kn/s / ELO 2054): 64,0/109 53-34-22 59% +63  
+
+-------------------------------------------------------------------
