@@ -53,44 +53,87 @@ Private Type PROCESS_INFORMATION
   dwThreadID As Long
 End Type
 
-Private Declare Function CreatePipe _
-                Lib "kernel32" (phReadPipe As Long, _
-                                phWritePipe As Long, _
-                                lpPipeAttributes As Any, _
-                                ByVal nSize As Long) As Long
-Private Declare Function ReadFile _
-                Lib "kernel32" (ByVal hFile As Long, _
-                                lpBuffer As Any, _
-                                ByVal nNumberOfBytesToRead As Long, _
-                                lpNumberOfBytesRead As Long, _
-                                lpOverlapped As Any) As Long
-Private Declare Function CreateProcess _
-                Lib "kernel32" _
-                Alias "CreateProcessA" (ByVal lpApplicationName As String, _
-                                        ByVal lpCommandLine As String, _
-                                        lpProcessAttributes As Any, _
-                                        lpThreadAttributes As Any, _
-                                        ByVal bInheritHandles As Long, _
-                                        ByVal dwCreationFlags As Long, _
-                                        lpEnvironment As Any, _
-                                        ByVal lpCurrentDriectory As String, _
-                                        lpStartupInfo As STARTUPINFO, _
-                                        lpProcessInformation As PROCESS_INFORMATION) As Long
-Private Declare Function GetCurrentProcess Lib "kernel32" () As Long
-Private Declare Function DuplicateHandle _
-                Lib "kernel32" (ByVal hSourceProcessHandle As Long, _
-                                ByVal hSourceHandle As Long, _
-                                ByVal hTargetProcessHandle As Long, _
-                                lpTargetHandle As Long, _
-                                ByVal dwDesiredAccess As Long, _
-                                ByVal bInheritHandle As Long, _
-                                ByVal dwOptions As Long) As Long
-Private Declare Function CloseHandle Lib "kernel32" (ByVal hObject As Long) As Long
-Private Declare Function OemToCharBuff _
-                Lib "user32" _
-                Alias "OemToCharBuffA" (lpszSrc As Any, _
-                                        ByVal lpszDst As String, _
-                                        ByVal cchDstLength As Long) As Long
+#If VBA7 And Win64 Then
+'Note: Win64 = Office64 bit (not Windows 64 bit)
+  Private Declare PtrSafe Function CreatePipe _
+                  Lib "kernel32" (phReadPipe As Long, _
+                                  phWritePipe As Long, _
+                                  lpPipeAttributes As Any, _
+                                  ByVal nSize As Long) As Long
+  Private Declare PtrSafe Function ReadFile _
+                  Lib "kernel32" (ByVal hFile As Long, _
+                                  lpBuffer As Any, _
+                                  ByVal nNumberOfBytesToRead As Long, _
+                                  lpNumberOfBytesRead As Long, _
+                                  lpOverlapped As Any) As Long
+  Private Declare PtrSafe Function CreateProcess _
+                  Lib "kernel32" _
+                  Alias "CreateProcessA" (ByVal lpApplicationName As String, _
+                                          ByVal lpCommandLine As String, _
+                                          lpProcessAttributes As Any, _
+                                          lpThreadAttributes As Any, _
+                                          ByVal bInheritHandles As Long, _
+                                          ByVal dwCreationFlags As Long, _
+                                          lpEnvironment As Any, _
+                                          ByVal lpCurrentDriectory As String, _
+                                          lpStartupInfo As STARTUPINFO, _
+                                          lpProcessInformation As PROCESS_INFORMATION) As Long
+  Private Declare PtrSafe Function GetCurrentProcess Lib "kernel32" () As Long
+  Private Declare PtrSafe Function DuplicateHandle _
+                  Lib "kernel32" (ByVal hSourceProcessHandle As Long, _
+                                  ByVal hSourceHandle As Long, _
+                                  ByVal hTargetProcessHandle As Long, _
+                                  lpTargetHandle As Long, _
+                                  ByVal dwDesiredAccess As Long, _
+                                  ByVal bInheritHandle As Long, _
+                                  ByVal dwOptions As Long) As Long
+  Private Declare PtrSafe Function CloseHandle Lib "kernel32" (ByVal hObject As Long) As Long
+  Private Declare PtrSafe Function OemToCharBuff _
+                  Lib "user32" _
+                  Alias "OemToCharBuffA" (lpszSrc As Any, _
+                                          ByVal lpszDst As String, _
+                                          ByVal cchDstLength As Long) As Long
+#Else
+  Private Declare Function CreatePipe _
+                  Lib "kernel32" (phReadPipe As Long, _
+                                  phWritePipe As Long, _
+                                  lpPipeAttributes As Any, _
+                                  ByVal nSize As Long) As Long
+  Private Declare Function ReadFile _
+                  Lib "kernel32" (ByVal hFile As Long, _
+                                  lpBuffer As Any, _
+                                  ByVal nNumberOfBytesToRead As Long, _
+                                  lpNumberOfBytesRead As Long, _
+                                  lpOverlapped As Any) As Long
+  Private Declare Function CreateProcess _
+                  Lib "kernel32" _
+                  Alias "CreateProcessA" (ByVal lpApplicationName As String, _
+                                          ByVal lpCommandLine As String, _
+                                          lpProcessAttributes As Any, _
+                                          lpThreadAttributes As Any, _
+                                          ByVal bInheritHandles As Long, _
+                                          ByVal dwCreationFlags As Long, _
+                                          lpEnvironment As Any, _
+                                          ByVal lpCurrentDriectory As String, _
+                                          lpStartupInfo As STARTUPINFO, _
+                                          lpProcessInformation As PROCESS_INFORMATION) As Long
+  Private Declare Function GetCurrentProcess Lib "kernel32" () As Long
+  Private Declare Function DuplicateHandle _
+                  Lib "kernel32" (ByVal hSourceProcessHandle As Long, _
+                                  ByVal hSourceHandle As Long, _
+                                  ByVal hTargetProcessHandle As Long, _
+                                  lpTargetHandle As Long, _
+                                  ByVal dwDesiredAccess As Long, _
+                                  ByVal bInheritHandle As Long, _
+                                  ByVal dwOptions As Long) As Long
+  Private Declare Function CloseHandle Lib "kernel32" (ByVal hObject As Long) As Long
+  Private Declare Function OemToCharBuff _
+                  Lib "user32" _
+                  Alias "OemToCharBuffA" (lpszSrc As Any, _
+                                          ByVal lpszDst As String, _
+                                          ByVal cchDstLength As Long) As Long
+#End If
+                                        
 
 ' Function GetCommandOutput
 '

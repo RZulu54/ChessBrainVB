@@ -1,47 +1,47 @@
 Type=Exe
 Reference=*\G{420B2830-E718-11CF-893D-00A0C9054228}#1.0#0#C:\Windows\SysWOW64\scrrun.dll#Microsoft Scripting Runtime
-Module=basBoard; Modules\Board.bas
+Module=basSearch; Modules\Search.bas
 Module=basBook; Modules\Book.bas
 Module=basConst; Modules\Const.bas
-Module=basIO; Modules\IO.bas
-Module=basChessBrainVB; Modules\ChessBrainVB.bas
 Module=basEPD; Modules\EPD.bas
-Module=basSearch; Modules\Search.bas
-Form=Forms\DebugMain.frm
-Module=basEval; Modules\Eval.bas
-Module=basHash; Modules\Hash.bas
-RelatedDoc=ChessBrainVB.ini
-Module=basTime; Modules\Time.bas
+Module=basIO; Modules\IO.bas
+Module=basBoard; Modules\Board.bas
 Form=Forms\Main.frm
+Module=basEval; Modules\Eval.bas
+Module=basChessBrainVB; Modules\ChessBrainVB.bas
+Module=basHash; Modules\Hash.bas
+Module=basTime; Modules\Time.bas
 Module=basDebug; Modules\Debug.bas
+RelatedDoc=ChessBrainVB.ini
 Class=clsHashMap; Modules\HashMap.cls
 Module=basCmdOutput; Modules\CmdOutput.bas
 Module=basProcess; Modules\Process.bas
-IconForm="frmDebugMain"
+IconForm="frmMain"
 Startup="Sub Main"
 HelpFile=""
 Title="ChessBrainVB"
-ExeName32="ChessBrainVB_debug.exe"
-Command32="-log"
+ExeName32="ChessBrainVB.exe"
+Command32=""
 Name="ChessBrainVB"
 HelpContextID="0"
 CompatibleMode="0"
 MajorVer=4
 MinorVer=0
-RevisionVer=0
+RevisionVer=1
 AutoIncrementVer=0
 ServerSupportFiles=0
-VersionComments="ChessBrainVB by Roger Zuehlsdorf 2023 / based on LarsenVB and Stockfish"
+VersionComments="ChessBrainVB by Roger Zuehlsdorf 2023 / based on LarsenVB by Luca Dormio and Faile by Adrien M.Regimbald / Stockfish "
 VersionCompanyName="-"
-VersionFileDescription="ChessBrainVB"
-CondComp="DEBUG_MODE = -1"
+VersionFileDescription="VB6 chess engine"
+VersionLegalCopyright="Roger Zuehlsdorf (2016)"
+CondComp="DEBUG_MODE = 0"
 CompilationType=0
 OptimizationType=0
 FavorPentiumPro(tm)=-1
 CodeViewDebugInfo=0
 NoAliasing=0
-BoundsCheck=0
-OverflowCheck=0
+BoundsCheck=-1
+OverflowCheck=-1
 FlPointCheck=-1
 FDIVCheck=-1
 UnroundedFP=-1
@@ -50,8 +50,10 @@ Unattended=0
 Retained=0
 ThreadPerObject=0
 MaxNumberOfThreads=1
-RemoveUnusedControlInfo=0
 DebugStartupOption=0
 
 [MS Transaction Server]
 AutoRefresh=1
+
+[CodeSMART]
+Task_UID=02_07_17_16_31_28

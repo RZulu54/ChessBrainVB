@@ -621,7 +621,7 @@ Public Function InsertIntoHashMap(Hashkey As THashKey, _
   ZobristHash1 = Hashkey.HashKey1: ZobristHash2 = Hashkey.Hashkey2
   ClusterIndex = HashKeyComputeMap() * HASH_CLUSTER
   ReplaceIndex = 0
-  moHashMap.ReadMapHashCluster ClusterIndex, VarPtr(HashCluster(0)), HashClusterLen ' read this cluster only
+  moHashMap.ReadMapHashCluster ClusterIndex, CLng(VarPtr(HashCluster(0))), HashClusterLen ' read this cluster only
   If HashAccessCnt < 2100000000 Then HashAccessCnt = HashAccessCnt + 1
   
   For i = 0 To HASH_CLUSTER - 1
@@ -658,7 +658,7 @@ Public Function InsertIntoHashMap(Hashkey As THashKey, _
       .PvHit = PvHit
       If ThreadNum >= 0 Then .ThreadNum = ThreadNum
       '--- Write Hash Map: replace index in Cluster only
-      moHashMap.WriteMapHashEntry ReplaceIndex, VarPtr(HashCluster(ReplaceIndex - ClusterIndex))
+      moHashMap.WriteMapHashEntry ReplaceIndex, CLng(VarPtr(HashCluster(ReplaceIndex - ClusterIndex)))
       Debug.Assert .MoveFrom = 0 Or Board(.MoveFrom) <> NO_PIECE
     End If
   End With
@@ -678,7 +678,7 @@ Public Function IsInHashMap(Hashkey As THashKey, _
   IsInHashMap = False: ClearMove HashMove: EvalType = TT_NO_BOUND: Eval = VALUE_NONE: StaticEval = VALUE_NONE: HashDepth = -MAX_GAME_MOVES
   ZobristHash1 = Hashkey.HashKey1: ZobristHash2 = Hashkey.Hashkey2
   IndexKey = HashKeyComputeMap() * HASH_CLUSTER
-  moHashMap.ReadMapHashCluster IndexKey, VarPtr(HashCluster(0)), HashClusterLen
+  moHashMap.ReadMapHashCluster IndexKey, CLng(VarPtr(HashCluster(0))), HashClusterLen
 
   For i = 0 To HASH_CLUSTER - 1
 
@@ -740,7 +740,7 @@ Public Function IsInHashMap(Hashkey As THashKey, _
             If .Generation <> HashGeneration Then
               .Generation = HashGeneration ' Update generation, each game move is a new generation
               '--- Write Hash Map: replace index in Cluster only
-              moHashMap.WriteMapHashEntry IndexKey + i, VarPtr(HashCluster(i))
+              moHashMap.WriteMapHashEntry IndexKey + i, CLng(VarPtr(HashCluster(i)))
             End If
             'If ThreadNum >= 0 Then If .ThreadNum <> GetMax(0, ThreadNum) Then HashFoundFromOtherThread = HashFoundFromOtherThread + 1
             Exit For
@@ -846,7 +846,7 @@ End Sub
 Public Function WriteMainThreadStatus(ByVal ilNewThreadStatus As Long) As Long
   Debug.Assert NoOfThreads > 1
   SingleThreadStatus(0) = ilNewThreadStatus
-  moHashMap.WriteMapPos HashMapThreadStatusPtr(0), VarPtr(ilNewThreadStatus), CLng(LenB(ilNewThreadStatus))
+  moHashMap.WriteMapPos HashMapThreadStatusPtr(0), CLng(VarPtr(ilNewThreadStatus)), CLng(LenB(ilNewThreadStatus))
   If bThreadTrace Then WriteTrace "WriteMainThreadStatus: " & HashMapThreadStatusPtr(0)
 End Function
 
@@ -854,7 +854,7 @@ Public Function ReadMainThreadStatus() As Long
   Static LastRead      As Long
   Dim MainThreadStatus As Long
   Debug.Assert NoOfThreads > 1
-  moHashMap.ReadMapPos HashMapThreadStatusPtr(0), VarPtr(MainThreadStatus), CLng(LenB(MainThreadStatus))
+  moHashMap.ReadMapPos HashMapThreadStatusPtr(0), CLng(VarPtr(MainThreadStatus)), CLng(LenB(MainThreadStatus))
   SingleThreadStatus(0) = MainThreadStatus
   ReadMainThreadStatus = MainThreadStatus
   If bThreadTrace Then If LastRead <> ReadMainThreadStatus Then WriteTrace "ReadMainThreadStatus:Threadnum=" & ThreadNum & ", Ptr:" & HashMapThreadStatusPtr(0) & ", MainStatus:" & ReadMainThreadStatus & " / " & Now()
@@ -866,14 +866,14 @@ Public Function WriteHelperThreadStatus(ByVal ilThreadNum As Long, _
   ' Write run status for current thread
   Debug.Assert NoOfThreads > 1 And ilThreadNum > 0
   SingleThreadStatus(ilThreadNum) = ilNewThreadStatus
-  moHashMap.WriteMapPos HashMapThreadStatusPtr(ilThreadNum), VarPtr(ilNewThreadStatus), CLng(LenB(ilNewThreadStatus))
+  moHashMap.WriteMapPos HashMapThreadStatusPtr(ilThreadNum), CLng(VarPtr(ilNewThreadStatus)), CLng(LenB(ilNewThreadStatus))
 End Function
 
 Public Function ReadHelperThreadStatus(ByVal ilThreadNum As Long) As Long
   ' Write run status for current thread
   Dim HelperThreadStatus As Long
   Debug.Assert NoOfThreads > 1 And ilThreadNum > 0
-  moHashMap.ReadMapPos HashMapThreadStatusPtr(ilThreadNum), VarPtr(HelperThreadStatus), CLng(LenB(HelperThreadStatus))
+  moHashMap.ReadMapPos HashMapThreadStatusPtr(ilThreadNum), CLng(VarPtr(HelperThreadStatus)), CLng(LenB(HelperThreadStatus))
   SingleThreadStatus(ilThreadNum) = HelperThreadStatus
   ReadHelperThreadStatus = HelperThreadStatus
 End Function
@@ -881,28 +881,28 @@ End Function
 Public Function WriteMapGameData() As Long
   ' Write game moves to map for other threads
   Debug.Assert NoOfThreads > 1
-  moHashMap.WriteMapPos HashMapBoardPtr, VarPtr(Board(0)), CLng(LenB(Board(0)) * MAX_BOARD)
-  moHashMap.WriteMapPos HashMapMovedPtr, VarPtr(Moved(0)), CLng(LenB(Moved(0)) * MAX_BOARD)
-  moHashMap.WriteMapPos HashMapWhiteToMovePtr, VarPtr(bWhiteToMove), CLng(LenB(bWhiteToMove))
-  moHashMap.WriteMapPos HashMapGameMovesCntPtr, VarPtr(GameMovesCnt), CLng(LenB(GameMovesCnt))
+  moHashMap.WriteMapPos HashMapBoardPtr, CLng(VarPtr(Board(0))), CLng(LenB(Board(0)) * MAX_BOARD)
+  moHashMap.WriteMapPos HashMapMovedPtr, CLng(VarPtr(Moved(0))), CLng(LenB(Moved(0)) * MAX_BOARD)
+  moHashMap.WriteMapPos HashMapWhiteToMovePtr, CLng(VarPtr(bWhiteToMove)), CLng(LenB(bWhiteToMove))
+  moHashMap.WriteMapPos HashMapGameMovesCntPtr, CLng(VarPtr(GameMovesCnt)), CLng(LenB(GameMovesCnt))
   arGameMoves(MAX_GAME_MOVES - 1).Target = Fifty ' tricky fix to avoid new map size
-  moHashMap.WriteMapPos HashMapGameMovesPtr, VarPtr(arGameMoves(0)), CLng(LenB(arGameMoves(0)) * MAX_GAME_MOVES)
-  moHashMap.WriteMapPos HashMapGamePosHashPtr, VarPtr(GamePosHash(0)), CLng(LenB(GamePosHash(0)) * MAX_GAME_MOVES)
+  moHashMap.WriteMapPos HashMapGameMovesPtr, CLng(VarPtr(arGameMoves(0))), CLng(LenB(arGameMoves(0)) * MAX_GAME_MOVES)
+  moHashMap.WriteMapPos HashMapGamePosHashPtr, CLng(VarPtr(GamePosHash(0))), CLng(LenB(GamePosHash(0)) * MAX_GAME_MOVES)
 End Function
 
 Public Function ReadMapGameData() As Long
   ' Read game moves to map for other threads
   Dim bToMove As Boolean
   Debug.Assert NoOfThreads > 1
-  moHashMap.ReadMapPos HashMapBoardPtr, VarPtr(Board(0)), CLng(LenB(Board(0)) * MAX_BOARD)
+  moHashMap.ReadMapPos HashMapBoardPtr, CLng(VarPtr(Board(0))), CLng(LenB(Board(0)) * MAX_BOARD)
   InitEpArr
-  moHashMap.ReadMapPos HashMapMovedPtr, VarPtr(Moved(0)), CLng(LenB(Moved(0)) * MAX_BOARD)
-  moHashMap.ReadMapPos HashMapWhiteToMovePtr, VarPtr(bToMove), CLng(LenB(bToMove))
+  moHashMap.ReadMapPos HashMapMovedPtr, CLng(VarPtr(Moved(0))), CLng(LenB(Moved(0)) * MAX_BOARD)
+  moHashMap.ReadMapPos HashMapWhiteToMovePtr, CLng(VarPtr(bToMove)), CLng(LenB(bToMove))
   bWhiteToMove = bToMove: bCompIsWhite = bWhiteToMove
-  moHashMap.ReadMapPos HashMapGameMovesCntPtr, VarPtr(GameMovesCnt), CLng(LenB(GameMovesCnt))
-  moHashMap.ReadMapPos HashMapGameMovesPtr, VarPtr(arGameMoves(0)), CLng(LenB(arGameMoves(0)) * MAX_GAME_MOVES)
+  moHashMap.ReadMapPos HashMapGameMovesCntPtr, CLng(VarPtr(GameMovesCnt)), CLng(LenB(GameMovesCnt))
+  moHashMap.ReadMapPos HashMapGameMovesPtr, CLng(VarPtr(arGameMoves(0))), CLng(LenB(arGameMoves(0)) * MAX_GAME_MOVES)
   Fifty = arGameMoves(MAX_GAME_MOVES - 1).Target ' tricky fix to avoid new map size
-  moHashMap.ReadMapPos HashMapGamePosHashPtr, VarPtr(GamePosHash(0)), CLng(LenB(GamePosHash(0)) * MAX_GAME_MOVES)
+  moHashMap.ReadMapPos HashMapGamePosHashPtr, CLng(VarPtr(GamePosHash(0))), CLng(LenB(GamePosHash(0)) * MAX_GAME_MOVES)
   InitPieceSquares
 End Function
 
@@ -911,7 +911,7 @@ Public Function ClearMapBestPVforThread() As Long
   Erase BestPV()
 
   For th = 0 To MAX_THREADS - 1
-    moHashMap.WriteMapPos HashMapBestPVPtr(th), VarPtr(BestPV(0)), CLng(LenB(BestPV(0)) * 10)
+    moHashMap.WriteMapPos HashMapBestPVPtr(th), CLng(VarPtr(BestPV(0))), CLng(LenB(BestPV(0)) * 10)
   Next
 
 End Function
@@ -935,7 +935,7 @@ Public Function WriteMapBestPVforThread(ByVal CompletedDepth As Long, _
   End If
   BestPV(0).Target = CompletedDepth: BestPV(0).SeeValue = BestScore: BestPV(0).From = GetMin(9, PVLength(1)): BestPV(0).OrderValue = Nodes
   If bThreadTrace Then WriteTrace "WriteMapBestPVforThread: D:" & CompletedDepth & ", PV:" & MoveText(BestPV(1)) & " / " & Now()
-  moHashMap.WriteMapPos HashMapBestPVPtr(ThreadNum), VarPtr(BestPV(0)), CLng(LenB(BestPV(0)) * 10)
+  moHashMap.WriteMapPos HashMapBestPVPtr(ThreadNum), CLng(VarPtr(BestPV(0))), CLng(LenB(BestPV(0)) * 10)
 End Function
 
 Public Function ReadMapBestPVforThread(ByVal SelThread As Long, _
@@ -950,7 +950,7 @@ Public Function ReadMapBestPVforThread(ByVal SelThread As Long, _
   ReadMapBestPVforThread = False
   Erase BestPV
   ' Use PV0 to get some values... not nice...
-  moHashMap.ReadMapPos HashMapBestPVPtr(SelThread), VarPtr(BestPV(0)), CLng(LenB(BestPV(0)) * 10)
+  moHashMap.ReadMapPos HashMapBestPVPtr(SelThread), CLng(VarPtr(BestPV(0))), CLng(LenB(BestPV(0)) * 10)
   CompletedDepth = BestPV(0).Target: BestScore = BestPV(0).SeeValue: BestPVLength = BestPV(0).From: HelperNodes = BestPV(0).OrderValue
   If BestPV(1).From = 0 Or BestPV(1).Target = 0 Then
     If bThreadTrace Then WriteTrace "!!!???ReadMapBestPVforThread:PV Empty Thread:" & SelThread & ", Completed Depth:" & CompletedDepth

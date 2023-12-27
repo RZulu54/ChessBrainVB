@@ -21,7 +21,7 @@ Black#Schwarz#
 White to move#Weiss am Zug#
 Black to move#Schwarz am Zug#
 Flip board#Drehe Brett#
-Level: Beginner#Anfänger#
+Level: Beginner#Anfaenger#
 Level: Advanced#Fortgeschritten#
 Level: Expert#Experte#
 Computer move#Computer Zug#

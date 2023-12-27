@@ -4,47 +4,95 @@ Attribute VB_Name = "basIO"
 '= Winboard / UCI communication / output of think results
 '==================================================
 Option Explicit
-'--- Win32 API functions
-Declare Function GetStdHandle Lib "kernel32" (ByVal nStdHandle As Long) As Long
-Declare Function CloseHandle Lib "kernel32" (ByVal hObject As Long) As Long
-Declare Function PeekNamedPipe _
-        Lib "kernel32" (ByVal hNamedPipe As Long, _
-                        lpBuffer As Any, _
-                        ByVal nBufferSize As Long, _
-                        lpBytesRead As Long, _
-                        lpTotalBytesAvail As Long, _
-                        lpBytesLeftThisMessage As Long) As Long
-Declare Function ReadFile _
-        Lib "kernel32" (ByVal hFile As Long, _
-                        lpBuffer As Any, _
-                        ByVal nNumberOfBytesToRead As Long, _
-                        lpNumberOfBytesRead As Long, _
-                        lpOverlapped As Any) As Long
-Declare Function WriteFile _
-        Lib "kernel32" (ByVal hFile As Long, _
-                        ByVal lpBuffer As String, _
-                        ByVal nNumberOfBytesToWrite As Long, _
-                        lpNumberOfBytesWritten As Long, _
-                        lpOverlapped As Any) As Long
-Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
-Declare Function GetPrivateProfileString _
-        Lib "kernel32" _
-        Alias "GetPrivateProfileStringA" (ByVal lpApplicationName As String, _
-                                          ByVal lpKeyName As Any, _
-                                          ByVal lpDefault As String, _
-                                          ByVal lpReturnedString As String, _
-                                          ByVal nSize As Long, _
-                                          ByVal lpFileName As String) As Long
-Declare Function WritePrivateProfileString _
-        Lib "kernel32" _
-        Alias "WritePrivateProfileStringA" (ByVal lpApplicationName As String, _
+'--- Win API functions
+
+#If VBA7 And Win64 Then
+'Note: Win64 = Office64 bit (not Windows 64 bit)
+  Declare PtrSafe Function GetStdHandle Lib "kernel32" (ByVal nStdHandle As Long) As Long
+  Declare PtrSafe Function CloseHandle Lib "kernel32" (ByVal hObject As Long) As Long
+  Declare PtrSafe Function PeekNamedPipe _
+          Lib "kernel32" (ByVal hNamedPipe As Long, _
+                          lpBuffer As Any, _
+                          ByVal nBufferSize As Long, _
+                          lpBytesRead As Long, _
+                          lpTotalBytesAvail As Long, _
+                          lpBytesLeftThisMessage As Long) As Long
+  Declare PtrSafe Function ReadFile _
+          Lib "kernel32" (ByVal hFile As Long, _
+                          lpBuffer As Any, _
+                          ByVal nNumberOfBytesToRead As Long, _
+                          lpNumberOfBytesRead As Long, _
+                          lpOverlapped As Any) As Long
+  Declare PtrSafe Function WriteFile _
+          Lib "kernel32" (ByVal hFile As Long, _
+                          ByVal lpBuffer As String, _
+                          ByVal nNumberOfBytesToWrite As Long, _
+                          lpNumberOfBytesWritten As Long, _
+                          lpOverlapped As Any) As Long
+  Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
+  Declare PtrSafe Function GetPrivateProfileString _
+          Lib "kernel32" _
+          Alias "GetPrivateProfileStringA" (ByVal lpApplicationName As String, _
                                             ByVal lpKeyName As Any, _
-                                            ByVal lpString As Any, _
+                                            ByVal lpDefault As String, _
+                                            ByVal lpReturnedString As String, _
+                                            ByVal nSize As Long, _
                                             ByVal lpFileName As String) As Long
-Public Declare Sub ZeroMemory2 _
-               Lib "kernel32.dll" _
-               Alias "RtlZeroMemory" (Destination As Any, _
-                                      ByVal Length As Long)
+  Declare PtrSafe Function WritePrivateProfileString _
+          Lib "kernel32" _
+          Alias "WritePrivateProfileStringA" (ByVal lpApplicationName As String, _
+                                              ByVal lpKeyName As Any, _
+                                              ByVal lpString As Any, _
+                                              ByVal lpFileName As String) As Long
+  Public Declare PtrSafe Sub ZeroMemory2 _
+                 Lib "kernel32.dll" _
+                 Alias "RtlZeroMemory" (Destination As Any, _
+                                        ByVal Length As Long)
+#Else
+  Declare Function GetStdHandle Lib "kernel32" (ByVal nStdHandle As Long) As Long
+  Declare Function CloseHandle Lib "kernel32" (ByVal hObject As Long) As Long
+  Declare Function PeekNamedPipe _
+          Lib "kernel32" (ByVal hNamedPipe As Long, _
+                          lpBuffer As Any, _
+                          ByVal nBufferSize As Long, _
+                          lpBytesRead As Long, _
+                          lpTotalBytesAvail As Long, _
+                          lpBytesLeftThisMessage As Long) As Long
+  Declare Function ReadFile _
+          Lib "kernel32" (ByVal hFile As Long, _
+                          lpBuffer As Any, _
+                          ByVal nNumberOfBytesToRead As Long, _
+                          lpNumberOfBytesRead As Long, _
+                          lpOverlapped As Any) As Long
+  Declare Function WriteFile _
+          Lib "kernel32" (ByVal hFile As Long, _
+                          ByVal lpBuffer As String, _
+                          ByVal nNumberOfBytesToWrite As Long, _
+                          lpNumberOfBytesWritten As Long, _
+                          lpOverlapped As Any) As Long
+  Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
+  Declare Function GetPrivateProfileString _
+          Lib "kernel32" _
+          Alias "GetPrivateProfileStringA" (ByVal lpApplicationName As String, _
+                                            ByVal lpKeyName As Any, _
+                                            ByVal lpDefault As String, _
+                                            ByVal lpReturnedString As String, _
+                                            ByVal nSize As Long, _
+                                            ByVal lpFileName As String) As Long
+  Declare Function WritePrivateProfileString _
+          Lib "kernel32" _
+          Alias "WritePrivateProfileStringA" (ByVal lpApplicationName As String, _
+                                              ByVal lpKeyName As Any, _
+                                              ByVal lpString As Any, _
+                                              ByVal lpFileName As String) As Long
+  Public Declare Sub ZeroMemory2 _
+                 Lib "kernel32.dll" _
+                 Alias "RtlZeroMemory" (Destination As Any, _
+                                        ByVal Length As Long)
+
+#End If
+                                      
+'-------------
 Public hStdIn  As Long   ' Handle Standard Input
 Public hStdOut As Long   ' Handle Standard Output
 Public Const STD_INPUT_HANDLE = -10&

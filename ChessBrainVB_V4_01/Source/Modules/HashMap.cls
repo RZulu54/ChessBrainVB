@@ -45,42 +45,83 @@ Private Type SECURITY_ATTRIBUTES
   bInheritHandle As Long
 End Type
 
-Private Declare Function CloseHandle Lib "kernel32" (ByVal hObject As Long) As Long
-Private Declare Sub CopyMemory _
-                Lib "kernel32" _
-                Alias "RtlMoveMemory" (ByVal Destination As Long, _
-                                       ByVal Source As Long, _
-                                       ByVal Length As Long)
-Private Declare Function RtlCompareMemory _
-                Lib "ntdll" (ByRef Source1 As Any, _
-                             ByRef Source2 As Any, _
-                             ByVal Length As Long) As Long
-                             
-Private Declare Function CreateFileMapping _
-                Lib "kernel32" _
-                Alias "CreateFileMappingA" (ByVal hFile As Long, _
-                                            ByVal lpFileMappigAttributes As Long, _
-                                            ByVal flProtect As Long, _
-                                            ByVal dwMaximumSizeHigh As Long, _
-                                            ByVal dwMaximumSizeLow As Long, _
+#If VBA7 And Win64 Then
+'Note: Win64 = Office64 bit (not Windows 64 bit)
+  Private Declare PtrSafe Function CloseHandle Lib "kernel32" (ByVal hObject As Long) As Long
+  Private Declare PtrSafe Sub CopyMemory _
+                  Lib "kernel32" _
+                  Alias "RtlMoveMemory" (ByVal Destination As Long, _
+                                         ByVal Source As Long, _
+                                         ByVal Length As Long)
+  Private Declare PtrSafe Function RtlCompareMemory _
+                  Lib "ntdll" (ByRef Source1 As Any, _
+                               ByRef Source2 As Any, _
+                               ByVal Length As Long) As Long
+                               
+  Private Declare PtrSafe Function CreateFileMapping _
+                  Lib "kernel32" _
+                  Alias "CreateFileMappingA" (ByVal hFile As Long, _
+                                              ByVal lpFileMappigAttributes As Long, _
+                                              ByVal flProtect As Long, _
+                                              ByVal dwMaximumSizeHigh As Long, _
+                                              ByVal dwMaximumSizeLow As Long, _
+                                              ByVal lpName As String) As Long
+  Private Declare PtrSafe Function MapViewOfFile _
+                  Lib "kernel32" (ByVal hFileMappingObject As Long, _
+                                  ByVal dwDesiredAccess As Long, _
+                                  ByVal dwFileOffsetHigh As Long, _
+                                  ByVal dwFileOffsetLow As Long, _
+                                  ByVal dwNumberOfBytesToMap As Long) As Long
+  Private Declare PtrSafe PtrSafe Function OpenFileMapping _
+                  Lib "kernel32" _
+                  Alias "OpenFileMappingA" (ByVal dwDesiredAccess As Long, _
+                                            ByVal bInheritHandle As Long, _
                                             ByVal lpName As String) As Long
-Private Declare Function MapViewOfFile _
-                Lib "kernel32" (ByVal hFileMappingObject As Long, _
-                                ByVal dwDesiredAccess As Long, _
-                                ByVal dwFileOffsetHigh As Long, _
-                                ByVal dwFileOffsetLow As Long, _
-                                ByVal dwNumberOfBytesToMap As Long) As Long
-Private Declare Function OpenFileMapping _
-                Lib "kernel32" _
-                Alias "OpenFileMappingA" (ByVal dwDesiredAccess As Long, _
-                                          ByVal bInheritHandle As Long, _
-                                          ByVal lpName As String) As Long
-Private Declare Function UnmapViewOfFile _
-                Lib "kernel32" (ByVal lpBaseAddress As Long) As Long
-Private Declare Sub ZeroMemory2 _
-                Lib "kernel32.dll" _
-                Alias "RtlZeroMemory" (Destination As Any, _
-                                       ByVal Length As Long)
+  Private Declare PtrSafe Function UnmapViewOfFile _
+                  Lib "kernel32" (ByVal lpBaseAddress As Long) As Long
+  Private Declare PtrSafe Sub ZeroMemory2 _
+                  Lib "kernel32.dll" _
+                  Alias "RtlZeroMemory" (Destination As Any, _
+                                         ByVal Length As Long)
+#Else
+  Private Declare Function CloseHandle Lib "kernel32" (ByVal hObject As Long) As Long
+  Private Declare Sub CopyMemory _
+                  Lib "kernel32" _
+                  Alias "RtlMoveMemory" (ByVal Destination As Long, _
+                                         ByVal Source As Long, _
+                                         ByVal Length As Long)
+  Private Declare Function RtlCompareMemory _
+                  Lib "ntdll" (ByRef Source1 As Any, _
+                               ByRef Source2 As Any, _
+                               ByVal Length As Long) As Long
+                               
+  Private Declare Function CreateFileMapping _
+                  Lib "kernel32" _
+                  Alias "CreateFileMappingA" (ByVal hFile As Long, _
+                                              ByVal lpFileMappigAttributes As Long, _
+                                              ByVal flProtect As Long, _
+                                              ByVal dwMaximumSizeHigh As Long, _
+                                              ByVal dwMaximumSizeLow As Long, _
+                                              ByVal lpName As String) As Long
+  Private Declare Function MapViewOfFile _
+                  Lib "kernel32" (ByVal hFileMappingObject As Long, _
+                                  ByVal dwDesiredAccess As Long, _
+                                  ByVal dwFileOffsetHigh As Long, _
+                                  ByVal dwFileOffsetLow As Long, _
+                                  ByVal dwNumberOfBytesToMap As Long) As Long
+  Private Declare Function OpenFileMapping _
+                  Lib "kernel32" _
+                  Alias "OpenFileMappingA" (ByVal dwDesiredAccess As Long, _
+                                            ByVal bInheritHandle As Long, _
+                                            ByVal lpName As String) As Long
+  Private Declare Function UnmapViewOfFile _
+                  Lib "kernel32" (ByVal lpBaseAddress As Long) As Long
+  Private Declare Sub ZeroMemory2 _
+                  Lib "kernel32.dll" _
+                  Alias "RtlZeroMemory" (Destination As Any, _
+                                         ByVal Length As Long)
+#End If
+                                       
 Private hObj           As Long
 Private lpMap          As Long
 Private mSize          As Long
@@ -158,7 +199,7 @@ Public Sub OpenMap(ByVal Name As String, ByVal Size As Long)
     End If
   Next
   mSize = Size
-  CheckDataPtr = VarPtr(CheckData(0))
+  CheckDataPtr = CLng(VarPtr(CheckData(0)))
 End Sub
 
 Public Sub ReadMapHashCluster(ByVal Index As Long, _
@@ -174,10 +215,10 @@ Public Sub ReadMapHashCluster(ByVal Index As Long, _
   For i = 1 To 3 ' about 1 hash collision for 1.000.000.000 endgame nodes measured
     CopyMemory ByVal lpData, ByVal Ptr, ByVal Size
     If bHashVerify Then
-      ' If bHashTrace Then WriteTrace "ReadMapHashCluster:Verify :" & VarPtr(VerifyArr(0)) & "Ptr:" & Ptr & Now()
-      CopyMemory ByVal VarPtr(VerifyArr(0)), ByVal Ptr, ByVal Size
-      ' If bHashTrace Then WriteTrace "ReadMapHashCluster: Compare " & VarPtr(VerifyArr(0)) & "Ptr:" & Ptr & Now()
-      If RtlCompareMemory(ByVal Ptr, ByVal VarPtr(VerifyArr(0)), ByVal Size) <> Size Then
+      ' If bHashTrace Then WriteTrace "ReadMapHashCluster:Verify :" & Clng(VarPtr(VerifyArr(0)) & "Ptr:" & Ptr & Now()
+      CopyMemory ByVal CLng(VarPtr(VerifyArr(0))), ByVal Ptr, ByVal Size
+      ' If bHashTrace Then WriteTrace "ReadMapHashCluster: Compare " & Clng(VarPtr(VerifyArr(0)) & "Ptr:" & Ptr & Now()
+      If RtlCompareMemory(ByVal Ptr, ByVal CLng(VarPtr(VerifyArr(0))), ByVal Size) <> Size Then
         ' Difference found => try again
         If bTraceHashCollision Then WriteTrace "HashMapDifference: Read " & Index & "/" & i & "/ Nodes:" & Nodes & " / " & Now()
       Else
