@@ -12,7 +12,7 @@ All chess rules are implemented: castling, En passant, Threfold repetition, 50 m
 Support for up to 64 cores, maximum transposition table hash size is 1.4 GB.
 Not supported: endgame tablebases, pondering.
  
-2. Excel/Word version: 
+2. Excel/Word version (for 32 bit and 64 bit Office): 
 Use ExcelChessBrainX.xlsm, WordChessBrainX.docm (full install needed, viewer not working) to play games using the GUI implemented in VBA forms.
 The Excel edition needs the Excel file only. All data needed (i.e. opening book) is stored in worksheets. 
 Playing strength of the VBA version is about 2600 ELO. Visual Basic for Applications (VBA) is used here for the chess engine. 
