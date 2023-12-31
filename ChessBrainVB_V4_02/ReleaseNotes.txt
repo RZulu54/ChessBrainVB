@@ -4,6 +4,15 @@
 = Release notes for ChessBrainVB chess engine 
 =======================================================================================
 
+Changes from version 4.01 to 4.02 (Roger Zuehlsdorf 31-DEC-2023)
+----------------------------------------------------------------
+- Bugfix for UCI "position startpos" command  (thanks to Gabor Szots)
+
+
+Changes from version 4.00 to 4.01 (Roger Zuehlsdorf 27-DEC-2023)
+----------------------------------------------------------------
+- Added support for Ms-Office 64 bit
+
 Changes from version 3.74 to 4.00 (Roger Zuehlsdorf 24-DEC-2023)
 ----------------------------------------------------------------
 - Several bug fixes

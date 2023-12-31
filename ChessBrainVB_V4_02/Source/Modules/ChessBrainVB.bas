@@ -395,7 +395,7 @@ Public Sub ParseCommand(ByVal sCommand As String)
     If UCIMode Then
       '--- get UCI command
       sCurrentCmd = Trim$(sCurrentCmd)
-      If sCurrentCmd = "ucinewgame" Or sCurrentCmd = "position startpos" Then
+      If sCurrentCmd = "ucinewgame" Then
         If bWinboardTrace Then WriteTrace "UCI: " & sCurrentCmd & " " & Now()
         InitGame
         GoTo NextCmd

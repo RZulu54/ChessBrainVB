@@ -53,7 +53,7 @@ Begin VB.Form frmMain
    End
    Begin VB.Label lblDescr 
       BackStyle       =   0  'Transparent
-      Caption         =   "ChessBrainVB 4.00 by Roger Zuehlsdorf 2023"
+      Caption         =   "ChessBrainVB 4.02 by Roger Zuehlsdorf 2023"
       BeginProperty Font 
          Name            =   "MS Sans Serif"
          Size            =   13.5
