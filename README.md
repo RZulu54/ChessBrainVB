@@ -18,6 +18,8 @@ The Excel edition needs the Excel file only. All data needed (i.e. opening book)
 Playing strength of the VBA version is about 2600 ELO. Visual Basic for Applications (VBA) is used here for the chess engine. 
 This pseudo code is 30 times slower ( 5.000-10.000 position/sec) than the compiled VB6 EXE.
 
+Virus scanners sometimes give a false positive alert. To be sure the files can be checked a www.virustotal.com .
+
 Hint: The program "Alice in Chessland" by Angelo Spartalis has a very nice GUI and is based on ChessbrainVB V3.05. 
 Link: https://www.spartalis.gr/chess/index_ENG.html
 
