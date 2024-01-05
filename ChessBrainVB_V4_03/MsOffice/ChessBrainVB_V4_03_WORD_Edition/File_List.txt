@@ -1,0 +1,52 @@
+==================================
+= File_List.txt
+= for ChessBrainVB V2.0 by Roger Zuehlsdorf
+==================================
+
+BookEdit.exe :  Opening book editor for *.opi,*.opn file. Sources see engine LarsenVB at "xoomer.virgilio.it/ludormio/download.htm"
+
+CB_THREAD0.TXT: generate if multiple cores are used. Used for stopping helper threads if this file is no longer locked by main thread.
+
+ChessBrainVB.exe: Win32 winboard chess engine => please use this optimized native x86  code file for winboard compatible GUIs like ARENA 
+
+ChessBrainVB.vbp: Visual Basic 6 project file for winboard engine. with compile optmization setting (no array bound checks,...)
+
+ChessBrainVB_Book.opi
+ChessBrainVB_Book.opn: Opening book (can be disabled in ChessbasVB.INI file)
+
+ChessBrainVB_debug.exe: debug version  for direct run without winboard 
+ChessBrainVB_debug.vbp: Visual Basic 6 project file for winboard engine.Debug version without compile optmization and debug form
+
+ChessBrainVB_Language_DE.txt:  german translation text file for Excel/Word GUI
+
+ChessBrainVB_PCode.exe:   Win32 winboard chess engine - NOT native x86 code but about 15 times slower pseudo code (interpreted at runtime)
+                                           This is comparable to the MSOffice VBA engine pseudo code (office compilation option is a syntax check only)
+ChessBrainVB_PCode.vbp: Visual Basic 6 project file for winboard engine. Pseudo-Code compile version comparable to Office VBA speed.
+
+ChessBrainVB_Notes.txt: notes about this engine
+
+ChessBrainVB_Source_FormattedHTML.html: Formatted VB source code in one HTML file (for quick reference and interested readers)
+
+ChessBrainVB_Source_FormattedRTF.RTF: Formatted VB source code in one RTF file (for quick reference and interested readers)
+
+ChessBrainVB_Source_PlainText.txt: VB source code in one plain text file (for quick reference and interested readers)
+
+ChessBrainVBA_Screenshot.jpg: Picture of the EXCEL ChessBrainVB GUI (ExcelChessBrainX.xlsm)
+
+Copying.txt:  GNU GENERAL PUBLIC LICENSE V3
+
+ExcelChessBrainX.xlsm:    EXCEL ChessBrainVB GUI. ALT+F8 to run auto_open macro (enable macros first)
+
+Fathom.exe:  helper exe for access to endgame tablebases, see source in Github: https://github.com/basil00/Fathom
+
+InBetween.exe:  UCI interface needed for Fritz/Chessbase GUI
+
+VB_Technical_Notes.txt: Technical hints about Visual Basic programming
+
+Wb2Uci.exe: select this file to run this winboard enginge with UCI protocol
+Wb2Uci.eng: definition file for Wb2Uci.exe
+Wb2Uci.html: help file for Wb2Uci.eng
+
+WordChessBrainX.docm:   WORD ChessBrainVB GUI. ALT+F8 to run autoopen macro (enable macros first)
+
+==================================

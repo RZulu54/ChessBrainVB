@@ -1,0 +1,135 @@
+=======================================================================================
+= ChessBrainVB_Notes.txt
+= by Roger Zuehlsdorf (2023 / V4.00)
+= Github:  https://github.com/RZulu54/ChessBrainVB 
+=======================================================================================
+
+This chess engine (32 bit Windows) for winboard and MsOfficeVBA (EXCEL/WORD) is based on the source of the engine "LarsenVB" 
+by Luca Dormio (http://xoomer.virgilio.it/ludormio/download.htm).
+LarsenVB was inspired by "Faile 0.6 by" Adrien M. Regimbald, which was also the base for the engine "Sjeng".
+I want to thank Luca Dormio for his permission to use his LarsenVB source.
+
+----------------------
+Note: - a full Excel/Word install is needed for the Office version. The Excel-Viewer will not execute macros and VBA. 
+        Tested with XP/W7/W8/W10
+      - supported GUI: ARENA (install as UCI engine)
+
+Known issues: - 
+----------------------
+
+The ChessBrain programming language is "Visual Basic 6" as part from Microsoft Visual Studio 6 from 1998, 
+which is nearly compatible to "Visual Basic for Application" (VBA) for Microsoft Office.
+VBA is still used in Office 2007 and later. 
+
+Motivation for this engine: 
+------------------------------------
+There are many MS-Office user with VBA knowledge but only few "C" programmer.
+This VBA engine can be used to start with chess programming and to try some new ideas.
+
+History of this engine:
+-------------------------------
+First step was to create a strong VB6 engine which can be converted to VBA later.
+LarsenVB was the best VB6 engine available:The compiled native x86 EXE for winboard has a playing strength of ELO 1528 
+at CCRL(Computer Chess Rating Lists) for 40 move in 4 minutes.
+
+Because the Office VBA code is not compiled but interpreted at runtime the speed is about 15 times slower.
+So I tried some ideas from Ed Schroeder descriptions of the engine REBEL (i.e. recapture extensions).
+The chess GUI ARENA was used to run matches against engines from the CCRL list (FAUCE, MrChess).
+Finally I reached a level of 1850 ELO for the fast VB native version, still not enough for a good VBA engine.
+
+So I added a simple hash logic and tried to understand sources from Cuckoo, Sjeng, Protector and Stockfish.
+One problem: The VB engine does NOT use bitboards. The board uses the classic 10x12 array.
+Then the search logic and the king safety evaluation was improved with Stockfish logic and combined with own ideas.
+
+The final native version has a >>> playing strength of about 3200 ELO <<< compared to CCRL 40/4,
+Match result: ChessBrainVB 4.00 - WAPS 3.75 :  + 50 ELO
+
+Compiling the VB6 source as Pseudo-Code creates a winboard exe which is close to VBA speed (10% faster than VBA).
+>>> Office VBA playing strength is about  ELO 2600 <<<  compared to CCRL 40/4.
+Node count of the Pseudo-Code-Exe (VBA speed)  is about 10.000-20.000 nodes per second only!
+
+The next step was to make the source compatible with VBA and to create a small GUI with MsOffice forms.
+Finally versions for EXCEL, WORD and POWERPOINT are available 
+
+Have fun!
+ 
+
+Not supported features:
+---------------------------------
+Endgame tablebases are NOT supported.
+Pondering is NOT supported.
+
+Supported commands: 
+--------------------------------
+thinking time: 
+  "st": fixed time for move in sec
+  "level":  level 0 2 12 : Game in 2 min + 12 sec/move 
+  "sd": fixed iterative depth
+   
+"analyze": supported
+"exit": end program
+"new": new game
+"setboard": read FEN position string
+"undo": undo move
+
+"eval": for debugging
+"display:"  for debugging
+
+nodes count displayed: computed for each legal move executed during search on the internal board
+
+
+Changes to LarsenVB:
+===================
+Opening book...... : 100% new book logic
+Board structure... : 10% > optimizations
+Time management...: 50% > optimizations
+Move generation... : 50% > optimizations
+Move ordering..... : 90% > much more conditions for order value, i.e. pawn attacks
+Hash functions.... :100% > own logic. Hash size can be set in Chessbase.ini file
+Search logic...... : 95% > 85% SF logic (Null move, Razoring, LMP, LMR)
+                           + 15% own logic (i.e. check escape extents,
+                                            no reductions for special dangerous moves)
+Position evaluation: 95% > 60% SF logic (Piece square tables, parts of king safety, passed pawns)
+                           + 35% own logic (does a complete move generation 
+                                            to calculation mobility, threats and defenders)
+                           No endgame knowledge, but material draws are recognized.
+                           
+---------------------------------------------------------------------------------------
+
+How to copy VB6 code to Office VBA
+===========================
+
+Option 1: Remove file from VBA project and import VB6 file
+Option 2: if not a form: copy and paste code directly form VB6 editor to VBA editor
+              (if using  simple text editor instead of VB6: remove first line#, i.e : "Attribute VB_Name = "ConstBas""
+
+
+---------------------------------------------------------------------------------------
+
+How to make the engine better
+=============================
+
+Check the ChessBrainVB.ini file and optimize settings:
+  Example: Change OPPKINGATT_FACTOR from 60 to 100 will create a more aggressive play: better against weak opponents.
+
+Try changes in function Search() in Search.bas. Changing condition for NullMove or LateMovePruning may create a very different search.
+
+Check the current patches for the Stockfish engine at
+  tests.stockfishchess.org/tests
+Have a look into patches that are green with less than 30.000 games (a good ELO gain)
+
+Chess Programming Wiki (sample: Null move ) 
+  chessprogramming.wikispaces.com/Null+Move+Pruning
+  
+Check the Talkchess forum at
+  talkchess.com/forum/viewforum.php?f=7
+  top-5000.nl/sources.htm
+
+Useful links:  
+  sedatcanbaz.com/chess/?page_id=24
+  
+Other engines to download:  
+  www.rwbc-chess.de/download.htm
+  
+---------------------------------------------------------------------------------------
+                           
