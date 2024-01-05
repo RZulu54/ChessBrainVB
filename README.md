@@ -4,7 +4,7 @@ Chess AI engine with chessboard GUI for Excel / Word VBA - plus VB6 edition for 
 There are two ways to use this chess engine:
 
 1. Visual Basic 6 Windows 32 bit EXE-Version: 
-Use a free chess GUI (i.e. ARENA), add ChessBrainVB.exe as UCI or winboard engine and play games. 
+Use a free chess GUI (i.e. ARENA or CuteChess), add ChessBrainVB.exe as UCI or winboard engine and play games. 
 Playing strength is about 3150 ELO (CCRL 40/40 conditions, 4CPU, see http://www.computerchess.org.uk/ccrl/4040/rating_list_all.html) 
 
 Compiled with Visual Basic 6 => 32 bit Windows exe file, examines about 150.000-200.000 positions/sec.
