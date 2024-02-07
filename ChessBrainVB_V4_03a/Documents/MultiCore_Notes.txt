@@ -1,0 +1,65 @@
+
+ChessbrainVB - mUlti core implementation ( max 64 cores )
+=========================================================
+
+This implementatin does not use mutliple threads for one process (VB restrictions).
+Instead the main process starts ChessbrainVB.exe multiple times, one for each helper process:
+Sample for 4 cores: 4x process ChessbrainVB.exe 
+
+The internal thread number for each process is defined using a shell command parameter.
+Internal number for main thread=0, for helper threads: 1-3.
+
+Engine data shared:
+- hash table
+- for last iteration: score, PV, completed depth, thread status (run/stopped)
+
+Implemetation:
+a memory mapped file is used using the following API's:
+
+The main process creates the mapped file using
+  Private Declare Function CreateFileMapping Lib "kernel32" _
+    Alias "CreateFileMappingA" ( _
+    ByVal hFile As Long, _
+    ByVal lpFileMappigAttributes As Long, _
+    ByVal flProtect As Long, _
+    ByVal dwMaximumSizeHigh As Long, _
+    ByVal dwMaximumSizeLow As Long, _
+    ByVal lpName As String) As Long
+
+The helper processes can open the file using:
+  Private Declare Function OpenFileMapping Lib "kernel32" _
+    Alias "OpenFileMappingA" ( _
+    ByVal dwDesiredAccess As Long, _
+    ByVal bInheritHandle As Long, _
+    ByVal lpName As String) As Long
+
+The mapped memory file is accessed using:
+  Private Declare Sub CopyMemory Lib "kernel32" _
+    Alias "RtlMoveMemory" ( _
+    ByVal Destination As Long, _
+    ByVal Source As Long, _
+    ByVal Length As Long)
+
+Write conflicts are detected by comparing the written data using:    
+  Private Declare Function RtlCompareMemory Lib "ntdll" ( _
+    ByRef Source1 As Any, _
+    ByRef Source2 As Any, _
+    ByVal Length As Long) As Long
+
+
+The total engine speed using this hash implementation 
+is about 1,5% slower than using internal VB arrays.
+
+Total nodes and nps are displayed when the final move is shown.
+
+The mapped memory is not seen as process memory depending on the Win OS.
+Memory value displayed in ARENA-GUI is correct.
+
+File CB_THREAD0.TXT: generate if multiple cores are used. 
+Used for stopping helper threads if this file is no longer locked by main thread.
+
+
+
+
+
+
