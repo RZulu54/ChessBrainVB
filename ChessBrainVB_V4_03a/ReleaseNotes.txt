@@ -5,6 +5,11 @@
 =======================================================================================
 
 
+Changes from version 4.03 to 4.03a (Roger Zuehlsdorf 7-FEB-2024)
+----------------------------------------------------------------
+- fix for enpassant problem in Excel/Word-GUI. No changes for UCI/Winboard engine.
+
+
 Changes from version 4.02 to 4.03 (Roger Zuehlsdorf 5-JAN-2024)
 ----------------------------------------------------------------
 - changes to support UCI for CuteChess GUI (which sends additonal UCI "isready" before "go")
