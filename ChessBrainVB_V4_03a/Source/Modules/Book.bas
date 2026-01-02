@@ -215,24 +215,21 @@ End Function
 
 Public Function InitInternalBook()
   ' Read internal book, just for fun - if external book is missing
-  Dim BookArr As Variant ' extra array because Variant type needed for ARRAY()
   Dim i As Long
-  BookArr = Array("a2a3 g7g6 g2g3 f8g7 f1g2", "a2a3 g8f6 g1f3 d7d5 d2d4", "b1c3 c7c5 d2d4 c5d4 d1d4", "b1c3 c7c5 e2e3 g7g6 d2d4", "b1c3 d7d5 e2e4 d5d4 c3e2", _
-                  "b2b3 d7d5 c1b2 c8g4 g2g3", "b2b3 e7e5 c1b2 b8c6 e2e3", "c2c4 b8c6 g2g3 e7e5 f1g2", "c2c4 c7c5 b1c3 b7b6 e2e3", "c2c4 c7c5 b1c3 b7b6 e2e4", _
-                  "c2c4 e7e5 b1c3 b8c6 g2g3", "c2c4 e7e6 g1f3 g8f6 b2b3", "c2c4 e7e6 g2g3 g8f6 f1g2", "c2c4 f7f5 b1c3 g8f6 d2d3", "c2c4 f7f5 b1c3 g8f6 d2d4", _
-                  "c2c4 g8f6 b1c3 e7e6 g1f3", "d2d4 d7d5 c2c4 c7c6 b1c3", "d2d4 d7d5 g1f3 g8f6 c2c4", "d2d4 d7d5 g1f3 g8f6 e2e3", "d2d4 d7d6 c1g5 b8d7 e2e4", _
-                  "d2d4 d7d6 c1g5 f7f6 g5h4", "d2d4 d7d6 c1g5 g7g6 c2c4", "d2d4 d7d6 c2c3 g8f6 c1g5", "d2d4 d7d6 c2c4 e7e5 b1c3", "d2d4 d7d6 c2c4 f7f5 g2g3", _
-                  "d2d4 d7d6 c2c4 g7g6 b1c3", "d2d4 d7d6 e2e4 c7c5 d4d5", "d2d4 d7d6 e2e4 e7e5 g1f3", "d2d4 d7d6 e2e4 g7g6 b1c3", "d2d4 d7d6 e2e4 g7g6 c2c4", _
-                  "d2d4 d7d6 e2e4 g8f6 b1c3", "d2d4 g8f6 c2c4 e7e6 g1f3", "d2d4 g8f6 g1f3 g7g6 g2g3", "e2e4 b7b6 g2g3 c8b7 f1g2", "e2e4 b8c6 b1c3 e7e5 f1c4", _
-                  "e2e4 b8c6 d2d4 e7e5 g1f3", "e2e4 b8c6 f1b5 g8f6 d2d3", "e2e4 b8c6 g1f3 d7d6 d2d4", "e2e4 c7c5 b1c3 a7a6 g2g4", "e2e4 c7c5 b1c3 b8c6 d2d3", _
-                  "e2e4 c7c5 c2c3 e7e6 d2d4", "e2e4 c7c5 f2f4 d7d5 d2d3", "e2e4 c7c5 f2f4 d7d5 e4d5", "e2e4 c7c5 g1f3 a7a6 b1c3", "e2e4 c7c5 g1f3 d8c7 d2d4", _
-                  "e2e4 c7c5 g1f3 e7e6 b1c3", "e2e4 c7c6 g1f3 d7d5 e4d5", "e2e4 d7d6 d2d4 g8f6 b1c3", "f2f4 b7b6 g1f3 c8b7 e2e3", "f2f4 c7c5 b2b3 g8f6 c1b2", _
-                  "f2f4 d7d5 e2e3 g8f6 g1f3", "g1f3 c7c5 c2c3 g8f6 g2g3", "g1f3 c7c5 c2c4 b7b6 b1c3", "g1f3 d7d5 c2c4 c7c6 g2g3", "g1f3 d7d5 c2c4 d5c4 b1a3", _
-                  "g2g3 d7d5 f1g2 c7c6 g1f3", "g2g3 d7d5 f1g2 e7e5 c2c3", "g2g3 e7e5 f1g2 d7d5 d2d3", "g2g3 g7g6 f1g2 f8g7 c2c4", "g2g3 g8f6 f1g2 e7e5 d2d3")
-  UCIBookCnt = UBound(BookArr) + 1
+  UCIBookCnt = 56
   ReDim UCIBook(UCIBookCnt)
-  For i = 1 To UCIBookCnt: UCIBook(i) = BookArr(i - 1): Next
- 
+  UCIBook(1) = "a2a3 g7g6 g2g3 f8g7 f1g2": UCIBook(2) = "a2a3 g8f6 g1f3 d7d5 d2d4": UCIBook(3) = "b1c3 c7c5 d2d4 c5d4 d1d4": UCIBook(4) = "b1c3 c7c5 e2e3 g7g6 d2d4": UCIBook(5) = "b1c3 d7d5 e2e4 d5d4 c3e2"
+  UCIBook(6) = "b2b3 d7d5 c1b2 c8g4 g2g3": UCIBook(7) = "b2b3 e7e5 c1b2 b8c6 e2e3": UCIBook(8) = "c2c4 b8c6 g2g3 e7e5 f1g2": UCIBook(9) = "c2c4 c7c5 b1c3 b7b6 e2e3": UCIBook(10) = "c2c4 c7c5 b1c3 b7b6 e2e4"
+  UCIBook(11) = "c2c4 e7e5 b1c3 b8c6 g2g3": UCIBook(12) = "c2c4 e7e6 g1f3 g8f6 b2b3": UCIBook(13) = "c2c4 e7e6 g2g3 g8f6 f1g2": UCIBook(14) = "c2c4 f7f5 b1c3 g8f6 d2d3": UCIBook(15) = "c2c4 f7f5 b1c3 g8f6 d2d4"
+  UCIBook(16) = "c2c4 g8f6 b1c3 e7e6 g1f3": UCIBook(17) = "d2d4 d7d5 c2c4 c7c6 b1c3": UCIBook(18) = "d2d4 d7d5 g1f3 g8f6 c2c4": UCIBook(19) = "d2d4 d7d5 g1f3 g8f6 e2e3": UCIBook(20) = "d2d4 d7d6 c1g5 b8d7 e2e4"
+  UCIBook(21) = "d2d4 d7d6 c1g5 f7f6 g5h4": UCIBook(22) = "d2d4 d7d6 c1g5 g7g6 c2c4": UCIBook(23) = "d2d4 d7d6 c2c3 g8f6 c1g5": UCIBook(24) = "d2d4 d7d6 c2c4 e7e5 b1c3": UCIBook(25) = "d2d4 d7d6 c2c4 f7f5 g2g3"
+  UCIBook(26) = "d2d4 d7d6 c2c4 g7g6 b1c3": UCIBook(27) = "d2d4 d7d6 e2e4 c7c5 d4d5": UCIBook(28) = "d2d4 d7d6 e2e4 e7e5 g1f3": UCIBook(29) = "d2d4 d7d6 e2e4 g7g6 b1c3": UCIBook(30) = "d2d4 d7d6 e2e4 g7g6 c2c4"
+  UCIBook(31) = "d2d4 d7d6 e2e4 g8f6 b1c3": UCIBook(32) = "d2d4 g8f6 c2c4 e7e6 g1f3": UCIBook(33) = "d2d4 g8f6 g1f3 g7g6 g2g3": UCIBook(34) = "e2e4 b7b6 g2g3 c8b7 f1g2": UCIBook(35) = "e2e4 b8c6 b1c3 e7e5 f1c4"
+  UCIBook(36) = "e2e4 b8c6 d2d4 e7e5 g1f3": UCIBook(37) = "e2e4 b8c6 f1b5 g8f6 d2d3": UCIBook(38) = "e2e4 b8c6 g1f3 d7d6 d2d4": UCIBook(39) = "e2e4 c7c5 b1c3 a7a6 g2g4": UCIBook(40) = "e2e4 c7c5 b1c3 b8c6 d2d3"
+  UCIBook(41) = "e2e4 c7c5 c2c3 e7e6 d2d4": UCIBook(42) = "e2e4 c7c5 f2f4 d7d5 d2d3": UCIBook(43) = "e2e4 c7c5 f2f4 d7d5 e4d5": UCIBook(44) = "e2e4 c7c5 g1f3 a7a6 b1c3": UCIBook(45) = "e2e4 c7c5 g1f3 d8c7 d2d4"
+  UCIBook(46) = "e2e4 c7c5 g1f3 e7e6 b1c3": UCIBook(47) = "e2e4 c7c6 g1f3 d7d5 e4d5": UCIBook(48) = "e2e4 d7d6 d2d4 g8f6 b1c3": UCIBook(49) = "f2f4 b7b6 g1f3 c8b7 e2e3": UCIBook(50) = "f2f4 c7c5 b2b3 g8f6 c1b2"
+  UCIBook(51) = "f2f4 d7d5 e2e3 g8f6 g1f3": UCIBook(52) = "g1f3 c7c5 c2c3 g8f6 g2g3": UCIBook(53) = "g1f3 c7c5 c2c4 b7b6 b1c3": UCIBook(54) = "g1f3 d7d5 c2c4 c7c6 g2g3": UCIBook(55) = "g1f3 d7d5 c2c4 d5c4 b1a3"
+  UCIBook(56) = "g2g3 d7d5 f1g2 c7c6 g1f3"
 End Function
 
 
