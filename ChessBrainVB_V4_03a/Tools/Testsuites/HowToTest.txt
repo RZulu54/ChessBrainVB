@@ -1,6 +1,0 @@
-with ARENA chess GUI:
-Use "automatic analysis", select STS1_15.epd, set time ( ie 4sec ).
-Compare results of solved solutions.
-
-STS chess test suite:
-https://sites.google.com/site/strategictestsuite/

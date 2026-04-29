@@ -1,0 +1,16 @@
+basBoard = 193, -10, 1299, 675, 
+basBook = 0, 0, 0, 0, C
+basConst = 52, 52, 1146, 470, CI
+basIO = 0, 0, 0, 0, C
+basChessBrainVB = 0, 0, 1068, 484, 
+basEPD = 234, 234, 1302, 718, 
+basSearch = 130, 130, 1250, 520, 
+frmDebugMain = 0, 0, 0, 0, C, 26, 26, 1094, 510, C
+basEval = 208, 58, 1276, 865, 
+basHash = 0, 0, 0, 0, C
+basTime = 0, 0, 0, 0, C
+frmMain = 0, 0, 0, 0, C, 78, 78, 1146, 562, C
+basDebug = 234, 234, 1250, 848, 
+clsHashMap = 0, 0, 0, 0, C
+basCmdOutput = 0, 0, 0, 0, C
+basProcess = 0, 0, 0, 0, C
