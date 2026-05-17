@@ -9,8 +9,10 @@ See the full collection at: https://github.com/RZulu54
 
 * **VB6** (Visual Basic 6): ChessbrainVB (~3125 Elo)
 * **VBA** (Excel Visual Basic for Applications): ExcelChessbrainX (~2600 Elo)
-* **VB.NET** (Visual Basic .NET): ChessbrainVbNet (~3300)
-
+* **VB.NET** (Visual Basic .NET): ChessbrainVbNet (~3300 Elo)
+* **QB64** (QBASIC 64): ChessbrainQB64 (~2700 Elo)
+* **FreeBasic** : ChessbrainFB (~3150 Elo)
+---
 ---
 
 # Usage
@@ -38,6 +40,7 @@ https://computerchess.org.uk/404/rating_list_all.html
 * No support for endgame tablebases.
 
 # Changes
+
 **Changes from V4.03a to V4.10:**
 * Added UCI option for pondering.
 * Excel VBA GUI version moved to a separate project.
